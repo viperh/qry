@@ -1,0 +1,14 @@
+{
+  "keybindings": {
+    "Normal": {
+      "<q>": "Quit",
+      "<Ctrl-c>": "Quit",
+      "<Ctrl-d>": "Quit",
+      "<Ctrl-z>": "Suspend",
+      "<Ctrl-h>": "Help"
+    }
+  },
+  "styles": {
+    "Normal": {}
+  }
+}
