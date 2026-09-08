@@ -1,10 +1,9 @@
 use crossterm::event::KeyEvent;
+use qry_core::Driver;
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
-
-use app_core::Core;
 
 use crate::{
     action::Action,
@@ -14,8 +13,7 @@ use crate::{
 };
 
 pub struct App {
-    /// UI-agnostic domain state, owned by the `app-core` crate.
-    core: Core,
+    core: Driver,
     config: Config,
     tick_rate: f64,
     frame_rate: f64,
@@ -40,7 +38,7 @@ impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
-            core: Core::new()?,
+            core: Driver::new(),
             tick_rate,
             frame_rate,
             components: vec![Box::new(Home::new())],
@@ -142,10 +140,6 @@ impl App {
                 debug!("{action:?}");
             }
             match action {
-                Action::Tick => {
-                    self.core.tick();
-                    self.last_tick_key_events.drain(..);
-                }
                 Action::Quit => self.should_quit = true,
                 Action::Suspend => self.should_suspend = true,
                 Action::Resume => self.should_suspend = false,

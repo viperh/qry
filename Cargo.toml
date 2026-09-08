@@ -7,16 +7,16 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["qviperh <olteanromeodavid34@gmail.com>"]
+authors = ["qViperH <qviperh.dev@proton.me>"]
 license = "MIT"
-repository = "https://github.com/qviperh/rust-tui-template"
+repository = "https://github.com/viperh/qry"
 rust-version = "1.85"
 
 # Central dependency versions. Crates reference these with
 # `some-dep = { workspace = true }` so versions stay in lockstep.
 [workspace.dependencies]
 # --- internal ---
-app-core = { path = "crates/app-core" }
+qry-core = { path = "crates/qry-core" }
 
 # --- tui / terminal ---
 crossterm = { version = "0.29.0", features = ["serde", "event-stream"] }

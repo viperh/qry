@@ -44,7 +44,7 @@ impl Component for Home {
         frame.render_widget(
             Paragraph::new("hello world\n\npress `q` to quit")
                 .centered()
-                .block(Block::bordered().title(" app ")),
+                .block(Block::bordered().title(" qry ")),
             area,
         );
         Ok(())
