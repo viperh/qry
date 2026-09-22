@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Remove this once you start using the code
-
 use std::{collections::HashMap, env, path::PathBuf, sync::LazyLock};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -14,23 +12,13 @@ use crate::{action::Action, app::Mode};
 /// files found in [`get_config_dir`] are layered on top of it.
 const CONFIG: &str = include_str!("../../../.config/config.json");
 
-/// Reverse-domain qualifier and organisation used to locate the per-user
+/// Reverse-domain qualifier and organization used to locate the per-user
 /// config and data directories. Change these when you rename the project.
 const APP_QUALIFIER: &str = "dev";
 const APP_ORGANIZATION: &str = "viperh";
 
-#[derive(Clone, Debug, Deserialize, Default)]
-pub struct AppConfig {
-    #[serde(default)]
-    pub data_dir: PathBuf,
-    #[serde(default)]
-    pub config_dir: PathBuf,
-}
-
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Config {
-    #[serde(default, flatten)]
-    pub config: AppConfig,
     #[serde(default)]
     pub keybindings: KeyBindings,
     #[serde(default)]
@@ -54,7 +42,8 @@ pub static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 
 impl Config {
     pub fn new() -> color_eyre::Result<Self, config::ConfigError> {
-        let default_config: Config = json5::from_str(CONFIG).unwrap();
+        let default_config: Config = json5::from_str(CONFIG)
+            .map_err(|e| config::ConfigError::Foreign(Box::new(e)))?;
         let data_dir = get_data_dir();
         let config_dir = get_config_dir();
         let mut builder = config::Config::builder()
@@ -142,11 +131,19 @@ impl<'de> Deserialize<'de> for KeyBindings {
             .map(|(mode, inner_map)| {
                 let converted_inner_map = inner_map
                     .into_iter()
-                    .map(|(key_str, cmd)| (parse_key_sequence(&key_str).unwrap(), cmd))
-                    .collect();
-                (mode, converted_inner_map)
+                    .map(|(key_str, cmd)| {
+                        parse_key_sequence(&key_str)
+                            .map(|keys| (keys, cmd))
+                            .map_err(|e| {
+                                serde::de::Error::custom(format!(
+                                    "invalid key sequence `{key_str}`: {e}"
+                                ))
+                            })
+                    })
+                    .collect::<Result<_, D::Error>>()?;
+                Ok((mode, converted_inner_map))
             })
-            .collect();
+            .collect::<Result<_, D::Error>>()?;
 
         Ok(KeyBindings(keybindings))
     }
@@ -233,6 +230,7 @@ fn parse_key_code_with_modifiers(
     Ok(KeyEvent::new(c, modifiers))
 }
 
+#[cfg(test)]
 pub fn key_event_to_string(key_event: &KeyEvent) -> String {
     let char;
     let key_code = match key_event.code {
@@ -510,13 +508,19 @@ mod tests {
         assert_eq!(
             c.keybindings
                 .0
-                .get(&Mode::Normal)
+                .get(&Mode::Home)
                 .unwrap()
                 .get(&parse_key_sequence("<q>").unwrap_or_default())
                 .unwrap(),
             &Action::Quit
         );
         Ok(())
+    }
+
+    #[test]
+    fn test_malformed_key_sequence_is_err() {
+        let result = json5::from_str::<KeyBindings>(r#"{"Home": {"<ctrl-notakey>": "Quit"}}"#);
+        assert!(result.is_err());
     }
 
     #[test]

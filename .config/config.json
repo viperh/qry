@@ -1,14 +1,19 @@
 {
   "keybindings": {
-    "Normal": {
+    "Home": {
       "<q>": "Quit",
       "<Ctrl-c>": "Quit",
-      "<Ctrl-d>": "Quit",
-      "<Ctrl-z>": "Suspend",
-      "<Ctrl-h>": "Help"
+      "<f1>": "Help",
+      "<tab>": "FocusNext",
+      "<shift-backtab>": "FocusPrev",
+      "<Ctrl-n>": { "ChangeMode": "AddConnModal" }
+    },
+    "AddConnModal": {
+      "<esc>": { "ChangeMode": "Home" }
     }
+
   },
   "styles": {
-    "Normal": {}
+    "Home": {}
   }
 }

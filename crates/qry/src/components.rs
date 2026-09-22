@@ -7,6 +7,11 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, config::Config, tui::Event};
 pub mod home;
+mod conntree;
+mod editor;
+mod results;
+mod infopanel;
+mod statuspanel;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
@@ -119,4 +124,17 @@ pub trait Component {
     ///
     /// * [`color_eyre::Result<()>`] - An Ok result or an error.
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()>;
+
+
+    /// Sets the focus for this component
+    /// Needs to be handled above
+    /// # Arguments
+    ///
+    /// * focused - a boolean showing if this specific component is focused or not
+    ///
+    /// # Returns
+    ///
+    ///
+    fn set_focus(&mut self, focus: bool);
+
 }

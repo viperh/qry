@@ -10,7 +10,7 @@ edition = "2024"
 authors = ["qViperH <qviperh.dev@proton.me>"]
 license = "MIT"
 repository = "https://github.com/viperh/qry"
-rust-version = "1.85"
+rust-version = "1.89"
 
 # Central dependency versions. Crates reference these with
 # `some-dep = { workspace = true }` so versions stay in lockstep.
@@ -40,7 +40,7 @@ clap = { version = "4.6.1", features = [
 config = "0.15.25"
 directories = "6.0.0"
 json5 = "1.3.1"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
 
 # --- errors / diagnostics ---
 better-panic = "0.3.0"

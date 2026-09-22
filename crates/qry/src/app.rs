@@ -1,19 +1,23 @@
 use crossterm::event::KeyEvent;
-use qry_core::Driver;
+use qry_core::{ConnectionConfig, sqlite::SqliteConfig};
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
+use strum::EnumIter;
+
+
 use crate::{
-    action::Action,
+    action::{Action, StatusCode},
     components::{Component, home::Home},
     config::Config,
+    db::DbCommand,
     tui::{Event, Tui},
 };
 
 pub struct App {
-    core: Driver,
+    db: mpsc::UnboundedSender<DbCommand>,
     config: Config,
     tick_rate: f64,
     frame_rate: f64,
@@ -28,24 +32,28 @@ pub struct App {
 
 /// Input modes. Keybindings and styles in `.config/config.json` are keyed by
 /// these names, so adding a variant here means adding a section there too.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
 pub enum Mode {
     #[default]
-    Normal,
+    Home,
+    AddConnModal
 }
+
+
+
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
-            core: Driver::new(),
+            db: crate::db::spawn(action_tx.clone()),
             tick_rate,
             frame_rate,
             components: vec![Box::new(Home::new())],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
-            mode: Mode::Normal,
+            mode: Mode::Home,
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
@@ -68,6 +76,13 @@ impl App {
         for component in self.components.iter_mut() {
             component.init(tui.size()?)?;
         }
+
+        // Temporary: until the New Connection modal can build a config, every
+        // session starts on an empty in-memory SQLite database.
+        self.send_db(DbCommand::Connect(
+            String::new(),
+            ConnectionConfig::Sqlite(SqliteConfig::new(":memory:", false)),
+        ))?;
 
         let action_tx = self.action_tx.clone();
         loop {
@@ -136,7 +151,8 @@ impl App {
 
     fn handle_actions(&mut self, tui: &mut Tui) -> color_eyre::Result<()> {
         while let Ok(action) = self.action_rx.try_recv() {
-            if action != Action::Tick && action != Action::Render {
+            // QueryDone is skipped so whole result sets don't end up in the log.
+            if !matches!(action, Action::Tick | Action::Render | Action::QueryDone(_)) {
                 debug!("{action:?}");
             }
             match action {
@@ -149,6 +165,18 @@ impl App {
                 Action::Error(ref err) => {
                     tracing::error!(?err)
                 }
+                Action::Tick => {
+                    self.last_tick_key_events.drain(..);
+                }
+                Action::ChangeMode(mode) => {
+                    self.mode = mode;
+                }
+                Action::Execute(ref sql) if !sql.trim().is_empty() => {
+                    self.send_db(DbCommand::Query(sql.clone()))?;
+                }
+                Action::Connect(ref name, ref config) => {
+                    self.send_db(DbCommand::Connect(name.clone(), config.clone()))?;
+                }
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -156,6 +184,17 @@ impl App {
                     self.action_tx.send(action)?
                 };
             }
+        }
+        Ok(())
+    }
+
+    /// Hands a command to the database worker. If the worker has stopped, says
+    /// so in the status bar instead of failing silently.
+    fn send_db(&self, command: DbCommand) -> color_eyre::Result<()> {
+        if self.db.send(command).is_err() {
+            self.action_tx.send(Action::Status(StatusCode::Error(
+                "database worker has stopped".into(),
+            )))?;
         }
         Ok(())
     }

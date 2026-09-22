@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MySqlConfig {
+pub struct MariadbConfig {
     pub host: String,
     pub port: u16,
     pub user: String,
@@ -18,7 +18,7 @@ pub struct MySqlConfig {
     pub ssl_mode: SslMode,
 }
 
-impl MySqlConfig {
+impl MariadbConfig {
     fn opts(&self) -> OptsBuilder {
         OptsBuilder::default()
             .ip_or_hostname(self.host.clone())
@@ -29,13 +29,13 @@ impl MySqlConfig {
     }
 }
 
-pub struct MySql {
+pub struct MariaDb {
     conn: Mutex<Conn>,
-    config: MySqlConfig,
+    config: MariadbConfig,
 }
 
-impl MySql {
-    pub async fn connect(config: MySqlConfig) -> Result<Self> {
+impl MariaDb {
+    pub async fn connect(config: MariadbConfig) -> Result<Self> {
         config.ssl_mode.ensure_supported()?;
         let conn = Conn::new(config.opts()).await?;
         Ok(Self {
@@ -63,9 +63,9 @@ fn value_to_string(value: Value) -> Option<String> {
 }
 
 #[async_trait]
-impl Database for MySql {
+impl Database for MariaDb {
     fn kind(&self) -> DatabaseType {
-        DatabaseType::Mysql
+        DatabaseType::MariaDb
     }
 
     fn label(&self) -> String {

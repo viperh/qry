@@ -28,12 +28,13 @@ libc = { workspace = true }
 ratatui = { workspace = true }
 serde = { workspace = true }
 strip-ansi-escapes = { workspace = true }
-strum = { workspace = true }
+strum = { workspace = true, features=["derive"] }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true }
+ratatui-textarea = "0.9.2"
 
 # `Tui::suspend` raises SIGTSTP, which only exists on unix.
 [target.'cfg(not(windows))'.dependencies]

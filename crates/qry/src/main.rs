@@ -13,6 +13,7 @@ mod app;
 mod cli;
 mod components;
 mod config;
+mod db;
 mod errors;
 mod logging;
 mod tui;
