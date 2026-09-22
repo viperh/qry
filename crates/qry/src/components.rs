@@ -10,8 +10,9 @@ pub mod home;
 mod conntree;
 mod editor;
 mod results;
-mod infopanel;
 mod statuspanel;
+mod help;
+mod textinput;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///

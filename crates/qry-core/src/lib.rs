@@ -76,6 +76,15 @@ impl Driver {
         };
         db.query(sql).await
     }
+
+
+    pub async fn export(&self, sql: &str) -> Result<()> {
+        if let Some(db) = &self.db {
+            
+        }
+        Ok(())
+    }
+
 }
 
 #[cfg(test)]

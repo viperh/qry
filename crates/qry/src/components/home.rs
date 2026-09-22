@@ -1,5 +1,5 @@
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::
 prelude::*;
 use ratatui::layout::{Flex, Size};
@@ -14,11 +14,12 @@ use super::Component;
 use crate::app::Mode;
 use crate::components::conntree::ConnTree;
 use crate::components::editor::Editor;
-use crate::components::infopanel::Infopanel;
 use crate::components::results::Results;
 use crate::components::statuspanel::Statuspanel;
+use crate::components::textinput::TextInput;
 use crate::{action::Action, config::Config};
-use ratatui::widgets::{Clear, Block, Paragraph};
+use ratatui::widgets::{Clear, Block};
+use crate::components::help::Help;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 enum Pane {
@@ -42,69 +43,6 @@ impl Pane {
             Pane::Tree => Pane::Results,
             Pane::Editor => Pane::Tree,
             Pane::Results => Pane::Editor,
-        }
-    }
-}
-
-/// Single-line text input. `cursor` counts characters, not bytes.
-#[derive(Default)]
-struct TextInput {
-    value: String,
-    cursor: usize,
-    masked: bool,
-}
-
-impl TextInput {
-    fn handle_key(&mut self, key: KeyEvent) {
-        match key.code {
-            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-                let at = self.byte_index();
-                self.value.insert(at, c);
-                self.cursor += 1;
-            }
-            KeyCode::Backspace if self.cursor > 0 => {
-                self.cursor -= 1;
-                let at = self.byte_index();
-                self.value.remove(at);
-            }
-            KeyCode::Delete if self.cursor < self.len() => {
-                let at = self.byte_index();
-                self.value.remove(at);
-            }
-            KeyCode::Left => self.cursor = self.cursor.saturating_sub(1),
-            KeyCode::Right => self.cursor = (self.cursor + 1).min(self.len()),
-            KeyCode::Home => self.cursor = 0,
-            KeyCode::End => self.cursor = self.len(),
-            _ => {}
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.value.chars().count()
-    }
-
-    fn byte_index(&self) -> usize {
-        self.value
-            .char_indices()
-            .nth(self.cursor)
-            .map_or(self.value.len(), |(i, _)| i)
-    }
-
-    /// Draws the input, scrolled so the cursor stays visible. The terminal
-    /// cursor is only placed on the focused input.
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
-        let width = usize::from(area.width).max(1);
-        let offset = (self.cursor + 1).saturating_sub(width);
-        let visible: String = if self.masked {
-            "•".repeat(self.len().saturating_sub(offset).min(width))
-        } else {
-            self.value.chars().skip(offset).take(width).collect()
-        };
-
-        frame.render_widget(Paragraph::new(visible), area);
-        if focused {
-            let x = area.x + u16::try_from(self.cursor - offset).unwrap_or(0);
-            frame.set_cursor_position((x, area.y));
         }
     }
 }
@@ -192,7 +130,6 @@ impl Default for ConnForm {
                 Field::Text(TextInput { masked: true, ..TextInput::default() }),
                 text(),
                 text(),
-                // "prefer", libpq's own default
                 Field::Choice { options: &SSL_MODES, selected: 2 },
             ],
             focus: 0,
@@ -228,8 +165,7 @@ impl ConnForm {
         }
     }
 
-    /// Turns the form into a connection name and config, or explains what is
-    /// wrong in a message short enough for the popup's bottom border.
+
     fn to_config(&self) -> Result<(String, ConnectionConfig), String> {
         let trimmed = |field: usize| self.text(field).trim().to_string();
         let required = |field: usize| {
@@ -288,7 +224,6 @@ impl ConnForm {
         Ok((name, config))
     }
 
-    /// Draws as many fields as fit, scrolled so the focused one is visible.
     fn render(&self, frame: &mut Frame, area: Rect) {
         let fits = usize::from((area.height + FIELD_GAP) / (FIELD_HEIGHT + FIELD_GAP))
             .clamp(1, LABELS.len());
@@ -335,12 +270,12 @@ pub struct Home {
     conntree: ConnTree,
     editor: Editor,
     results: Results,
-    infopanel: Infopanel,
     statuspanel: Statuspanel,
     focus: Pane,
     modal_active: bool,
     form: ConnForm,
-
+    help: Help,
+    helpvisible: bool
 }
 
 impl Home {
@@ -356,12 +291,11 @@ impl Home {
         self.results.set_focus(self.focus == Pane::Results);
     }
 
-    fn children(&mut self) -> [&mut dyn Component; 5] {
+    fn children(&mut self) -> [&mut dyn Component; 4] {
         [
             &mut self.conntree,
             &mut self.editor,
             &mut self.results,
-            &mut self.infopanel,
             &mut self.statuspanel,
         ]
     }
@@ -406,8 +340,6 @@ impl Home {
             self.form.render(frame, inner);
 
         }
-
-
     }
 
 }
@@ -480,28 +412,29 @@ impl Component for Home {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-
-        let info_height = if self.infopanel.is_empty() {0} else {3};
         let status_height = if self.statuspanel.is_empty() {0} else {3};
 
 
         let [all, statuspanel] = Layout::vertical([Constraint::Fill(1), Constraint::Length(status_height)]).areas(area);
         let [connpanel, rest] = Layout::horizontal([Constraint::Percentage(25), Constraint::Percentage(75)]).areas(all);
 
-        let [querypane, infopane, resultspane] = Layout::vertical([
+        let [querypane, resultspane] = Layout::vertical([
             Constraint::Percentage(40),
-            Constraint::Length(info_height),
             Constraint::Fill(1)])
             .areas(rest);
 
 
          self.conntree.draw(frame, connpanel)?;
          self.editor.draw(frame, querypane)?;
-        self.infopanel.draw(frame, infopane)?;
         self.results.draw(frame, resultspane)?;
         self.statuspanel.draw(frame, statuspanel)?;
 
         self.render_modal(frame, area);
+
+
+        if self.helpvisible {
+            self.help.draw(frame, area)?;
+        }
 
         Ok(())
     }
@@ -546,10 +479,8 @@ mod tests {
     #[test]
     fn update_is_forwarded_to_children() {
         let mut home = Home::new();
-        assert!(home.infopanel.is_empty());
         assert!(home.statuspanel.is_empty());
         home.update(Action::Info("x".into())).unwrap();
-        assert!(!home.infopanel.is_empty());
         home.update(Action::Status(StatusCode::Error("e".into()))).unwrap();
         assert!(!home.statuspanel.is_empty());
     }

@@ -3,10 +3,11 @@
     "Home": {
       "<q>": "Quit",
       "<Ctrl-c>": "Quit",
-      "<f1>": "Help",
+      "<Ctrl-h>": "Help",
       "<tab>": "FocusNext",
       "<shift-backtab>": "FocusPrev",
-      "<Ctrl-n>": { "ChangeMode": "AddConnModal" }
+      "<Ctrl-n>": { "ChangeMode": "AddConnModal" },
+      "<Ctrl-e>": "Export"
     },
     "AddConnModal": {
       "<esc>": { "ChangeMode": "Home" }

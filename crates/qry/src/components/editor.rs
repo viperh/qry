@@ -59,7 +59,7 @@ impl Component for Editor {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        if key.code == KeyCode::F(5) {
+        if key.code == KeyCode::F(8) {
             return Ok(Some(Action::Execute(self.query())));
         }
         self.textarea.input(key);

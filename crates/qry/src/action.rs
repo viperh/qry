@@ -33,6 +33,7 @@ pub enum Action {
     /// Sent by the database worker. Wrapped in `Arc` because every action is
     /// cloned once per component.
     QueryDone(Arc<QueryResult>),
+    Export
 }
 
 
