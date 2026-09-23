@@ -3,6 +3,7 @@ use std::sync::Arc;
 use qry_core::{ConnectionConfig, QueryResult};
 use serde::{Deserialize, Serialize};
 use strum::Display;
+use qry_core::ExportConfig;
 use crate::app::Mode;
 
 /// Messages passed between the event loop, [`App`](crate::app::App) and every
@@ -33,7 +34,7 @@ pub enum Action {
     /// Sent by the database worker. Wrapped in `Arc` because every action is
     /// cloned once per component.
     QueryDone(Arc<QueryResult>),
-    Export
+    Export(ExportConfig),
 }
 
 

@@ -27,9 +27,6 @@ impl SslMode {
         SslMode::VerifyFull,
     ];
 
-    /// qry cannot open TLS connections yet. Modes that may fall back to plain
-    /// text are accepted; modes that demand TLS are refused rather than
-    /// silently connecting unencrypted.
     pub fn ensure_supported(self) -> Result<()> {
         match self {
             SslMode::Disable | SslMode::Allow | SslMode::Prefer => Ok(()),
@@ -37,6 +34,8 @@ impl SslMode {
         }
     }
 }
+
+
 
 impl std::fmt::Display for SslMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

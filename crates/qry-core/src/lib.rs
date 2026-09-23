@@ -6,7 +6,9 @@ pub mod postgres;
 pub mod sqlite;
 pub mod mysql;
 pub mod mariadb;
+pub mod exporter;
 
+pub use exporter::Exporter;
 pub use shared::{Database, QueryResult, SslMode};
 
 use mariadb::{MariaDb, MariadbConfig};
@@ -22,8 +24,80 @@ pub enum DatabaseType {
     Oracle,
     MariaDb
 }
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ExportType {
+    #[default]
+    Csv,
+    Excel,
+    Text,
+    Json
+}
 
-/// Everything needed to open a connection, one variant per backend.
+impl ExportType {
+    /// In the order the export form offers them.
+    pub const ALL: [ExportType; 4] =
+        [ExportType::Csv, ExportType::Excel, ExportType::Text, ExportType::Json];
+
+    /// Whether the rows are separated by a character the user chooses.
+    /// Excel writes cells and JSON writes objects, so neither uses one.
+    pub fn uses_separator(self) -> bool {
+        matches!(self, ExportType::Csv | ExportType::Text)
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            ExportType::Csv => "csv",
+            ExportType::Excel => "xlsx",
+            ExportType::Text => "txt",
+            ExportType::Json => "json",
+        }
+    }
+
+    /// The path with this type's extension, added unless it is already there.
+    /// The check ignores case, so `ROWS.CSV` is left alone.
+    pub fn with_extension(self, path: &str) -> String {
+        let extension = self.extension();
+        let present = path
+            .rsplit_once('.')
+            .is_some_and(|(_, last)| last.eq_ignore_ascii_case(extension));
+        match path {
+            _ if present => path.to_string(),
+            // A trailing dot already separates the extension.
+            _ if path.ends_with('.') => format!("{path}{extension}"),
+            _ => format!("{path}.{extension}"),
+        }
+    }
+}
+
+impl std::fmt::Display for ExportType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ExportType::Csv => "CSV",
+            ExportType::Excel => "Excel",
+            ExportType::Text => "Text",
+            ExportType::Json => "JSON",
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ExportConfig {
+    pub path: String,
+    pub separator: String,
+    pub etype: ExportType
+}
+
+impl ExportConfig {
+    /// Builds a config whose path ends with the type's extension.
+    pub fn new(path: impl Into<String>, separator: impl Into<String>, etype: ExportType) -> Self {
+        Self {
+            path: etype.with_extension(&path.into()),
+            separator: separator.into(),
+            etype,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionConfig {
     Sqlite(SqliteConfig),
@@ -32,7 +106,7 @@ pub enum ConnectionConfig {
     MariaDb(MariadbConfig),
 }
 
-/// Written by hand so a password can never end up in a log.
+
 impl std::fmt::Debug for ConnectionConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -44,11 +118,11 @@ impl std::fmt::Debug for ConnectionConfig {
     }
 }
 
-/// Holds the active connection. It is meant to be owned by a single task,
-/// so it needs no locking of its own.
+
 #[derive(Default)]
 pub struct Driver {
     db: Option<Box<dyn Database>>,
+
 }
 
 impl Driver {
@@ -77,13 +151,6 @@ impl Driver {
         db.query(sql).await
     }
 
-
-    pub async fn export(&self, sql: &str) -> Result<()> {
-        if let Some(db) = &self.db {
-            
-        }
-        Ok(())
-    }
 
 }
 
@@ -137,6 +204,29 @@ mod tests {
             let err = Driver::new().connect(postgres(mode)).await.unwrap_err();
             assert!(err.to_string().contains("does not support"), "{mode}: {err}");
         }
+    }
+
+    #[test]
+    fn each_type_has_an_extension_and_adds_it_once() {
+        let extensions: Vec<&str> = ExportType::ALL.iter().map(|t| t.extension()).collect();
+        assert_eq!(extensions, ["csv", "xlsx", "txt", "json"]);
+
+        assert_eq!(ExportType::Csv.with_extension("rows"), "rows.csv");
+        assert_eq!(ExportType::Csv.with_extension("rows.csv"), "rows.csv");
+        // Already there, whatever the case.
+        assert_eq!(ExportType::Csv.with_extension("ROWS.CSV"), "ROWS.CSV");
+        assert_eq!(ExportType::Csv.with_extension("rows."), "rows.csv");
+        // A different extension is kept, and the right one added after it.
+        assert_eq!(ExportType::Csv.with_extension("rows.txt"), "rows.txt.csv");
+        assert_eq!(ExportType::Excel.with_extension(r"C:\data\rows"), r"C:\data\rows.xlsx");
+        assert_eq!(ExportType::Json.with_extension("rows.json"), "rows.json");
+    }
+
+    #[test]
+    fn a_config_gets_the_extension_of_its_type() {
+        let config = ExportConfig::new("rows", ",", ExportType::Json);
+        assert_eq!(config.path, "rows.json");
+        assert_eq!(config.separator, ",");
     }
 
     #[test]

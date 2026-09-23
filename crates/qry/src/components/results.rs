@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 use qry_core::QueryResult;
 use ratatui::{
     prelude::*,
@@ -12,7 +12,7 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::{action::Action, config::Config};
+use crate::{action::Action, config::Config, keymap::ResultsCommand};
 
 /// Wider values are cut off at this many columns.
 const MAX_COLUMN_WIDTH: u16 = 40;
@@ -61,20 +61,22 @@ impl Component for Results {
         else {
             return Ok(None);
         };
+        let Some(command) = self.config.panes.results.get(key) else {
+            return Ok(None);
+        };
         let (last_row, last_col) = (rows.saturating_sub(1), cols.saturating_sub(1));
         let page = self.page_rows.max(1);
-        match key.code {
-            KeyCode::Up | KeyCode::Char('i') => self.row = self.row.saturating_sub(1),
-            KeyCode::Down | KeyCode::Char('k') => self.row = (self.row + 1).min(last_row),
-            KeyCode::Left | KeyCode::Char('j') => self.col = self.col.saturating_sub(1),
-            KeyCode::Right | KeyCode::Char('l') => self.col = (self.col + 1).min(last_col),
-            KeyCode::PageUp => self.row = self.row.saturating_sub(page),
-            KeyCode::PageDown => self.row = (self.row + page).min(last_row),
-            KeyCode::Home => self.col = 0,
-            KeyCode::End => self.col = last_col,
-            KeyCode::Char('g') => self.row = 0,
-            KeyCode::Char('G') => self.row = last_row,
-            _ => {}
+        match command {
+            ResultsCommand::Up => self.row = self.row.saturating_sub(1),
+            ResultsCommand::Down => self.row = (self.row + 1).min(last_row),
+            ResultsCommand::Left => self.col = self.col.saturating_sub(1),
+            ResultsCommand::Right => self.col = (self.col + 1).min(last_col),
+            ResultsCommand::PageUp => self.row = self.row.saturating_sub(page),
+            ResultsCommand::PageDown => self.row = (self.row + page).min(last_row),
+            ResultsCommand::FirstColumn => self.col = 0,
+            ResultsCommand::LastColumn => self.col = last_col,
+            ResultsCommand::FirstRow => self.row = 0,
+            ResultsCommand::LastRow => self.row = last_row,
         }
         Ok(None)
     }
@@ -243,7 +245,7 @@ fn visible_columns(widths: &[u16], offset: usize, available: u16) -> Vec<(usize,
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::KeyModifiers;
+    use crossterm::event::{KeyCode, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
 
     fn render_buffer(results: &mut Results, width: u16, height: u16) -> Buffer {
@@ -266,13 +268,17 @@ mod tests {
 
     fn press(results: &mut Results, code: KeyCode, times: usize) {
         for _ in 0..times {
-            results.handle_key_event(KeyEvent::new(code, KeyModifiers::NONE)).unwrap();
+            // Terminals report capital letters with Shift held.
+            let shift = matches!(code, KeyCode::Char(c) if c.is_ascii_uppercase());
+            let modifiers = if shift { KeyModifiers::SHIFT } else { KeyModifiers::NONE };
+            results.handle_key_event(KeyEvent::new(code, modifiers)).unwrap();
         }
     }
 
     /// `rows` rows of `cols` columns named c0, c1, … holding "r{row}c{col}".
     fn grid(rows: usize, cols: usize) -> Results {
         let mut results = Results::default();
+        results.register_config_handler(Config::embedded()).unwrap();
         results
             .update(Action::QueryDone(Arc::new(QueryResult {
                 columns: (0..cols).map(|c| format!("c{c}")).collect(),

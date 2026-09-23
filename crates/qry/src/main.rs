@@ -15,6 +15,7 @@ mod components;
 mod config;
 mod db;
 mod errors;
+mod keymap;
 mod logging;
 mod tui;
 

@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use qry_core::{ConnectionConfig, Driver};
+use qry_core::{ConnectionConfig, Driver, ExportConfig, Exporter, QueryResult};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::action::{Action, StatusCode};
@@ -14,6 +14,15 @@ pub enum DbCommand {
     /// A display name (may be empty) and how to reach the database.
     Connect(String, ConnectionConfig),
     Query(String),
+    /// Writes the last result to a file; no second trip to the database.
+    Export(ExportConfig),
+}
+
+/// The connection and the last result it produced.
+#[derive(Default)]
+struct Worker {
+    driver: Driver,
+    last: Option<Arc<QueryResult>>,
 }
 
 /// Starts the worker and returns the sender used to reach it. Commands run one
@@ -21,9 +30,9 @@ pub enum DbCommand {
 pub fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
     let (tx, mut rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
-        let mut driver = Driver::new();
+        let mut worker = Worker::default();
         while let Some(command) = rx.recv().await {
-            for action in run(&mut driver, command).await {
+            for action in worker.run(command).await {
                 if action_tx.send(action).is_err() {
                     return;
                 }
@@ -33,24 +42,46 @@ pub fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
     tx
 }
 
-async fn run(driver: &mut Driver, command: DbCommand) -> Vec<Action> {
-    match command {
-        DbCommand::Connect(name, config) => match driver.connect(config).await {
-            Ok(label) if name.is_empty() => vec![success(format!("Connected to {label}"))],
-            Ok(label) => vec![success(format!("Connected to {name} ({label})"))],
-            Err(e) => vec![error(format!("Connection failed: {e:#}"))],
-        },
-        DbCommand::Query(sql) => match driver.query(&sql).await {
-            Ok(result) => {
-                let summary = match result.rows.len() {
-                    _ if result.columns.is_empty() => "Statement executed".to_string(),
-                    1 => "1 row".to_string(),
-                    n => format!("{n} rows"),
-                };
-                vec![Action::QueryDone(Arc::new(result)), success(summary)]
-            }
-            Err(e) => vec![error(format!("{e:#}"))],
-        },
+impl Worker {
+    async fn run(&mut self, command: DbCommand) -> Vec<Action> {
+        match command {
+            DbCommand::Connect(name, config) => match self.driver.connect(config).await {
+                Ok(label) if name.is_empty() => vec![success(format!("Connected to {label}"))],
+                Ok(label) => vec![success(format!("Connected to {name} ({label})"))],
+                Err(e) => vec![error(format!("Connection failed: {e:#}"))],
+            },
+            DbCommand::Query(sql) => match self.driver.query(&sql).await {
+                Ok(result) => {
+                    let summary = match result.rows.len() {
+                        _ if result.columns.is_empty() => "Statement executed".to_string(),
+                        1 => "1 row".to_string(),
+                        n => format!("{n} rows"),
+                    };
+                    let result = Arc::new(result);
+                    self.last = Some(result.clone());
+                    vec![Action::QueryDone(result), success(summary)]
+                }
+                Err(e) => vec![error(format!("{e:#}"))],
+            },
+            DbCommand::Export(config) => self.export(config).await,
+        }
+    }
+
+    async fn export(&self, config: ExportConfig) -> Vec<Action> {
+        let Some(result) = &self.last else {
+            return vec![error("Nothing to export yet: run a query first".into())];
+        };
+        let exporter = Exporter::from_result(result, &config);
+        let etype = config.etype;
+
+        // Writing a big file would block this task, and with it every later
+        // query, so it goes to a thread that is allowed to block.
+        let written = tokio::task::spawn_blocking(move || exporter.write(etype)).await;
+        match written {
+            Ok(Ok(rows)) => vec![success(format!("Exported {rows} rows to {}", config.path))],
+            Ok(Err(e)) => vec![error(format!("Export failed: {e:#}"))],
+            Err(e) => vec![error(format!("Export failed: {e}"))],
+        }
     }
 }
 
@@ -65,7 +96,7 @@ fn error(message: String) -> Action {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use qry_core::sqlite::SqliteConfig;
+    use qry_core::{ExportType, sqlite::SqliteConfig};
 
     fn in_memory() -> DbCommand {
         DbCommand::Connect(
@@ -121,5 +152,55 @@ mod tests {
             action_rx.recv().await,
             Some(Action::Status(StatusCode::Error(_)))
         ));
+    }
+
+    fn temp_csv() -> String {
+        let name = format!("qry-worker-{}.csv", std::process::id());
+        std::env::temp_dir().join(name).display().to_string()
+    }
+
+    #[tokio::test]
+    async fn export_writes_the_last_result() {
+        let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+        let db = spawn(action_tx);
+        let path = temp_csv();
+
+        // Nothing has run yet, so there is nothing to export.
+        db.send(DbCommand::Export(ExportConfig {
+            path: path.clone(),
+            separator: ",".into(),
+            etype: ExportType::Csv,
+        }))
+        .unwrap();
+        assert_eq!(
+            action_rx.recv().await,
+            Some(error("Nothing to export yet: run a query first".into()))
+        );
+
+        db.send(in_memory()).unwrap();
+        db.send(DbCommand::Query(
+            "WITH t(id, name) AS (VALUES (1, 'alice'), (2, NULL)) SELECT * FROM t".into(),
+        ))
+        .unwrap();
+        db.send(DbCommand::Export(ExportConfig {
+            path: path.clone(),
+            separator: ",".into(),
+            etype: ExportType::Csv,
+        }))
+        .unwrap();
+
+        let mut messages = Vec::new();
+        while messages.len() < 4 {
+            messages.push(action_rx.recv().await.unwrap());
+        }
+        assert_eq!(
+            messages.last(),
+            Some(&success(format!("Exported 2 rows to {path}")))
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "id,name\n1,alice\n2,\n"
+        );
+        let _ = std::fs::remove_file(&path);
     }
 }

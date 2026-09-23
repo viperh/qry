@@ -36,7 +36,8 @@ pub struct App {
 pub enum Mode {
     #[default]
     Home,
-    AddConnModal
+    AddConnModal,
+    ExpoModal
 }
 
 
@@ -173,6 +174,9 @@ impl App {
                 }
                 Action::Execute(ref sql) if !sql.trim().is_empty() => {
                     self.send_db(DbCommand::Query(sql.clone()))?;
+                }
+                Action::Export(ref config) => {
+                    self.send_db(DbCommand::Export(config.clone()))?;
                 }
                 Action::Connect(ref name, ref config) => {
                     self.send_db(DbCommand::Connect(name.clone(), config.clone()))?;

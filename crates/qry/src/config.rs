@@ -6,7 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use serde::{Deserialize, de::Deserializer};
 use tracing::error;
 
-use crate::{action::Action, app::Mode};
+use crate::{action::Action, app::Mode, keymap::PaneKeys};
 
 /// The default config, baked into the binary at compile time. User config
 /// files found in [`get_config_dir`] are layered on top of it.
@@ -21,6 +21,9 @@ const APP_ORGANIZATION: &str = "viperh";
 pub struct Config {
     #[serde(default)]
     pub keybindings: KeyBindings,
+    /// Keys that act inside one pane; see [`crate::keymap`].
+    #[serde(default)]
+    pub panes: PaneKeys,
     #[serde(default)]
     pub styles: Styles,
 }
@@ -81,6 +84,7 @@ impl Config {
                     .or_insert_with(|| cmd.clone());
             }
         }
+        cfg.panes.merge_defaults(&default_config.panes);
         for (mode, default_styles) in default_config.styles.0.iter() {
             let user_styles = cfg.styles.0.entry(*mode).or_default();
             for (style_key, style) in default_styles.iter() {
@@ -89,6 +93,13 @@ impl Config {
         }
 
         Ok(cfg)
+    }
+
+    /// Only the built-in config, ignoring any user files. Keeps tests
+    /// independent of the machine they run on.
+    #[cfg(test)]
+    pub fn embedded() -> Self {
+        json5::from_str(CONFIG).expect("the embedded config is valid")
     }
 }
 
@@ -510,7 +521,7 @@ mod tests {
                 .0
                 .get(&Mode::Home)
                 .unwrap()
-                .get(&parse_key_sequence("<q>").unwrap_or_default())
+                .get(&parse_key_sequence("<ctrl-q>").unwrap_or_default())
                 .unwrap(),
             &Action::Quit
         );

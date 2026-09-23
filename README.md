@@ -43,7 +43,7 @@ if you later add a second front end (a CLI, a daemon, a web UI).
 cargo run -p qry
 ```
 
-`q`, `Ctrl-c` and `Ctrl-d` quit; `Ctrl-z` suspends. Rebind in
+`q`, `Ctrl-q quit
 `.config/config.json`.
 
 ```sh

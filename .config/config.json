@@ -1,18 +1,92 @@
 {
   "keybindings": {
     "Home": {
-      "<q>": "Quit",
-      "<Ctrl-c>": "Quit",
+      "<Ctrl-q>": "Quit",
       "<Ctrl-h>": "Help",
       "<tab>": "FocusNext",
       "<shift-backtab>": "FocusPrev",
       "<Ctrl-n>": { "ChangeMode": "AddConnModal" },
-      "<Ctrl-e>": "Export"
+      "<Ctrl-e>": { "ChangeMode":  "ExpoModal"}
     },
     "AddConnModal": {
       "<esc>": { "ChangeMode": "Home" }
+    },
+    "ExpoModal": {
+      "<esc>": { "ChangeMode": "Home" }
     }
 
+  },
+  "panes": {
+    "Editor": {
+      "<f8>": "RunQuery",
+      "<enter>": "NewLine",
+      "<left>": "Left",
+      "<right>": "Right",
+      "<up>": "Up",
+      "<down>": "Down",
+      "<ctrl-left>": "WordLeft",
+      "<ctrl-right>": "WordRight",
+      "<home>": "LineStart",
+      "<end>": "LineEnd",
+      "<ctrl-home>": "Top",
+      "<ctrl-end>": "Bottom",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
+      "<shift-left>": "SelectLeft",
+      "<shift-right>": "SelectRight",
+      "<shift-up>": "SelectUp",
+      "<shift-down>": "SelectDown",
+      "<ctrl-shift-left>": "SelectWordLeft",
+      "<ctrl-shift-right>": "SelectWordRight",
+      "<shift-home>": "SelectLineStart",
+      "<shift-end>": "SelectLineEnd",
+      "<ctrl-a>": "SelectAll",
+      "<backspace>": "DeleteBack",
+      "<delete>": "DeleteForward",
+      "<ctrl-w>": "DeleteWordBack",
+      "<alt-d>": "DeleteWordForward",
+      "<ctrl-k>": "DeleteToLineEnd",
+      "<alt-c>": "Copy",
+      "<ctrl-x>": "Cut",
+      "<ctrl-y>": "Paste",
+      "<ctrl-u>": "Undo",
+      "<ctrl-r>": "Redo"
+    },
+    "Results": {
+      "<up>": "Up",
+      "<i>": "Up",
+      "<down>": "Down",
+      "<k>": "Down",
+      "<left>": "Left",
+      "<j>": "Left",
+      "<right>": "Right",
+      "<l>": "Right",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
+      "<home>": "FirstColumn",
+      "<end>": "LastColumn",
+      "<g>": "FirstRow",
+      "<shift-g>": "LastRow"
+    },
+    "Form": {
+      "<tab>": "NextField",
+      "<shift-backtab>": "PrevField",
+      "<enter>": "Submit",
+      "<left>": "Left",
+      "<right>": "Right",
+      "<space>": "NextChoice",
+      "<home>": "LineStart",
+      "<end>": "LineEnd",
+      "<backspace>": "DeleteBack",
+      "<delete>": "DeleteForward"
+    },
+    "Help": {
+      "<esc>": "Close",
+      "<up>": "ScrollUp",
+      "<down>": "ScrollDown",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown"
+    }
   },
   "styles": {
     "Home": {}

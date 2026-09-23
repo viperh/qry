@@ -13,6 +13,9 @@ mod results;
 mod statuspanel;
 mod help;
 mod textinput;
+mod form;
+mod connform;
+mod exportform;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
