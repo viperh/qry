@@ -69,6 +69,8 @@ pub struct Home {
     awaiting: Option<Awaiting>,
     /// Whose password the worker asked for, for the prompt's title.
     asked: Option<String>,
+    /// The connection the tree asked to change, for the form to open with.
+    editing: Option<Box<crate::connections::StoredConnection>>,
     help: Help,
     helpvisible: bool,
 }
@@ -104,10 +106,13 @@ impl Home {
     }
 
     /// The modal a mode shows, freshly filled in. `Home` shows none.
-    fn modal_for(&self, mode: Mode) -> Option<Box<dyn Form>> {
+    fn modal_for(&mut self, mode: Mode) -> Option<Box<dyn Form>> {
         match mode {
             Mode::Home => None,
-            Mode::AddConnModal => Some(Box::new(ConnForm::default())),
+            Mode::AddConnModal => Some(match self.editing.take() {
+                Some(record) => Box::new(ConnForm::editing(&record)),
+                None => Box::new(ConnForm::default()),
+            }),
             Mode::ExpoModal => Some(Box::new(ExportForm::default())),
             Mode::PasswordModal => Some(Box::new(PasswordForm::new(
                 self.asked.clone().unwrap_or_default(),
@@ -242,6 +247,13 @@ impl Component for Home {
             Action::ChangeMode(mode) => {
                 self.modal = self.modal_for(*mode);
                 self.awaiting = None;
+            }
+            // The tree asked for a connection to be changed.
+            Action::EditConnection(record) => {
+                self.editing = Some(record.clone());
+                if let Some(tx) = &self.command_tx {
+                    tx.send(Action::ChangeMode(Mode::AddConnModal))?;
+                }
             }
             // The worker cannot prompt, so it asks here.
             Action::NeedPassword { name, .. } => {

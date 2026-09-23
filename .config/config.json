@@ -78,6 +78,7 @@
       "<k>": "Down",
       "<space>": "Toggle",
       "<enter>": "Connect",
+      "<e>": "Edit",
       "<delete>": "Delete",
       "<home>": "First",
       "<end>": "Last"

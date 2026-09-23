@@ -41,6 +41,7 @@ const SSL_MODES: [&str; 6] = ["disable", "allow", "prefer", "require", "verify-c
 /// file of its own, so these are the only choices.
 const STORES: [&str; 3] = ["KEYCHAIN", "ASK EACH TIME", "ENVIRONMENT"];
 const KEYCHAIN: usize = 0;
+const ASK: usize = 1;
 const ENVIRONMENT: usize = 2;
 
 /// The New Connection form.
@@ -53,6 +54,11 @@ pub struct ConnForm {
     /// Minted once, so retrying after a failure does not make a second
     /// connection with a second keychain entry.
     id: String,
+    /// Editing an existing connection rather than making one, which changes
+    /// what an empty password field means.
+    editing: bool,
+    /// Where its password lived before the edit.
+    was: Secret,
 }
 
 impl Default for ConnForm {
@@ -75,11 +81,72 @@ impl Default for ConnForm {
             error: None,
             pending: None,
             id: StoredConnection::new("", Driver::Sqlite).id,
+            editing: false,
+            was: Secret::None,
         }
     }
 }
 
 impl ConnForm {
+    /// Opens an existing connection for changing. The password field starts
+    /// empty: leaving it be keeps whatever the connection already used.
+    pub fn editing(record: &StoredConnection) -> Self {
+        let mut form = Self {
+            id: record.id.clone(),
+            editing: true,
+            was: record.secret.clone(),
+            ..Self::default()
+        };
+
+        form.set_text(NAME, &record.name);
+        form.set_choice(TYPE, DRIVERS.iter().position(|d| *d == record.driver).unwrap_or(0));
+        form.set_text(HOST, record.host.as_deref().unwrap_or_default());
+        form.set_text(PORT, &record.port.map(|p| p.to_string()).unwrap_or_default());
+        form.set_text(USER, record.user.as_deref().unwrap_or_default());
+        form.set_text(SCHEMA, record.schema.as_deref().unwrap_or_default());
+        // The one field the drivers disagree about.
+        let database = match record.driver {
+            Driver::Sqlite => record.path.as_deref(),
+            Driver::Oracle => record.service.as_deref(),
+            _ => record.database.as_deref(),
+        };
+        form.set_text(DATABASE, database.unwrap_or_default());
+        if let Some(tls) = &record.tls
+            && let Some(mode) = SSL_MODES.iter().position(|m| m == tls)
+        {
+            form.set_choice(SSL_MODE, mode);
+        }
+
+        match &record.secret {
+            Secret::Keyring => {
+                form.set_choice(STORE, KEYCHAIN);
+                if let Field::Text(input) = &mut form.fields[PASSWORD] {
+                    input.placeholder = Some("(unchanged)");
+                }
+            }
+            Secret::Env { var } => {
+                form.set_choice(STORE, ENVIRONMENT);
+                form.after_change();
+                form.set_text(VAR, var);
+            }
+            Secret::Prompt | Secret::None => form.set_choice(STORE, ASK),
+        }
+        form
+    }
+
+    fn set_text(&mut self, field: usize, value: &str) {
+        if let Field::Text(input) = &mut self.fields[field] {
+            input.value = value.to_string();
+            input.cursor = input.len();
+        }
+    }
+
+    fn set_choice(&mut self, field: usize, option: usize) {
+        if let Field::Choice { selected, .. } = &mut self.fields[field] {
+            *selected = option;
+        }
+    }
+
     fn driver(&self) -> Driver {
         DRIVERS[self.selected(TYPE)]
     }
@@ -91,7 +158,7 @@ impl ConnForm {
 
 impl Form for ConnForm {
     fn title(&self) -> &'static str {
-        "New Connection"
+        if self.editing { "Edit Connection" } else { "New Connection" }
     }
 
     fn hint(&self) -> &'static str {
@@ -194,6 +261,8 @@ impl Form for ConnForm {
                 Some(var) => Secret::Env { var },
                 None => return Err("Variable is required".into()),
             },
+            // Editing and leaving the password be keeps what it used.
+            (true, KEYCHAIN) if password.is_empty() && self.editing => self.was.clone(),
             // Nothing typed means there is nothing to keep, so it is asked
             // for on every connect.
             (true, KEYCHAIN) if password.is_empty() => Secret::Prompt,
@@ -334,6 +403,64 @@ mod tests {
         let built = record(&form);
         assert_eq!(built.service.as_deref(), Some("app"));
         assert_eq!(built.database, None);
+    }
+
+    #[test]
+    fn editing_opens_the_form_filled_in_and_keeps_the_id() {
+        let _guard = secrets::test_lock();
+        let _ = secrets::take_stash();
+        let mut saved = record(&filled());
+        saved.port = Some(6543);
+        saved.secret = Secret::Keyring;
+
+        let form = ConnForm::editing(&saved);
+        assert_eq!(form.title(), "Edit Connection");
+        assert_eq!(form.text(NAME), "prod");
+        assert_eq!(form.text(HOST), "db.local");
+        assert_eq!(form.text(PORT), "6543");
+        assert_eq!(form.text(DATABASE), "app");
+        assert_eq!(form.text(SCHEMA), "reporting");
+        assert_eq!(form.text(PASSWORD), "", "the password is never shown back");
+
+        let shown = lines(&render(&form, 80, 60)).join("\n");
+        assert!(shown.contains("(unchanged)"), "{shown}");
+
+        // Saving it again is the same connection, not a second one.
+        let edited = record(&form);
+        assert_eq!(edited.id, saved.id);
+        assert_eq!(edited.secret, Secret::Keyring, "its password is untouched");
+        assert_eq!(edited.port, Some(6543));
+    }
+
+    #[test]
+    fn editing_can_change_where_the_password_lives() {
+        let _guard = secrets::test_lock();
+        let mut saved = record(&filled());
+        saved.secret = Secret::Keyring;
+
+        // Asking each time from now on.
+        let mut form = ConnForm::editing(&saved);
+        choose(&mut form, STORE, "ASK EACH TIME");
+        assert_eq!(record(&form).secret, Secret::Prompt);
+
+        // Or typing a new one, which replaces what the keychain holds.
+        let mut form = ConnForm::editing(&saved);
+        set(&mut form, PASSWORD, "newer");
+        assert_eq!(record(&form).secret, Secret::Keyring);
+        assert_eq!(
+            secrets::take_stash().map(|p| p.as_str().to_string()),
+            Some("newer".to_string())
+        );
+    }
+
+    #[test]
+    fn editing_an_environment_connection_shows_its_variable() {
+        let mut saved = record(&filled());
+        saved.secret = Secret::Env { var: "PGPASSWORD".into() };
+
+        let form = ConnForm::editing(&saved);
+        assert_eq!(form.labels(), LABELS_VAR);
+        assert_eq!(form.text(VAR), "PGPASSWORD");
     }
 
     #[test]

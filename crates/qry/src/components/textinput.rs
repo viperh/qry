@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::prelude::Stylize;
 use ratatui::widgets::Paragraph;
 
 
@@ -9,6 +10,8 @@ pub(crate) struct TextInput {
     pub value: String,
     pub cursor: usize,
     pub masked: bool,
+    /// Shown dimmed while the field is empty, for what an empty field means.
+    pub placeholder: Option<&'static str>,
 }
 
 /// The character a key types, if it is plain typing rather than a shortcut.
@@ -88,7 +91,12 @@ impl TextInput {
             self.value.chars().skip(offset).take(width).collect()
         };
 
-        frame.render_widget(Paragraph::new(visible), area);
+        match (visible.is_empty(), self.placeholder) {
+            (true, Some(placeholder)) => {
+                frame.render_widget(Paragraph::new(placeholder).dark_gray(), area);
+            }
+            _ => frame.render_widget(Paragraph::new(visible), area),
+        }
         if focused {
             let x = area.x + u16::try_from(self.cursor - offset).unwrap_or(0);
             frame.set_cursor_position((x, area.y));

@@ -78,10 +78,11 @@ impl ConnTree {
     }
 
     /// Remembers a connection the app is about to open, adding it to the
-    /// tree if its id is new. The entry stays once it has connected.
-    fn attempt(&mut self, record: &StoredConnection) {
+    /// tree if its id is new and taking on its fields if it was edited. The
+    /// entry stays once it has connected.
+    fn attempt(&mut self, record: &StoredConnection) -> color_eyre::Result<()> {
         let known = self.connections.iter().position(|n| n.record.id == record.id);
-        self.attempting = Some(known.unwrap_or_else(|| {
+        let Some(i) = known else {
             self.connections.push(Node {
                 record: record.clone(),
                 label: None,
@@ -90,8 +91,25 @@ impl ConnTree {
                 loading: false,
                 unsaved: !record.ephemeral,
             });
-            self.connections.len() - 1
-        }));
+            self.attempting = Some(self.connections.len() - 1);
+            return Ok(());
+        };
+
+        self.attempting = Some(i);
+        let previous = std::mem::replace(&mut self.connections[i].record, record.clone());
+        if previous == *record {
+            return Ok(());
+        }
+        // Edited: worth writing once it opens, and its tables may differ.
+        self.connections[i].unsaved = !record.ephemeral;
+        self.connections[i].tables = None;
+        if matches!(previous.secret, Secret::Keyring)
+            && !matches!(record.secret, Secret::Keyring)
+        {
+            // Its password is no longer kept, so it should not linger.
+            self.send(Action::ForgetSecret(previous.id))?;
+        }
+        Ok(())
     }
 
     /// The records worth writing: everything but the scratch database.
@@ -144,6 +162,13 @@ impl ConnTree {
             TreeCommand::Connect => {
                 if let Some(Row::Connection(i)) = rows.get(self.selected) {
                     self.send(Action::Connect(Box::new(self.connections[*i].record.clone())))?;
+                }
+            }
+            TreeCommand::Edit => {
+                if let Some(Row::Connection(i)) = rows.get(self.selected) {
+                    self.send(Action::EditConnection(Box::new(
+                        self.connections[*i].record.clone(),
+                    )))?;
                 }
             }
             TreeCommand::Delete => {
@@ -221,7 +246,7 @@ impl Component for ConnTree {
         match action {
             // Every connection the app opens passes through here, whether it
             // came from the New Connection modal or from this tree.
-            Action::Connect(ref record) => self.attempt(record),
+            Action::Connect(ref record) => self.attempt(record)?,
             Action::Connected(label) => {
                 if let Some(i) = self.attempting.take() {
                     self.connections[i].label = Some(label);
@@ -243,9 +268,10 @@ impl Component for ConnTree {
             }
             Action::ConnectFailed(_) => {
                 if let Some(i) = self.attempting.take()
-                    && self.connections[i].label.is_none()
+                    // Only one added this session and never written: a saved
+                    // connection stays, whatever the database says today.
+                    && self.connections[i].unsaved
                 {
-                    // It never opened, so it does not belong in the tree.
                     self.forget(i);
                 }
                 self.expand_when_connected = None;
@@ -500,6 +526,72 @@ mod tests {
         press(&mut tree, KeyCode::Down);
         assert_eq!(row_style(&mut tree, 30, 8, 1), (Color::Gray, Color::Reset));
         assert_eq!(row_style(&mut tree, 30, 8, 2), (Color::Green, Color::Reset));
+    }
+
+    #[test]
+    fn e_opens_the_selected_connection_for_editing() {
+        let (mut tree, mut rx) = tree();
+        let saved = record("prod", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+        while rx.try_recv().is_ok() {}
+
+        press(&mut tree, KeyCode::Char('e'));
+        let Ok(Action::EditConnection(asked)) = rx.try_recv() else {
+            panic!("expected an edit");
+        };
+        assert_eq!(asked.id, saved.id);
+    }
+
+    #[test]
+    fn an_edited_connection_replaces_the_old_one_and_is_saved() {
+        let (mut tree, mut rx) = tree();
+        let saved = record("prod", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+        while rx.try_recv().is_ok() {}
+
+        // Same id, new name: the edit, coming back through the app.
+        let mut edited = saved.clone();
+        edited.name = "production".into();
+        tree.update(Action::Connect(Box::new(edited))).unwrap();
+        tree.update(Action::Connected("app.db".into())).unwrap();
+
+        assert_eq!(tree.connections.len(), 1, "not a second connection");
+        assert!(lines(&mut tree, 30, 8).join("\n").contains("production"));
+        let Ok(Action::SaveConnections(list)) = rx.try_recv() else {
+            panic!("expected a save");
+        };
+        assert_eq!(list[0].name, "production");
+    }
+
+    #[test]
+    fn an_edit_that_stops_using_the_keychain_forgets_the_password() {
+        let (mut tree, mut rx) = tree();
+        let mut saved = record("prod", "app.db");
+        saved.secret = Secret::Keyring;
+        let id = saved.id.clone();
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+        while rx.try_recv().is_ok() {}
+
+        let mut edited = saved.clone();
+        edited.secret = Secret::Prompt;
+        tree.update(Action::Connect(Box::new(edited))).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), Action::ForgetSecret(id));
+    }
+
+    #[test]
+    fn a_saved_connection_survives_a_failed_connect() {
+        let (mut tree, _rx) = tree();
+        let saved = record("prod", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+
+        // It has never opened in this session, which is not the same as
+        // never having existed.
+        tree.update(Action::Connect(Box::new(saved))).unwrap();
+        tree.update(Action::ConnectFailed("password authentication failed".into()))
+            .unwrap();
+
+        assert_eq!(tree.connections.len(), 1);
+        assert!(lines(&mut tree, 30, 8).join("\n").contains("prod"));
     }
 
     #[test]

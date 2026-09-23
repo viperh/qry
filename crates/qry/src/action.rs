@@ -38,6 +38,8 @@ pub enum Action {
     NeedPassword { id: String, name: String },
     /// A password is waiting in the stash for the connection that asked.
     PasswordEntered,
+    /// Open this connection in the New Connection form, to change it.
+    EditConnection(Box<StoredConnection>),
     /// Remove this connection's password from the keychain.
     ForgetSecret(String),
     /// The keychain refused a password, so the connection must ask for one
