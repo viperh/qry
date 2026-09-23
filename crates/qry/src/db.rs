@@ -16,6 +16,8 @@ pub enum DbCommand {
     Query(String),
     /// Writes the last result to a file; no second trip to the database.
     Export(ExportConfig),
+    /// The tables of the open connection, for the tree.
+    ListTables,
 }
 
 /// The connection and the last result it produced.
@@ -75,6 +77,10 @@ impl Worker {
                 Err(e) => vec![error(format!("{e:#}"))],
             },
             DbCommand::Export(config) => self.export(config).await,
+            DbCommand::ListTables => match self.driver.tables().await {
+                Ok(tables) => vec![Action::TablesLoaded(tables)],
+                Err(e) => vec![Action::TablesFailed(e.to_string()), error(format!("{e:#}"))],
+            },
         }
     }
 

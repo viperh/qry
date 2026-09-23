@@ -40,6 +40,11 @@ pub enum Action {
     /// path it wrote, or why it could not.
     Exported(String),
     ExportFailed(String),
+    /// Asked for by the tree when a connection is expanded, and answered by
+    /// the worker with the tables of whatever is connected.
+    ListTables,
+    TablesLoaded(Vec<String>),
+    TablesFailed(String),
     /// Sent by the database worker. Wrapped in `Arc` because every action is
     /// cloned once per component.
     QueryDone(Arc<QueryResult>),

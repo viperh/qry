@@ -151,6 +151,14 @@ impl Driver {
         db.query(sql).await
     }
 
+    /// The tables of the open connection, for the connection tree.
+    pub async fn tables(&self) -> Result<Vec<String>> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.tables().await
+    }
+
 
 }
 
@@ -233,6 +241,20 @@ mod tests {
     fn debug_output_never_contains_the_password() {
         let shown = format!("{:?}", postgres(SslMode::Prefer));
         assert_eq!(shown, "Postgres(alice@db.invalid:5432/app)");
+    }
+
+    #[tokio::test]
+    async fn tables_lists_what_the_connection_can_see() {
+        let mut driver = Driver::new();
+        assert!(driver.tables().await.is_err(), "not connected");
+
+        driver.connect(in_memory()).await.unwrap();
+        assert!(driver.tables().await.unwrap().is_empty());
+
+        driver.query("CREATE TABLE people (name TEXT)").await.unwrap();
+        driver.query("CREATE TABLE addresses (line TEXT)").await.unwrap();
+        driver.query("CREATE VIEW recent AS SELECT * FROM people").await.unwrap();
+        assert_eq!(driver.tables().await.unwrap(), ["addresses", "people", "recent"]);
     }
 
     #[tokio::test]

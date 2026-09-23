@@ -78,10 +78,11 @@ impl App {
             component.init(tui.size()?)?;
         }
 
-        // Temporary: until the New Connection modal can build a config, every
-        // session starts on an empty in-memory SQLite database.
-        self.send_db(DbCommand::Connect(
-            String::new(),
+        // Every session starts on an empty in-memory SQLite database. It goes
+        // out as an action rather than straight to the worker, so the tree
+        // lists it like any other connection.
+        self.action_tx.send(Action::Connect(
+            "scratch".to_string(),
             ConnectionConfig::Sqlite(SqliteConfig::new(":memory:", false)),
         ))?;
 
@@ -181,6 +182,7 @@ impl App {
                 Action::Connect(ref name, ref config) => {
                     self.send_db(DbCommand::Connect(name.clone(), config.clone()))?;
                 }
+                Action::ListTables => self.send_db(DbCommand::ListTables)?,
                 _ => {}
             }
             for component in self.components.iter_mut() {

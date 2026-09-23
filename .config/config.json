@@ -68,6 +68,16 @@
       "<g>": "FirstRow",
       "<shift-g>": "LastRow"
     },
+    "Tree": {
+      "<up>": "Up",
+      "<i>": "Up",
+      "<down>": "Down",
+      "<k>": "Down",
+      "<space>": "Toggle",
+      "<enter>": "Connect",
+      "<home>": "First",
+      "<end>": "Last"
+    },
     "Form": {
       "<tab>": "NextField",
       "<shift-backtab>": "PrevField",

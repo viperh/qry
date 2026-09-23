@@ -29,6 +29,7 @@ impl Help {
         let panes = &config.panes;
         let sections = [
             ("Global", mode_bindings(config, Mode::Home)),
+            ("Connection tree", pane_bindings(panes.tree.describe())),
             ("Editor", pane_bindings(panes.editor.describe())),
             ("Results", pane_bindings(panes.results.describe())),
             // Both modals share these keys, so they are listed once.
@@ -193,7 +194,16 @@ mod tests {
         let titles: Vec<_> = help.sections.iter().map(|(t, _)| t.as_str()).collect();
         assert_eq!(
             titles,
-            ["Global", "Editor", "Results", "Forms", "New Connection", "Export", "Help"]
+            [
+                "Global",
+                "Connection tree",
+                "Editor",
+                "Results",
+                "Forms",
+                "New Connection",
+                "Export",
+                "Help"
+            ]
         );
 
         let find = |title: &str, desc: &str| {
@@ -201,6 +211,8 @@ mod tests {
             binds.iter().find(|(_, d)| d == desc).map(|(k, _)| k.clone())
         };
         assert_eq!(find("Global", "Quit").as_deref(), Some("Ctrl-q"));
+        assert_eq!(find("Connection tree", "Connect").as_deref(), Some("Enter"));
+        assert_eq!(find("Connection tree", "Expand or collapse").as_deref(), Some("Space"));
         assert_eq!(find("Editor", "Run query").as_deref(), Some("F8"));
         assert_eq!(find("Results", "Up a row").as_deref(), Some("↑ / i"));
         assert_eq!(find("Results", "Last row").as_deref(), Some("G"));

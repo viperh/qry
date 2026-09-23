@@ -93,6 +93,8 @@ pub struct PaneKeys {
     pub editor: Keymap<EditorCommand>,
     #[serde(default)]
     pub results: Keymap<ResultsCommand>,
+    #[serde(default)]
+    pub tree: Keymap<TreeCommand>,
     /// Shared by every modal form.
     #[serde(default)]
     pub form: Keymap<FormCommand>,
@@ -104,6 +106,7 @@ impl PaneKeys {
     pub fn merge_defaults(&mut self, defaults: &Self) {
         self.editor.merge_defaults(&defaults.editor);
         self.results.merge_defaults(&defaults.results);
+        self.tree.merge_defaults(&defaults.tree);
         self.form.merge_defaults(&defaults.form);
         self.help.merge_defaults(&defaults.help);
     }
@@ -243,6 +246,32 @@ impl Command for ResultsCommand {
             Self::LastColumn => "Last column",
             Self::FirstRow => "First row",
             Self::LastRow => "Last row",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
+pub enum TreeCommand {
+    Up,
+    Down,
+    /// Opens or closes the selected connection, loading its tables the first
+    /// time it opens.
+    Toggle,
+    /// Connects to the selected connection.
+    Connect,
+    First,
+    Last,
+}
+
+impl Command for TreeCommand {
+    fn description(self) -> &'static str {
+        match self {
+            Self::Up => "Up a row",
+            Self::Down => "Down a row",
+            Self::Toggle => "Expand or collapse",
+            Self::Connect => "Connect",
+            Self::First => "First row",
+            Self::Last => "Last row",
         }
     }
 }
