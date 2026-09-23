@@ -99,6 +99,16 @@ pub trait Form {
     /// each other can add or remove one.
     fn after_change(&mut self) {}
 
+    /// What the form is waiting for, shown in place of the hint. While this
+    /// is set its owner ignores Submit, so one Enter is one attempt.
+    fn pending(&self) -> Option<&'static str> {
+        None
+    }
+
+    fn set_pending(&mut self, pending: Option<&'static str>) {
+        let _ = pending;
+    }
+
     fn text(&self, field: usize) -> &str {
         match &self.fields()[field] {
             Field::Text(input) => &input.value,
@@ -161,9 +171,10 @@ pub trait Form {
             .areas(popup);
 
         frame.render_widget(Clear, popup);
-        let footer = match self.error() {
-            Some(error) => Line::from(format!(" {error} ")).red(),
-            None => Line::from(format!(" {} ", self.hint())).dark_gray(),
+        let footer = match (self.pending(), self.error()) {
+            (Some(pending), _) => Line::from(format!(" {pending} ")).cyan(),
+            (None, Some(error)) => Line::from(format!(" {error} ")).red(),
+            (None, None) => Line::from(format!(" {} ", self.hint())).dark_gray(),
         };
         let block = Block::bordered().title(self.title()).title_bottom(footer);
         let inner = block.inner(popup).inner(Margin::new(2, 1));

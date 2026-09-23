@@ -29,6 +29,8 @@ pub struct ConnForm {
     fields: [Field; 9],
     focus: usize,
     error: Option<String>,
+    /// Set while the database worker is trying the connection.
+    pending: Option<&'static str>,
 }
 
 impl Default for ConnForm {
@@ -48,6 +50,7 @@ impl Default for ConnForm {
             ],
             focus: 0,
             error: None,
+            pending: None,
         }
     }
 }
@@ -87,6 +90,14 @@ impl Form for ConnForm {
 
     fn set_error(&mut self, error: Option<String>) {
         self.error = error;
+    }
+
+    fn pending(&self) -> Option<&'static str> {
+        self.pending
+    }
+
+    fn set_pending(&mut self, pending: Option<&'static str>) {
+        self.pending = pending;
     }
 
     /// Turns the form into a connection name and config, or explains what is

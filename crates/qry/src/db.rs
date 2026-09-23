@@ -46,9 +46,20 @@ impl Worker {
     async fn run(&mut self, command: DbCommand) -> Vec<Action> {
         match command {
             DbCommand::Connect(name, config) => match self.driver.connect(config).await {
-                Ok(label) if name.is_empty() => vec![success(format!("Connected to {label}"))],
-                Ok(label) => vec![success(format!("Connected to {name} ({label})"))],
-                Err(e) => vec![error(format!("Connection failed: {e:#}"))],
+                Ok(label) => {
+                    let shown = if name.is_empty() {
+                        label.clone()
+                    } else {
+                        format!("{name} ({label})")
+                    };
+                    vec![Action::Connected(label), success(format!("Connected to {shown}"))]
+                }
+                Err(e) => vec![
+                    // The modal shows the top of the chain, which fits its
+                    // bottom border; the status bar gets the whole of it.
+                    Action::ConnectFailed(e.to_string()),
+                    error(format!("Connection failed: {e:#}")),
+                ],
             },
             DbCommand::Query(sql) => match self.driver.query(&sql).await {
                 Ok(result) => {
@@ -69,7 +80,8 @@ impl Worker {
 
     async fn export(&self, config: ExportConfig) -> Vec<Action> {
         let Some(result) = &self.last else {
-            return vec![error("Nothing to export yet: run a query first".into())];
+            let message = "Nothing to export yet: run a query first";
+            return vec![Action::ExportFailed(message.into()), error(message.into())];
         };
         let exporter = Exporter::from_result(result, &config);
         let etype = config.etype;
@@ -78,9 +90,14 @@ impl Worker {
         // query, so it goes to a thread that is allowed to block.
         let written = tokio::task::spawn_blocking(move || exporter.write(etype)).await;
         match written {
-            Ok(Ok(rows)) => vec![success(format!("Exported {rows} rows to {}", config.path))],
-            Ok(Err(e)) => vec![error(format!("Export failed: {e:#}"))],
-            Err(e) => vec![error(format!("Export failed: {e}"))],
+            Ok(Ok(rows)) => vec![
+                Action::Exported(config.path.clone()),
+                success(format!("Exported {rows} rows to {}", config.path)),
+            ],
+            // As with a connection, the modal gets the short message and the
+            // status bar the whole chain.
+            Ok(Err(e)) => vec![Action::ExportFailed(e.to_string()), error(format!("Export failed: {e:#}"))],
+            Err(e) => vec![Action::ExportFailed(e.to_string()), error(format!("Export failed: {e}"))],
         }
     }
 }
@@ -114,10 +131,32 @@ mod tests {
             ConnectionConfig::Sqlite(SqliteConfig::new(":memory:", false)),
         ))
         .unwrap();
+        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
         assert_eq!(
             action_rx.recv().await,
             Some(success("Connected to scratch (:memory:)".into()))
         );
+    }
+
+    #[tokio::test]
+    async fn a_failed_connection_is_reported_for_the_modal_and_the_status_bar() {
+        let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+        let db = spawn(action_tx);
+        db.send(DbCommand::Connect(
+            String::new(),
+            // A directory is not a database file.
+            ConnectionConfig::Sqlite(SqliteConfig::new(std::env::temp_dir(), true)),
+        ))
+        .unwrap();
+
+        let Some(Action::ConnectFailed(message)) = action_rx.recv().await else {
+            panic!("expected ConnectFailed first, for the modal");
+        };
+        assert!(!message.is_empty());
+        assert!(matches!(
+            action_rx.recv().await,
+            Some(Action::Status(StatusCode::Error(_)))
+        ));
     }
 
     #[tokio::test]
@@ -127,6 +166,7 @@ mod tests {
         db.send(in_memory()).unwrap();
         db.send(DbCommand::Query("SELECT 1 AS one".into())).unwrap();
 
+        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
         assert_eq!(action_rx.recv().await, Some(success("Connected to :memory:".into())));
         let Some(Action::QueryDone(result)) = action_rx.recv().await else {
             panic!("expected QueryDone");
@@ -146,7 +186,8 @@ mod tests {
         );
 
         db.send(in_memory()).unwrap();
-        action_rx.recv().await;
+        action_rx.recv().await; // Connected
+        action_rx.recv().await; // its status message
         db.send(DbCommand::Query("SELEC nonsense".into())).unwrap();
         assert!(matches!(
             action_rx.recv().await,
@@ -174,6 +215,10 @@ mod tests {
         .unwrap();
         assert_eq!(
             action_rx.recv().await,
+            Some(Action::ExportFailed("Nothing to export yet: run a query first".into()))
+        );
+        assert_eq!(
+            action_rx.recv().await,
             Some(error("Nothing to export yet: run a query first".into()))
         );
 
@@ -189,8 +234,9 @@ mod tests {
         }))
         .unwrap();
 
+        // Connected, its status, QueryDone, its status, Exported, its status.
         let mut messages = Vec::new();
-        while messages.len() < 4 {
+        while messages.len() < 6 {
             messages.push(action_rx.recv().await.unwrap());
         }
         assert_eq!(

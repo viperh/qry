@@ -29,6 +29,8 @@ pub struct ExportForm {
     fields: Vec<Field>,
     focus: usize,
     error: Option<String>,
+    /// Set while the database worker is writing the file.
+    pending: Option<&'static str>,
     /// Kept so switching to Excel and back does not forget the choice.
     separator: usize,
 }
@@ -43,6 +45,7 @@ impl Default for ExportForm {
             ],
             focus: 0,
             error: None,
+            pending: None,
             separator: 0,
         }
     }
@@ -93,6 +96,14 @@ impl Form for ExportForm {
 
     fn set_error(&mut self, error: Option<String>) {
         self.error = error;
+    }
+
+    fn pending(&self) -> Option<&'static str> {
+        self.pending
+    }
+
+    fn set_pending(&mut self, pending: Option<&'static str>) {
+        self.pending = pending;
     }
 
     /// Adds and removes the Separator and Custom fields to match the type and

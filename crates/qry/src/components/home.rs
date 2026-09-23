@@ -42,6 +42,14 @@ impl Pane {
     }
 }
 
+/// An answer a modal is waiting for, so a late one meant for a modal that has
+/// since been closed cannot act on whatever is open now.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Awaiting {
+    Connect,
+    Export,
+}
+
 /// The main screen: the panes, and whatever is on top of them.
 #[derive(Default)]
 pub struct Home {
@@ -56,6 +64,8 @@ pub struct Home {
 
     /// The open modal, if any; the mode decides which one.
     modal: Option<Box<dyn Form>>,
+    /// What that modal is waiting for the worker to answer, if anything.
+    awaiting: Option<Awaiting>,
     help: Help,
     helpvisible: bool,
 }
@@ -99,22 +109,59 @@ impl Home {
         }
     }
 
-    /// Sends what the open modal produced and closes it, or keeps it open
-    /// showing why it was refused.
+    /// Sends what the open modal produced, or keeps it open showing why it
+    /// was refused. Connecting and exporting are only known to have worked
+    /// once the worker answers, so those modals wait for the answer instead
+    /// of closing and losing everything that was typed.
     fn submit_modal(&mut self) -> color_eyre::Result<()> {
+        if self.awaiting.is_some() {
+            return Ok(());
+        }
         let Some(modal) = &mut self.modal else {
             return Ok(());
         };
         match modal.submit() {
             Ok(action) => {
+                let waiting = match action {
+                    Action::Connect(..) => Some((Awaiting::Connect, "Connecting…")),
+                    Action::Export(..) => Some((Awaiting::Export, "Exporting…")),
+                    _ => None,
+                };
                 if let Some(tx) = &self.command_tx {
                     tx.send(action)?;
-                    tx.send(Action::ChangeMode(Mode::Home))?;
+                    match waiting {
+                        Some((answer, pending)) => {
+                            modal.set_error(None);
+                            modal.set_pending(Some(pending));
+                            self.awaiting = Some(answer);
+                        }
+                        None => tx.send(Action::ChangeMode(Mode::Home))?,
+                    }
                 }
             }
             Err(error) => modal.set_error(Some(error)),
         }
         Ok(())
+    }
+
+    /// The worker answered the modal: it is done, so close it and let `App`
+    /// leave the modal's mode behind too.
+    fn close_modal(&mut self) -> color_eyre::Result<()> {
+        self.modal = None;
+        self.awaiting = None;
+        if let Some(tx) = &self.command_tx {
+            tx.send(Action::ChangeMode(Mode::Home))?;
+        }
+        Ok(())
+    }
+
+    /// The worker refused: keep the modal, with everything in it, and say why.
+    fn fail_modal(&mut self, message: &str) {
+        self.awaiting = None;
+        if let Some(modal) = &mut self.modal {
+            modal.set_pending(None);
+            modal.set_error(Some(message.to_string()));
+        }
     }
 }
 
@@ -182,7 +229,19 @@ impl Component for Home {
                     self.help.scroll_to_top();
                 }
             }
-            Action::ChangeMode(mode) => self.modal = Self::modal_for(*mode),
+            Action::ChangeMode(mode) => {
+                self.modal = Self::modal_for(*mode);
+                self.awaiting = None;
+            }
+            // The worker's answer, but only to the modal that asked for it.
+            Action::Connected(_) if self.awaiting == Some(Awaiting::Connect) => self.close_modal()?,
+            Action::Exported(_) if self.awaiting == Some(Awaiting::Export) => self.close_modal()?,
+            Action::ConnectFailed(message) if self.awaiting == Some(Awaiting::Connect) => {
+                self.fail_modal(message);
+            }
+            Action::ExportFailed(message) if self.awaiting == Some(Awaiting::Export) => {
+                self.fail_modal(message);
+            }
             _ => {}
         }
 
@@ -300,7 +359,29 @@ mod tests {
     }
 
     #[test]
-    fn submitting_a_modal_sends_its_action_and_closes_it() {
+    fn a_failed_export_keeps_the_modal_and_the_path() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+        open(&mut home, Mode::ExpoModal);
+        type_str_home(&mut home, "no/such/dir/rows.csv");
+
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        let Ok(Action::Export(config)) = rx.try_recv() else {
+            panic!("expected an export action");
+        };
+        assert_eq!(config.path, "no/such/dir/rows.csv");
+        assert!(rx.try_recv().is_err(), "the mode must not change yet");
+        assert!(shown(&mut home, 80, 50).contains("Exporting"));
+
+        home.update(Action::ExportFailed("could not write no/such/dir/rows.csv".into())).unwrap();
+        let text = shown(&mut home, 80, 50);
+        assert!(text.contains("could not write"), "{text}");
+        assert!(text.contains("no/such/dir/rows.csv"), "{text}");
+    }
+
+    #[test]
+    fn a_written_export_closes_the_modal() {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         let mut home = home();
         home.register_action_handler(tx).unwrap();
@@ -308,11 +389,29 @@ mod tests {
         type_str_home(&mut home, "rows.csv");
 
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
-        let Ok(Action::Export(config)) = rx.try_recv() else {
-            panic!("expected an export action");
-        };
-        assert_eq!(config.path, "rows.csv");
+        assert!(matches!(rx.try_recv(), Ok(Action::Export(_))));
+
+        home.update(Action::Exported("rows.csv".into())).unwrap();
+        assert!(home.modal.is_none());
         assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
+    }
+
+    #[test]
+    fn an_answer_meant_for_another_modal_is_ignored() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+
+        // An export is waiting, and a connection's answer arrives late.
+        open(&mut home, Mode::ExpoModal);
+        type_str_home(&mut home, "rows.csv");
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        home.update(Action::Connected(":memory:".into())).unwrap();
+        home.update(Action::ConnectFailed("nope".into())).unwrap();
+
+        let text = shown(&mut home, 80, 50);
+        assert!(home.modal.is_some(), "the export modal was closed by a connection");
+        assert!(text.contains("Exporting") && !text.contains("nope"), "{text}");
     }
 
     #[test]
@@ -325,6 +424,76 @@ mod tests {
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
         assert!(rx.try_recv().is_err());
         assert!(shown(&mut home, 80, 50).contains("Path is required"));
+    }
+
+    /// Fills in enough of the New Connection form to be submittable.
+    fn fill_connection(home: &mut Home) {
+        for (field, value) in [(2, "db.local"), (4, "alice"), (6, "app")] {
+            home.modal.as_mut().unwrap().set_focus(field);
+            type_str_home(home, value);
+        }
+    }
+
+    #[test]
+    fn a_failed_connection_keeps_the_modal_and_everything_typed() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+        open(&mut home, Mode::AddConnModal);
+        fill_connection(&mut home);
+
+        // Submitting sends the connection but leaves the modal waiting.
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::Connect(..))));
+        assert!(rx.try_recv().is_err(), "the mode must not change yet");
+        assert!(shown(&mut home, 80, 50).contains("Connecting"));
+
+        // A second Enter while waiting does not try again.
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(rx.try_recv().is_err());
+
+        home.update(Action::ConnectFailed("password authentication failed".into())).unwrap();
+        let text = shown(&mut home, 80, 50);
+        assert!(text.contains("password authentication failed"), "{text}");
+        assert!(text.contains("db.local") && text.contains("alice"), "{text}");
+        assert!(!text.contains("Connecting"), "{text}");
+
+        // Correcting and submitting again sends a second attempt.
+        home.handle_key_event(key(KeyCode::Char('x'))).unwrap();
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::Connect(..))));
+    }
+
+    #[test]
+    fn a_working_connection_closes_the_modal() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+        open(&mut home, Mode::AddConnModal);
+        fill_connection(&mut home);
+
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::Connect(..))));
+
+        home.update(Action::Connected("alice@db.local:5432/app".into())).unwrap();
+        assert!(home.modal.is_none());
+        assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
+        assert!(!shown(&mut home, 80, 50).contains("New Connection"));
+    }
+
+    #[test]
+    fn a_connect_answer_without_a_waiting_modal_is_ignored() {
+        let mut home = home();
+        // The in-memory connection at startup answers with nobody waiting.
+        home.update(Action::Connected(":memory:".into())).unwrap();
+        home.update(Action::ConnectFailed("nope".into())).unwrap();
+        assert!(home.modal.is_none());
+
+        // An export modal is not touched by a connection's answer either.
+        open(&mut home, Mode::ExpoModal);
+        home.update(Action::ConnectFailed("nope".into())).unwrap();
+        let text = shown(&mut home, 80, 50);
+        assert!(text.contains("Export") && !text.contains("nope"), "{text}");
     }
 
     #[test]

@@ -31,6 +31,15 @@ pub enum Action {
     /// Sent by the New Connection form: the connection's name (may be empty)
     /// and how to reach it.
     Connect(String, ConnectionConfig),
+    /// The worker's answer to a [`Action::Connect`]: the label it connected
+    /// to, or why it could not. The New Connection modal stays open until one
+    /// of these arrives, so a typo does not cost the whole form.
+    Connected(String),
+    ConnectFailed(String),
+    /// The worker's answer to an [`Action::Export`], the same way round: the
+    /// path it wrote, or why it could not.
+    Exported(String),
+    ExportFailed(String),
     /// Sent by the database worker. Wrapped in `Arc` because every action is
     /// cloned once per component.
     QueryDone(Arc<QueryResult>),
