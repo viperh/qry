@@ -1,4 +1,3 @@
-use qry_core::ConnectionConfig;
 use ratatui::{
     prelude::*,
     widgets::{Block, Paragraph},
@@ -6,28 +5,25 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
+use crate::connections::{Secret, StoredConnection};
 use crate::keymap::TreeCommand;
 use crate::{action::Action, config::Config};
 
 /// A connection the tree knows about, and what it has learned of it.
-struct Connection {
-    name: String,
-    config: ConnectionConfig,
+struct Node {
+    record: StoredConnection,
     /// What the database called itself; `None` until it has connected once.
     label: Option<String>,
     expanded: bool,
     tables: Option<Vec<String>>,
     loading: bool,
+    /// Added this session and not written to the file yet.
+    unsaved: bool,
 }
 
-impl Connection {
-    /// What to show: the name if the form gave one, else the label.
+impl Node {
     fn title(&self) -> &str {
-        match (self.name.as_str(), &self.label) {
-            ("", Some(label)) => label,
-            ("", None) => "(unnamed)",
-            (name, _) => name,
-        }
+        self.record.title()
     }
 }
 
@@ -45,7 +41,7 @@ pub struct ConnTree {
     config: Config,
     focus: bool,
 
-    connections: Vec<Connection>,
+    connections: Vec<Node>,
     /// The connection the worker is on.
     active: Option<usize>,
     /// The connection whose `Connect` was sent and has not been answered.
@@ -81,24 +77,34 @@ impl ConnTree {
         rows
     }
 
-    /// Remembers a connection the app is about to open, adding it to the tree
-    /// if it is new. The tree keeps the entry once it has connected.
-    fn attempt(&mut self, name: &str, config: &ConnectionConfig) {
-        let known = self
-            .connections
-            .iter()
-            .position(|c| c.name == name && c.config == *config);
+    /// Remembers a connection the app is about to open, adding it to the
+    /// tree if its id is new. The entry stays once it has connected.
+    fn attempt(&mut self, record: &StoredConnection) {
+        let known = self.connections.iter().position(|n| n.record.id == record.id);
         self.attempting = Some(known.unwrap_or_else(|| {
-            self.connections.push(Connection {
-                name: name.to_string(),
-                config: config.clone(),
+            self.connections.push(Node {
+                record: record.clone(),
                 label: None,
                 expanded: false,
                 tables: None,
                 loading: false,
+                unsaved: !record.ephemeral,
             });
             self.connections.len() - 1
         }));
+    }
+
+    /// The records worth writing: everything but the scratch database.
+    fn to_save(&self) -> Vec<StoredConnection> {
+        self.connections
+            .iter()
+            .filter(|node| !node.record.ephemeral)
+            .map(|node| node.record.clone())
+            .collect()
+    }
+
+    fn save(&self) -> color_eyre::Result<()> {
+        self.send(Action::SaveConnections(self.to_save()))
     }
 
     /// Asks the worker for the tables of whatever is connected.
@@ -130,22 +136,30 @@ impl ConnTree {
                         } else {
                             // Its tables can only be read once it is open.
                             self.expand_when_connected = Some(i);
-                            let connection = &self.connections[i];
-                            self.send(Action::Connect(
-                                connection.name.clone(),
-                                connection.config.clone(),
-                            ))?;
+                            self.send(Action::Connect(Box::new(self.connections[i].record.clone())))?;
                         }
                     }
                 }
             }
             TreeCommand::Connect => {
                 if let Some(Row::Connection(i)) = rows.get(self.selected) {
-                    let connection = &self.connections[*i];
-                    self.send(Action::Connect(
-                        connection.name.clone(),
-                        connection.config.clone(),
-                    ))?;
+                    self.send(Action::Connect(Box::new(self.connections[*i].record.clone())))?;
+                }
+            }
+            TreeCommand::Delete => {
+                if let Some(Row::Connection(i)) = rows.get(self.selected) {
+                    let node = &self.connections[*i];
+                    // Its password goes with it, so nothing is orphaned.
+                    let forget = matches!(node.record.secret, Secret::Keyring)
+                        .then(|| Action::ForgetSecret(node.record.id.clone()));
+                    let saved = !node.record.ephemeral;
+                    self.forget(*i);
+                    if let Some(action) = forget {
+                        self.send(action)?;
+                    }
+                    if saved {
+                        self.save()?;
+                    }
                 }
             }
         }
@@ -173,14 +187,15 @@ impl ConnTree {
                 let connection = &self.connections[*i];
                 let marker = if connection.expanded { "▾" } else { "▸" };
                 let line = Line::from(format!("{marker} {}", connection.title()));
-                // The one the worker is on stands out from the rest.
-                if self.active == Some(*i) { line.green().bold() } else { line }
+                // The one the worker is on stands out without taking the
+                // colour, which belongs to the selection.
+                if self.active == Some(*i) { line.bold() } else { line }
             }
             Row::Table(i, t) => {
                 let table = &self.connections[*i].tables.as_ref().expect("expanded")[*t];
                 Line::from(format!("    {table}"))
             }
-            Row::Note(note) => Line::from(format!("    {note}")).dark_gray(),
+            Row::Note(note) => Line::from(format!("    {note}")),
         }
     }
 }
@@ -206,7 +221,7 @@ impl Component for ConnTree {
         match action {
             // Every connection the app opens passes through here, whether it
             // came from the New Connection modal or from this tree.
-            Action::Connect(ref name, ref config) => self.attempt(name, config),
+            Action::Connect(ref record) => self.attempt(record),
             Action::Connected(label) => {
                 if let Some(i) = self.attempting.take() {
                     self.connections[i].label = Some(label);
@@ -219,6 +234,11 @@ impl Component for ConnTree {
                     if self.connections[i].expanded {
                         self.load_tables(i)?;
                     }
+                    // It works, so it is worth keeping.
+                    if self.connections[i].unsaved {
+                        self.connections[i].unsaved = false;
+                        self.save()?;
+                    }
                 }
             }
             Action::ConnectFailed(_) => {
@@ -229,6 +249,30 @@ impl Component for ConnTree {
                     self.forget(i);
                 }
                 self.expand_when_connected = None;
+            }
+            Action::ConnectionsLoaded(records) => {
+                // Whatever is already here was opened during startup; the
+                // file fills in the rest.
+                for record in records {
+                    if !self.connections.iter().any(|n| n.record.id == record.id) {
+                        self.connections.push(Node {
+                            record,
+                            label: None,
+                            expanded: false,
+                            tables: None,
+                            loading: false,
+                            unsaved: false,
+                        });
+                    }
+                }
+            }
+            Action::SecretNotStored(id) => {
+                if let Some(node) = self.connections.iter_mut().find(|n| n.record.id == id) {
+                    // The keychain would not take it, so the record says so
+                    // rather than pretending the password is there.
+                    node.record.secret = Secret::Prompt;
+                    self.save()?;
+                }
             }
             Action::TablesLoaded(tables) => {
                 if let Some(i) = self.active {
@@ -274,12 +318,10 @@ impl Component for ConnTree {
             .skip(self.offset)
             .take(page)
             .map(|(i, row)| {
+                // The colour carries the selection: green for it, grey for
+                // the rest, and no background behind either.
                 let line = self.line(row);
-                match (i == self.selected, self.focus) {
-                    (true, true) => line.on_dark_gray(),
-                    (true, false) => line.underlined(),
-                    (false, _) => line,
-                }
+                if i == self.selected { line.green() } else { line.gray() }
             })
             .collect();
 
@@ -297,12 +339,15 @@ mod tests {
     use super::*;
     use crate::components::form::tests::key;
     use crossterm::event::KeyCode;
-    use qry_core::sqlite::SqliteConfig;
     use ratatui::{Terminal, backend::TestBackend};
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
-    fn config(path: &str) -> ConnectionConfig {
-        ConnectionConfig::Sqlite(SqliteConfig::new(path, false))
+    /// A saved SQLite connection, as the form would build it.
+    fn record(name: &str, path: &str) -> StoredConnection {
+        let mut record = StoredConnection::new(name, crate::connections::Driver::Sqlite);
+        record.path = Some(path.to_string());
+        record.secret = Secret::None;
+        record
     }
 
     fn tree() -> (ConnTree, UnboundedReceiver<Action>) {
@@ -314,9 +359,12 @@ mod tests {
     }
 
     /// Adds a connection the way the app does: the action, then the answer.
-    fn connect(tree: &mut ConnTree, name: &str, path: &str) {
-        tree.update(Action::Connect(name.into(), config(path))).unwrap();
+    #[allow(clippy::let_underscore_untyped)]
+    fn connect(tree: &mut ConnTree, name: &str, path: &str) -> StoredConnection {
+        let record = record(name, path);
+        tree.update(Action::Connect(Box::new(record.clone()))).unwrap();
         tree.update(Action::Connected(path.into())).unwrap();
+        record
     }
 
     fn press(tree: &mut ConnTree, code: KeyCode) {
@@ -342,8 +390,11 @@ mod tests {
         assert!(shown.contains("▸ prod"), "{shown}");
         assert_eq!(tree.active, Some(0));
 
-        // The same connection again is not added twice.
-        connect(&mut tree, "prod", "app.db");
+        // The same connection again is not added twice: the id is what
+        // counts, not the name.
+        let again = tree.connections[0].record.clone();
+        tree.update(Action::Connect(Box::new(again))).unwrap();
+        tree.update(Action::Connected("app.db".into())).unwrap();
         assert_eq!(tree.connections.len(), 1);
     }
 
@@ -352,13 +403,103 @@ mod tests {
         let (mut tree, _rx) = tree();
         connect(&mut tree, "prod", "app.db");
 
-        tree.update(Action::Connect("typo".into(), config("nope.db"))).unwrap();
+        tree.update(Action::Connect(Box::new(record("typo", "nope.db")))).unwrap();
         assert_eq!(tree.connections.len(), 2, "added while it is being tried");
         tree.update(Action::ConnectFailed("no such file".into())).unwrap();
 
         assert_eq!(tree.connections.len(), 1);
         assert_eq!(tree.active, Some(0), "the working one is still active");
         assert!(!lines(&mut tree, 30, 8).join("\n").contains("typo"));
+    }
+
+    #[test]
+    fn the_saved_connections_join_the_tree_at_startup() {
+        let (mut tree, _rx) = tree();
+        connect(&mut tree, "scratch", ":memory:");
+        let saved = record("prod", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+
+        let shown = lines(&mut tree, 30, 8).join("\n");
+        assert!(shown.contains("scratch") && shown.contains("prod"), "{shown}");
+
+        // Loading again does not double anything up.
+        tree.update(Action::ConnectionsLoaded(vec![saved])).unwrap();
+        assert_eq!(tree.connections.len(), 2);
+    }
+
+    #[test]
+    fn a_connection_that_opens_is_saved_but_the_scratch_one_is_not() {
+        let (mut tree, mut rx) = tree();
+
+        let mut scratch = record("scratch", ":memory:");
+        scratch.ephemeral = true;
+        tree.update(Action::Connect(Box::new(scratch))).unwrap();
+        tree.update(Action::Connected(":memory:".into())).unwrap();
+        assert!(rx.try_recv().is_err(), "the scratch database is never written");
+
+        connect(&mut tree, "prod", "app.db");
+        let Ok(Action::SaveConnections(saved)) = rx.try_recv() else {
+            panic!("expected a save");
+        };
+        assert_eq!(saved.len(), 1, "only the real connection");
+        assert_eq!(saved[0].name, "prod");
+    }
+
+    #[test]
+    fn deleting_a_connection_saves_and_forgets_its_password() {
+        let (mut tree, mut rx) = tree();
+        let mut kept = record("prod", "app.db");
+        kept.secret = Secret::Keyring;
+        let id = kept.id.clone();
+        tree.update(Action::ConnectionsLoaded(vec![kept])).unwrap();
+        while rx.try_recv().is_ok() {}
+
+        press(&mut tree, KeyCode::Delete);
+        assert_eq!(rx.try_recv().unwrap(), Action::ForgetSecret(id));
+        let Ok(Action::SaveConnections(saved)) = rx.try_recv() else {
+            panic!("expected a save");
+        };
+        assert!(saved.is_empty());
+        assert!(lines(&mut tree, 30, 8).join("\n").contains("No connections yet"));
+    }
+
+    #[test]
+    fn a_keychain_that_refused_downgrades_the_record_and_saves() {
+        let (mut tree, mut rx) = tree();
+        let mut record = record("prod", "app.db");
+        record.secret = Secret::Keyring;
+        let id = record.id.clone();
+        tree.update(Action::ConnectionsLoaded(vec![record])).unwrap();
+        while rx.try_recv().is_ok() {}
+
+        tree.update(Action::SecretNotStored(id)).unwrap();
+        let Ok(Action::SaveConnections(saved)) = rx.try_recv() else {
+            panic!("expected a save");
+        };
+        assert_eq!(saved[0].secret, Secret::Prompt, "it asks each time now");
+    }
+
+    /// The cells of one rendered row, for checking its colours.
+    fn row_style(tree: &mut ConnTree, width: u16, height: u16, y: u16) -> (Color, Color) {
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal.draw(|frame| tree.draw(frame, frame.area()).unwrap()).unwrap();
+        let cell = &terminal.backend().buffer()[(1, y)];
+        (cell.fg, cell.bg)
+    }
+
+    #[test]
+    fn the_selection_is_green_and_the_rest_grey_with_no_background() {
+        let (mut tree, _rx) = tree();
+        connect(&mut tree, "one", "one.db");
+        connect(&mut tree, "two", "two.db");
+
+        // Row 0 is the border, so the connections are on rows 1 and 2.
+        assert_eq!(row_style(&mut tree, 30, 8, 1), (Color::Green, Color::Reset));
+        assert_eq!(row_style(&mut tree, 30, 8, 2), (Color::Gray, Color::Reset));
+
+        press(&mut tree, KeyCode::Down);
+        assert_eq!(row_style(&mut tree, 30, 8, 1), (Color::Gray, Color::Reset));
+        assert_eq!(row_style(&mut tree, 30, 8, 2), (Color::Green, Color::Reset));
     }
 
     #[test]
@@ -388,7 +529,10 @@ mod tests {
 
         press(&mut tree, KeyCode::Down);
         press(&mut tree, KeyCode::Enter);
-        assert_eq!(rx.try_recv().unwrap(), Action::Connect("two".into(), config("two.db")));
+        let Ok(Action::Connect(sent)) = rx.try_recv() else {
+            panic!("expected a connection");
+        };
+        assert_eq!(sent.name, "two");
     }
 
     #[test]
@@ -428,7 +572,8 @@ mod tests {
         press(&mut tree, KeyCode::Home);
         press(&mut tree, KeyCode::Char(' '));
         let sent = rx.try_recv().unwrap();
-        assert_eq!(sent, Action::Connect("one".into(), config("one.db")));
+        let Action::Connect(ref asked) = sent else { panic!("expected a connection") };
+        assert_eq!(asked.name, "one");
         assert!(rx.try_recv().is_err(), "tables come after it is connected");
         // `App` hands every action back to the components, this one included.
         tree.update(sent).unwrap();

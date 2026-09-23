@@ -13,6 +13,9 @@
     },
     "ExpoModal": {
       "<esc>": { "ChangeMode": "Home" }
+    },
+    "PasswordModal": {
+      "<esc>": { "ChangeMode": "Home" }
     }
 
   },
@@ -75,6 +78,7 @@
       "<k>": "Down",
       "<space>": "Toggle",
       "<enter>": "Connect",
+      "<delete>": "Delete",
       "<home>": "First",
       "<end>": "Last"
     },

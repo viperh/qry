@@ -35,6 +35,10 @@ tracing = { workspace = true }
 tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true }
 ratatui-textarea = "0.9.2"
+serde_json = "1.0.151"
+zeroize = "1.9.0"
+keyring = "4.2.0"
+winresource = "0.1.31"
 
 # `Tui::suspend` raises SIGTSTP, which only exists on unix.
 [target.'cfg(not(windows))'.dependencies]
@@ -43,6 +47,7 @@ signal-hook = { workspace = true }
 [build-dependencies]
 anyhow = { workspace = true }
 vergen-gix = { workspace = true }
+winresource = "0.1.31"
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

@@ -259,6 +259,8 @@ pub enum TreeCommand {
     Toggle,
     /// Connects to the selected connection.
     Connect,
+    /// Removes the selected connection, and its stored password with it.
+    Delete,
     First,
     Last,
 }
@@ -270,6 +272,7 @@ impl Command for TreeCommand {
             Self::Down => "Down a row",
             Self::Toggle => "Expand or collapse",
             Self::Connect => "Connect",
+            Self::Delete => "Forget this connection",
             Self::First => "First row",
             Self::Last => "Last row",
         }

@@ -18,7 +18,7 @@ use crate::keymap::FormCommand;
 /// Each field is a bordered box, with a blank row between boxes.
 const FIELD_HEIGHT: u16 = 3;
 const FIELD_GAP: u16 = 1;
-const LABEL_WIDTH: u16 = 12;
+const LABEL_WIDTH: u16 = 14;
 pub const MODAL_WIDTH: u16 = 60;
 
 pub enum Field {
@@ -94,6 +94,11 @@ pub trait Form {
     fn set_error(&mut self, error: Option<String>);
     /// What to send when the form is accepted, or why it was refused.
     fn submit(&self) -> Result<Action, String>;
+
+    /// Shown next to the title, for what the title cannot carry.
+    fn subtitle(&self) -> Option<String> {
+        None
+    }
 
     /// Called after a key changed the form, so a form whose fields depend on
     /// each other can add or remove one.
@@ -176,7 +181,10 @@ pub trait Form {
             (None, Some(error)) => Line::from(format!(" {error} ")).red(),
             (None, None) => Line::from(format!(" {} ", self.hint())).dark_gray(),
         };
-        let block = Block::bordered().title(self.title()).title_bottom(footer);
+        let mut block = Block::bordered().title(self.title()).title_bottom(footer);
+        if let Some(subtitle) = self.subtitle() {
+            block = block.title(Line::from(format!(" {subtitle} ")).right_aligned());
+        }
         let inner = block.inner(popup).inner(Margin::new(2, 1));
         frame.render_widget(block, popup);
         self.render_fields(frame, inner);

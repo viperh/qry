@@ -21,5 +21,6 @@ tokio-postgres = "0.7.18"
 tokio-rusqlite = { version="0.8.0", features = ["bundled"] }
 mysql_async = "0.37.1"
 rust_xlsxwriter = "0.99.1"
+oracle = "0.6.3"
 
 [dev-dependencies]

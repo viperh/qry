@@ -13,10 +13,12 @@ mod app;
 mod cli;
 mod components;
 mod config;
+mod connections;
 mod db;
 mod errors;
 mod keymap;
 mod logging;
+mod secrets;
 mod tui;
 
 #[tokio::main]

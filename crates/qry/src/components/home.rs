@@ -10,6 +10,7 @@ use crate::components::conntree::ConnTree;
 use crate::components::editor::Editor;
 use crate::components::exportform::ExportForm;
 use crate::components::form::Form;
+use crate::components::passwordform::PasswordForm;
 use crate::components::help::Help;
 use crate::components::results::Results;
 use crate::components::statuspanel::Statuspanel;
@@ -66,6 +67,8 @@ pub struct Home {
     modal: Option<Box<dyn Form>>,
     /// What that modal is waiting for the worker to answer, if anything.
     awaiting: Option<Awaiting>,
+    /// Whose password the worker asked for, for the prompt's title.
+    asked: Option<String>,
     help: Help,
     helpvisible: bool,
 }
@@ -101,11 +104,14 @@ impl Home {
     }
 
     /// The modal a mode shows, freshly filled in. `Home` shows none.
-    fn modal_for(mode: Mode) -> Option<Box<dyn Form>> {
+    fn modal_for(&self, mode: Mode) -> Option<Box<dyn Form>> {
         match mode {
             Mode::Home => None,
             Mode::AddConnModal => Some(Box::new(ConnForm::default())),
             Mode::ExpoModal => Some(Box::new(ExportForm::default())),
+            Mode::PasswordModal => Some(Box::new(PasswordForm::new(
+                self.asked.clone().unwrap_or_default(),
+            ))),
         }
     }
 
@@ -123,7 +129,11 @@ impl Home {
         match modal.submit() {
             Ok(action) => {
                 let waiting = match action {
-                    Action::Connect(..) => Some((Awaiting::Connect, "Connecting…")),
+                    // A typed password is the rest of a connection attempt,
+                    // so the prompt waits for the same answer.
+                    Action::Connect(..) | Action::PasswordEntered => {
+                        Some((Awaiting::Connect, "Connecting…"))
+                    }
                     Action::Export(..) => Some((Awaiting::Export, "Exporting…")),
                     _ => None,
                 };
@@ -230,8 +240,15 @@ impl Component for Home {
                 }
             }
             Action::ChangeMode(mode) => {
-                self.modal = Self::modal_for(*mode);
+                self.modal = self.modal_for(*mode);
                 self.awaiting = None;
+            }
+            // The worker cannot prompt, so it asks here.
+            Action::NeedPassword { name, .. } => {
+                self.asked = Some(name.clone());
+                if let Some(tx) = &self.command_tx {
+                    tx.send(Action::ChangeMode(Mode::PasswordModal))?;
+                }
             }
             // The worker's answer, but only to the modal that asked for it.
             Action::Connected(_) if self.awaiting == Some(Awaiting::Connect) => self.close_modal()?,
@@ -494,6 +511,31 @@ mod tests {
         home.update(Action::ConnectFailed("nope".into())).unwrap();
         let text = shown(&mut home, 80, 50);
         assert!(text.contains("Export") && !text.contains("nope"), "{text}");
+    }
+
+    #[test]
+    fn a_request_for_a_password_opens_the_prompt() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+
+        home.update(Action::NeedPassword { id: "c7f3a1e2".into(), name: "prod".into() })
+            .unwrap();
+        // It asks `App` to switch modes, so Esc closes the prompt.
+        assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::PasswordModal));
+
+        open(&mut home, Mode::PasswordModal);
+        let text = shown(&mut home, 80, 30);
+        assert!(text.contains("Password") && text.contains("for prod"), "{text}");
+
+        // Submitting waits for the worker, as a connection does.
+        crate::secrets::stash(crate::secrets::Password::new("x"));
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), Action::PasswordEntered);
+        assert!(shown(&mut home, 80, 30).contains("Connecting"));
+
+        home.update(Action::Connected(":memory:".into())).unwrap();
+        assert!(home.modal.is_none());
     }
 
     #[test]

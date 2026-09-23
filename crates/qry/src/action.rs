@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use qry_core::{ConnectionConfig, QueryResult};
+use qry_core::QueryResult;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use qry_core::ExportConfig;
 use crate::app::Mode;
+use crate::connections::StoredConnection;
 
 /// Messages passed between the event loop, [`App`](crate::app::App) and every
 /// [`Component`](crate::components::Component).
@@ -28,9 +29,24 @@ pub enum Action {
     FocusPrev,
     ChangeMode(Mode),
     Execute(String),
-    /// Sent by the New Connection form: the connection's name (may be empty)
-    /// and how to reach it.
-    Connect(String, ConnectionConfig),
+    /// Sent by the New Connection form and by the tree. It carries the
+    /// stored record, which holds no password: the worker resolves the
+    /// secret itself, so no password ever travels in an action.
+    Connect(Box<StoredConnection>),
+    /// The worker needs a password typed before it can open this connection.
+    /// The prompt leaves it in `secrets::stash`, never in an action.
+    NeedPassword { id: String, name: String },
+    /// A password is waiting in the stash for the connection that asked.
+    PasswordEntered,
+    /// Remove this connection's password from the keychain.
+    ForgetSecret(String),
+    /// The keychain refused a password, so the connection must ask for one
+    /// every time instead.
+    SecretNotStored(String),
+    /// The connections read from disk at startup.
+    ConnectionsLoaded(Vec<StoredConnection>),
+    /// Write these to disk; sent by the tree when its list changes.
+    SaveConnections(Vec<StoredConnection>),
     /// The worker's answer to a [`Action::Connect`]: the label it connected
     /// to, or why it could not. The New Connection modal stays open until one
     /// of these arrives, so a typo does not cost the whole form.

@@ -1,5 +1,5 @@
 use crossterm::event::KeyEvent;
-use qry_core::{ConnectionConfig, sqlite::SqliteConfig};
+
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -12,6 +12,7 @@ use crate::{
     action::{Action, StatusCode},
     components::{Component, home::Home},
     config::Config,
+    connections::{self, Driver, Secret, StoredConnection},
     db::DbCommand,
     tui::{Event, Tui},
 };
@@ -37,11 +38,9 @@ pub enum Mode {
     #[default]
     Home,
     AddConnModal,
-    ExpoModal
+    ExpoModal,
+    PasswordModal
 }
-
-
-
 
 impl App {
     pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
@@ -78,13 +77,24 @@ impl App {
             component.init(tui.size()?)?;
         }
 
-        // Every session starts on an empty in-memory SQLite database. It goes
-        // out as an action rather than straight to the worker, so the tree
-        // lists it like any other connection.
-        self.action_tx.send(Action::Connect(
-            "scratch".to_string(),
-            ConnectionConfig::Sqlite(SqliteConfig::new(":memory:", false)),
-        ))?;
+        // Reading a file is blocking, so it happens off the event loop and
+        // arrives as an action.
+        let loaded = self.action_tx.clone();
+        tokio::task::spawn_blocking(move || {
+            let _ = match connections::load() {
+                Ok(list) => loaded.send(Action::ConnectionsLoaded(list)),
+                Err(e) => loaded.send(Action::Error(format!("{e:#}"))),
+            };
+        });
+
+        // Every session also starts on an empty in-memory SQLite database. It
+        // goes out as an action rather than straight to the worker, so the
+        // tree lists it like any other connection. It is never saved.
+        let mut scratch = StoredConnection::new("scratch", Driver::Sqlite);
+        scratch.path = Some(":memory:".to_string());
+        scratch.secret = Secret::None;
+        scratch.ephemeral = true;
+        self.action_tx.send(Action::Connect(Box::new(scratch)))?;
 
         let action_tx = self.action_tx.clone();
         loop {
@@ -179,8 +189,20 @@ impl App {
                 Action::Export(ref config) => {
                     self.send_db(DbCommand::Export(config.clone()))?;
                 }
-                Action::Connect(ref name, ref config) => {
-                    self.send_db(DbCommand::Connect(name.clone(), config.clone()))?;
+                Action::Connect(ref record) => {
+                    self.send_db(DbCommand::Connect(record.clone()))?;
+                }
+                Action::PasswordEntered => self.send_db(DbCommand::PasswordEntered)?,
+                Action::SaveConnections(ref list) => self.save_connections(list.clone()),
+                Action::ForgetSecret(ref id) => {
+                    let (id, tx) = (id.clone(), self.action_tx.clone());
+                    tokio::task::spawn_blocking(move || {
+                        if let Err(e) = crate::secrets::delete(&id) {
+                            let _ = tx.send(Action::Error(format!(
+                                "cannot remove the stored password: {e:#}"
+                            )));
+                        }
+                    });
                 }
                 Action::ListTables => self.send_db(DbCommand::ListTables)?,
                 _ => {}
@@ -192,6 +214,17 @@ impl App {
             }
         }
         Ok(())
+    }
+
+    /// Writes the connections off the event loop, reporting a failure
+    /// without losing the change the user just made.
+    fn save_connections(&self, list: Vec<StoredConnection>) {
+        let tx = self.action_tx.clone();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = connections::save(&list) {
+                let _ = tx.send(Action::Error(format!("cannot save connections: {e:#}")));
+            }
+        });
     }
 
     /// Hands a command to the database worker. If the worker has stopped, says

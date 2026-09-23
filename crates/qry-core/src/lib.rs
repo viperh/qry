@@ -5,6 +5,7 @@ pub mod shared;
 pub mod postgres;
 pub mod sqlite;
 pub mod mysql;
+pub mod oracle;
 pub mod mariadb;
 pub mod exporter;
 
@@ -13,6 +14,7 @@ pub use shared::{Database, QueryResult, SslMode};
 
 use mariadb::{MariaDb, MariadbConfig};
 use mysql::{MySql, MySqlConfig};
+use oracle::{Oracle, OracleConfig};
 use postgres::{Postgres, PostgresConfig};
 use sqlite::{Sqlite, SqliteConfig};
 
@@ -104,6 +106,7 @@ pub enum ConnectionConfig {
     Postgres(PostgresConfig),
     Mysql(MySqlConfig),
     MariaDb(MariadbConfig),
+    Oracle(OracleConfig),
 }
 
 
@@ -114,6 +117,7 @@ impl std::fmt::Debug for ConnectionConfig {
             Self::Postgres(c) => write!(f, "Postgres({}@{}:{}/{})", c.user, c.host, c.port, c.database),
             Self::Mysql(c) => write!(f, "Mysql({}@{}:{}/{})", c.user, c.host, c.port, c.database),
             Self::MariaDb(c) => write!(f, "MariaDb({}@{}:{}/{})", c.user, c.host, c.port, c.database),
+            Self::Oracle(c) => write!(f, "Oracle({}@{}:{}/{})", c.user, c.host, c.port, c.service),
         }
     }
 }
@@ -138,6 +142,7 @@ impl Driver {
             ConnectionConfig::Postgres(config) => Box::new(Postgres::connect(config).await?),
             ConnectionConfig::Mysql(config) => Box::new(MySql::connect(config).await?),
             ConnectionConfig::MariaDb(config) => Box::new(MariaDb::connect(config).await?),
+            ConnectionConfig::Oracle(config) => Box::new(Oracle::connect(config).await?),
         };
         let label = db.label();
         self.db = Some(db);

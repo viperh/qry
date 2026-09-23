@@ -1,13 +1,16 @@
-use qry_core::{
-    ConnectionConfig, SslMode, mariadb::MariadbConfig, mysql::MySqlConfig,
-    postgres::PostgresConfig, sqlite::SqliteConfig,
-};
-
 use crate::action::Action;
 use crate::components::form::{Field, Form};
+use crate::connections::{Driver, Secret, StoredConnection};
+use crate::secrets::{self, Password};
 
-const LABELS: [&str; 9] = [
+const LABELS: [&str; 10] = [
     "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
+    "Password in",
+];
+/// Same, plus the variable name that only ENVIRONMENT shows.
+const LABELS_VAR: [&str; 11] = [
+    "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
+    "Password in", "Variable",
 ];
 // Indexes into `LABELS` and `ConnForm::fields`.
 const NAME: usize = 0;
@@ -19,24 +22,43 @@ const PASSWORD: usize = 5;
 const DATABASE: usize = 6;
 const SCHEMA: usize = 7;
 const SSL_MODE: usize = 8;
+const STORE: usize = 9;
+const VAR: usize = 10;
 
-const DB_TYPES: [&str; 4] = ["PostgreSQL", "MySQL", "MariaDB", "SQLite"];
+const DB_TYPES: [&str; 5] = ["PostgreSQL", "MySQL", "MariaDB", "SQLite", "Oracle"];
+/// Same order as `DB_TYPES`.
+const DRIVERS: [Driver; 5] = [
+    Driver::Postgres,
+    Driver::Mysql,
+    Driver::Mariadb,
+    Driver::Sqlite,
+    Driver::Oracle,
+];
 /// Same order as `SslMode::ALL`.
 const SSL_MODES: [&str; 6] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
 
+/// Where the password is kept between sessions. qry never writes one to a
+/// file of its own, so these are the only choices.
+const STORES: [&str; 3] = ["KEYCHAIN", "ASK EACH TIME", "ENVIRONMENT"];
+const KEYCHAIN: usize = 0;
+const ENVIRONMENT: usize = 2;
+
 /// The New Connection form.
 pub struct ConnForm {
-    fields: [Field; 9],
+    fields: Vec<Field>,
     focus: usize,
     error: Option<String>,
     /// Set while the database worker is trying the connection.
     pending: Option<&'static str>,
+    /// Minted once, so retrying after a failure does not make a second
+    /// connection with a second keychain entry.
+    id: String,
 }
 
 impl Default for ConnForm {
     fn default() -> Self {
         Self {
-            fields: [
+            fields: vec![
                 Field::text(),
                 Field::choice(&DB_TYPES, 0),
                 Field::text(),
@@ -47,11 +69,23 @@ impl Default for ConnForm {
                 Field::text(),
                 // "prefer", libpq's own default
                 Field::choice(&SSL_MODES, 2),
+                Field::choice(&STORES, KEYCHAIN),
             ],
             focus: 0,
             error: None,
             pending: None,
+            id: StoredConnection::new("", Driver::Sqlite).id,
         }
+    }
+}
+
+impl ConnForm {
+    fn driver(&self) -> Driver {
+        DRIVERS[self.selected(TYPE)]
+    }
+
+    fn wants_var(&self) -> bool {
+        self.selected(STORE) == ENVIRONMENT
     }
 }
 
@@ -65,7 +99,7 @@ impl Form for ConnForm {
     }
 
     fn labels(&self) -> &'static [&'static str] {
-        &LABELS
+        if self.fields.len() > LABELS.len() { &LABELS_VAR } else { &LABELS }
     }
 
     fn fields(&self) -> &[Field] {
@@ -100,67 +134,81 @@ impl Form for ConnForm {
         self.pending = pending;
     }
 
-    /// Turns the form into a connection name and config, or explains what is
-    /// wrong in a message short enough for the popup's bottom border.
+    /// The variable name is only asked for when the password lives in one.
+    fn after_change(&mut self) {
+        let base = LABELS.len();
+        if self.wants_var() && self.fields.len() == base {
+            self.fields.push(Field::text());
+        } else if !self.wants_var() && self.fields.len() > base {
+            self.fields.truncate(base);
+            self.focus = self.focus.min(base - 1);
+        }
+    }
+
+    /// Builds the record the tree stores and the worker opens. The typed
+    /// password is left in the stash, never in the record and never in the
+    /// action.
     fn submit(&self) -> Result<Action, String> {
         let trimmed = |field: usize| self.text(field).trim().to_string();
-        let required = |field: usize| {
-            let value = trimmed(field);
-            if value.is_empty() {
-                Err(format!("{} is required", LABELS[field]))
-            } else {
-                Ok(value)
-            }
-        };
-        let name = trimmed(NAME);
-        let schema = trimmed(SCHEMA);
-        let db_type = DB_TYPES[self.selected(TYPE)];
+        let some = |value: String| (!value.is_empty()).then_some(value);
+        let driver = self.driver();
 
-        if db_type == "SQLite" {
-            if !schema.is_empty() {
-                return Err("SQLite has no schemas; leave Schema empty".into());
-            }
-            let path = required(DATABASE)
-                .map_err(|_| "Database (the SQLite file path) is required".to_string())?;
-            return Ok(Action::Connect(
-                name,
-                ConnectionConfig::Sqlite(SqliteConfig::new(path, false)),
-            ));
+        let port = match trimmed(PORT).as_str() {
+            "" => None,
+            port => Some(
+                port.parse::<u16>()
+                    .ok()
+                    .filter(|&port| port != 0)
+                    .ok_or("Port must be a number from 1 to 65535")?,
+            ),
+        };
+
+        let database = some(trimmed(DATABASE));
+        let mut record = StoredConnection {
+            id: self.id.clone(),
+            name: trimmed(NAME),
+            driver,
+            host: some(trimmed(HOST)),
+            port,
+            user: some(trimmed(USER)),
+            schema: some(trimmed(SCHEMA)),
+            ..StoredConnection::new("", driver)
+        };
+        // The one field the drivers disagree about: a file, a service, or a
+        // database name.
+        match driver {
+            Driver::Sqlite => record.path = database,
+            Driver::Oracle => record.service = database,
+            _ => record.database = database,
+        }
+        // SQLite has no transport, and Oracle reads `tls` as a wallet path.
+        if !matches!(driver, Driver::Sqlite | Driver::Oracle) {
+            record.tls = Some(SSL_MODES[self.selected(SSL_MODE)].to_string());
         }
 
-        let host = required(HOST)?;
-        let port = match trimmed(PORT).as_str() {
-            "" if db_type == "PostgreSQL" => 5432,
-            "" => 3306,
-            port => port
-                .parse::<u16>()
-                .ok()
-                .filter(|&port| port != 0)
-                .ok_or("Port must be a number from 1 to 65535")?,
-        };
-        let user = required(USER)?;
-        // Not trimmed: leading or trailing spaces can be part of a password.
+        // Not trimmed: spaces can be part of a password.
         let password = self.text(PASSWORD).to_string();
-        let database = required(DATABASE)?;
-        let ssl_mode = SslMode::ALL[self.selected(SSL_MODE)];
-
-        let config = match db_type {
-            "PostgreSQL" => ConnectionConfig::Postgres(PostgresConfig {
-                host,
-                port,
-                user,
-                password,
-                database,
-                schema: (!schema.is_empty()).then_some(schema),
-                ssl_mode,
-            }),
-            _ if !schema.is_empty() => {
-                return Err(format!("{db_type} has no separate schemas; use Database"));
-            }
-            "MySQL" => ConnectionConfig::Mysql(MySqlConfig { host, port, user, password, database, ssl_mode }),
-            _ => ConnectionConfig::MariaDb(MariadbConfig { host, port, user, password, database, ssl_mode }),
+        record.secret = match (driver.needs_password(), self.selected(STORE)) {
+            (false, _) => Secret::None,
+            (true, ENVIRONMENT) => match some(trimmed(VAR)) {
+                Some(var) => Secret::Env { var },
+                None => return Err("Variable is required".into()),
+            },
+            // Nothing typed means there is nothing to keep, so it is asked
+            // for on every connect.
+            (true, KEYCHAIN) if password.is_empty() => Secret::Prompt,
+            (true, KEYCHAIN) => Secret::Keyring,
+            (true, _) => Secret::Prompt,
         };
-        Ok(Action::Connect(name, config))
+
+        // Checks the fields this driver needs, with the same messages the
+        // worker would give.
+        record.to_config(&password).map_err(|e| e.to_string())?;
+
+        if !password.is_empty() {
+            secrets::stash(Password::new(password));
+        }
+        Ok(Action::Connect(Box::new(record)))
     }
 }
 
@@ -196,72 +244,104 @@ mod tests {
         form
     }
 
+    fn record(form: &ConnForm) -> StoredConnection {
+        match form.submit() {
+            Ok(Action::Connect(record)) => *record,
+            other => panic!("expected a connection, got {other:?}"),
+        }
+    }
+
     #[test]
-    fn postgres_form_builds_its_config() {
+    fn the_form_builds_a_record_with_no_password_in_it() {
+        let _guard = secrets::test_lock();
+        let _ = secrets::take_stash();
+        let built = record(&filled());
+
+        assert_eq!(built.name, "prod");
+        assert_eq!(built.driver, Driver::Postgres);
+        assert_eq!(built.host.as_deref(), Some("db.local"));
+        assert_eq!(built.user.as_deref(), Some("alice"));
+        assert_eq!(built.database.as_deref(), Some("app"));
+        assert_eq!(built.schema.as_deref(), Some("reporting"));
+        assert_eq!(built.tls.as_deref(), Some("prefer"));
+        assert_eq!(built.port, None, "left to the driver's default");
+        assert_eq!(built.secret, Secret::Keyring);
+
+        // The record can be written without leaking anything.
+        let written = serde_json::to_string(&built).unwrap();
+        assert!(!written.contains("s3cret"), "{written}");
+
+        // The typed password went to the stash instead, spaces and all.
         assert_eq!(
-            filled().submit().unwrap(),
-            Action::Connect(
-                "prod".into(),
-                ConnectionConfig::Postgres(PostgresConfig {
-                    host: "db.local".into(),
-                    port: 5432,
-                    user: "alice".into(),
-                    password: " s3cret ".into(),
-                    database: "app".into(),
-                    schema: Some("reporting".into()),
-                    ssl_mode: SslMode::Prefer,
-                })
-            )
+            secrets::take_stash().map(|p| p.as_str().to_string()),
+            Some(" s3cret ".to_string())
         );
     }
 
     #[test]
-    fn mysql_and_mariadb_default_to_port_3306_and_reject_a_schema() {
+    fn the_id_survives_a_retry() {
+        let _guard = secrets::test_lock();
+        let form = filled();
+        assert_eq!(record(&form).id, record(&form).id);
+    }
+
+    #[test]
+    fn where_the_password_lives_follows_the_choice() {
+        let _guard = secrets::test_lock();
         let mut form = filled();
-        choose(&mut form, TYPE, "MySQL");
-        choose(&mut form, SSL_MODE, "disable");
-        assert_eq!(
-            form.submit().unwrap_err(),
-            "MySQL has no separate schemas; use Database"
-        );
+        choose(&mut form, STORE, "ASK EACH TIME");
+        assert_eq!(record(&form).secret, Secret::Prompt);
 
-        set(&mut form, SCHEMA, "");
-        let Ok(Action::Connect(_, ConnectionConfig::Mysql(mysql))) = form.submit() else {
-            panic!("expected a MySQL connection");
-        };
-        assert_eq!((mysql.port, mysql.ssl_mode), (3306, SslMode::Disable));
+        // Nothing typed: there is nothing to keep.
+        let mut form = filled();
+        set(&mut form, PASSWORD, "");
+        choose(&mut form, STORE, "KEYCHAIN");
+        assert_eq!(record(&form).secret, Secret::Prompt);
 
-        choose(&mut form, TYPE, "MariaDB");
-        set(&mut form, PORT, "3307");
-        let Ok(Action::Connect(_, ConnectionConfig::MariaDb(mariadb))) = form.submit() else {
-            panic!("expected a MariaDB connection");
-        };
-        assert_eq!(mariadb.port, 3307);
-    }
-
-    #[test]
-    fn sqlite_only_needs_a_file_path() {
+        // SQLite needs no password at all.
         let mut form = ConnForm::default();
         choose(&mut form, TYPE, "SQLite");
-        assert_eq!(
-            form.submit().unwrap_err(),
-            "Database (the SQLite file path) is required"
-        );
-        set(&mut form, DATABASE, "C:/data/app.db");
-        assert_eq!(
-            form.submit().unwrap(),
-            Action::Connect(
-                String::new(),
-                ConnectionConfig::Sqlite(SqliteConfig::new("C:/data/app.db", false))
-            )
-        );
+        set(&mut form, DATABASE, "app.db");
+        let built = record(&form);
+        assert_eq!(built.secret, Secret::None);
+        assert_eq!(built.path.as_deref(), Some("app.db"), "the file, not a database name");
+        assert_eq!(built.tls, None);
+    }
+
+    #[test]
+    fn an_environment_variable_needs_its_name() {
+        let _guard = secrets::test_lock();
+        let mut form = filled();
+        choose(&mut form, STORE, "ENVIRONMENT");
+        form.after_change();
+        assert_eq!(form.labels(), LABELS_VAR);
+        assert_eq!(form.submit().unwrap_err(), "Variable is required");
+
+        set(&mut form, VAR, "PGPASSWORD");
+        assert_eq!(record(&form).secret, Secret::Env { var: "PGPASSWORD".into() });
+
+        // Choosing another store takes the field away again.
+        choose(&mut form, STORE, "KEYCHAIN");
+        form.after_change();
+        assert_eq!(form.labels(), LABELS);
+    }
+
+    #[test]
+    fn oracle_stores_the_database_field_as_a_service() {
+        let _guard = secrets::test_lock();
+        let mut form = filled();
+        choose(&mut form, TYPE, "Oracle");
+        let built = record(&form);
+        assert_eq!(built.service.as_deref(), Some("app"));
+        assert_eq!(built.database, None);
     }
 
     #[test]
     fn invalid_forms_explain_what_is_wrong() {
+        let _guard = secrets::test_lock();
         let mut form = filled();
         set(&mut form, HOST, "   ");
-        assert_eq!(form.submit().unwrap_err(), "Host is required");
+        assert!(form.submit().unwrap_err().contains("needs a host"));
 
         let mut form = filled();
         for port in ["abc", "0", "70000"] {
@@ -272,24 +352,8 @@ mod tests {
 
     #[test]
     fn ssl_mode_labels_line_up_with_core() {
-        let core: Vec<String> = SslMode::ALL.iter().map(ToString::to_string).collect();
+        let core: Vec<String> = qry_core::SslMode::ALL.iter().map(ToString::to_string).collect();
         assert_eq!(core, SSL_MODES);
-    }
-
-    #[test]
-    fn type_and_ssl_mode_are_choices() {
-        let mut form = ConnForm::default();
-        form.set_focus(TYPE);
-        press(&mut form, key(KeyCode::Right));
-        assert_eq!(DB_TYPES[form.selected(TYPE)], "MySQL");
-        press(&mut form, key(KeyCode::Char('x')));
-        assert_eq!(DB_TYPES[form.selected(TYPE)], "MySQL");
-
-        form.set_focus(SSL_MODE);
-        assert_eq!(SSL_MODES[form.selected(SSL_MODE)], "prefer");
-        press(&mut form, key(KeyCode::Left));
-        press(&mut form, key(KeyCode::Left));
-        assert_eq!(SSL_MODES[form.selected(SSL_MODE)], "disable");
     }
 
     #[test]
@@ -305,7 +369,7 @@ mod tests {
         assert_eq!(form.text(NAME), "prod");
         assert_eq!(form.text(HOST), "db.local");
 
-        let shown = lines(&render(&form, 80, 50)).join("\n");
+        let shown = lines(&render(&form, 80, 60)).join("\n");
         for label in LABELS {
             assert!(shown.contains(label), "missing {label}: {shown}");
         }
