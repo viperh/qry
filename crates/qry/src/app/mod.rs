@@ -82,3 +82,11 @@ impl App {
 #[cfg(test)]
 #[path = "reducer_tests.rs"]
 mod reducer_tests;
+
+#[cfg(test)]
+#[path = "purity_tests.rs"]
+mod purity_tests;
+
+#[cfg(test)]
+#[path = "determinism_tests.rs"]
+mod determinism_tests;

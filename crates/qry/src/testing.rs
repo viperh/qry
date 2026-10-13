@@ -97,7 +97,7 @@ impl AppHarness {
             app: App::new(config, theme_env.adapt(Theme::DARK), 0),
             effects: Vec::new(),
             inbox: VecDeque::new(),
-            epoch: Instant::now(),
+            epoch: instant(0),
             now: 0,
             tick_every,
             next_tick: tick_every,
@@ -391,6 +391,54 @@ pub fn fixture(relative: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures")
         .join(relative)
+}
+
+/// A moment `ms` milliseconds after a fixed one, for tests that build
+/// `UiEvent::Tick`s themselves: the reducer's own modules may not read the
+/// clock, not even in their tests.
+pub fn instant(ms: u64) -> Instant {
+    static EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
+    *EPOCH + Duration::from_millis(ms)
+}
+
+/// Every `.rs` file under these directories of this crate's `src/` (and
+/// `src/<dir>.rs` itself where there is one), with its text, for tests that
+/// scan the source.
+///
+/// # Panics
+/// On a directory or file it cannot read.
+#[cfg(test)]
+pub(crate) fn sources(dirs: &[&str]) -> Vec<(std::path::PathBuf, String)> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut files = Vec::new();
+    let mut stack = Vec::new();
+    for dir in dirs {
+        let file = root.join(format!("{dir}.rs"));
+        if file.is_file() {
+            files.push(file);
+        }
+        stack.push(root.join(dir));
+    }
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            panic!("cannot read {}", dir.display());
+        };
+        for path in entries.flatten().map(|entry| entry.path()) {
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    files
+        .into_iter()
+        .map(|path| match std::fs::read_to_string(&path) {
+            Ok(text) => (path, text),
+            Err(e) => panic!("cannot read {}: {e}", path.display()),
+        })
+        .collect()
 }
 
 /// Draws whatever `draw` draws into a `w`x`h` test terminal and returns the
