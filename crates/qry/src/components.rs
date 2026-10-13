@@ -20,6 +20,11 @@ mod results;
 mod statuspanel;
 mod textinput;
 
+/// The form test helpers (`key`, `press`, `type_str`, `render`, `lines`),
+/// shared by every form's tests.
+#[cfg(test)]
+pub(crate) use form::form_tests;
+
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
 /// Implementors of this trait can be registered with the main application loop and will be able to

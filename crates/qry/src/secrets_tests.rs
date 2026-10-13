@@ -1,0 +1,65 @@
+//! Unit tests for `secrets.rs`.
+
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use super::*;
+
+#[test]
+fn a_password_cannot_be_printed() {
+    let password = Password::new("hunter2");
+    assert_eq!(format!("{password:?}"), "[redacted]");
+    assert_eq!(format!("{:?}", Some(password.clone())), "Some([redacted])");
+    assert_eq!(password.as_str(), "hunter2");
+}
+
+#[test]
+fn the_stash_hands_a_password_over_once() {
+    let _guard = test_lock();
+    stash(Password::new("hunter2"));
+    assert_eq!(
+        take_stash().map(|p| p.as_str().to_string()),
+        Some("hunter2".into())
+    );
+    assert_eq!(take_stash(), None, "taken twice");
+}
+
+#[test]
+fn an_environment_variable_is_read_only_when_it_has_a_value() {
+    // SAFETY: single-threaded within this test, and the names are its own.
+    unsafe {
+        std::env::set_var("QRY_TEST_PASSWORD", "hunter2");
+        std::env::set_var("QRY_TEST_EMPTY", "");
+    }
+    assert_eq!(
+        from_env("QRY_TEST_PASSWORD").map(|p| p.as_str().to_string()),
+        Some("hunter2".into())
+    );
+    assert_eq!(from_env("QRY_TEST_EMPTY"), None);
+    assert_eq!(from_env("QRY_TEST_UNSET"), None);
+}
+
+#[test]
+fn dsn_passwords_are_redacted() {
+    assert_eq!(
+        redact("error connecting to postgres://alice:hunter2@db.local/app"),
+        "error connecting to postgres://alice:[redacted]@db.local/app"
+    );
+    assert_eq!(
+        redact("mysql://root:s3cret@127.0.0.1:3306/app failed"),
+        "mysql://root:[redacted]@127.0.0.1:3306/app failed"
+    );
+    // No credentials in the authority: left as it was.
+    assert_eq!(redact("postgres://db.local/app"), "postgres://db.local/app");
+}
+
+#[test]
+fn key_value_passwords_are_redacted() {
+    assert_eq!(
+        redact("host=db.local user=alice password=hunter2 dbname=app"),
+        "host=db.local user=alice password=[redacted] dbname=app"
+    );
+    assert_eq!(
+        redact("Server=db;Password=hunter2;Database=app"),
+        "Server=db;Password=[redacted];Database=app"
+    );
+}
