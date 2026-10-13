@@ -2,27 +2,27 @@
 source: crates/qry/src/views/views_tests.rs
 expression: "h.render(80, 24)"
 ---
- qry  1┌ Help ──────────────────────────────────────────────────────────┐ORMAL  
- SCHEMA│ Global:                                                        │       
-      N│ ctrl-q                : Quit                                   │       
-       │ ctrl-z                : Suspend to the shell                   │       
-       │ F1                    : Show / hide the help                   │       
-       │ ctrl-p                : Command palette                        │       
-       │ Tab                   : Next pane                              │       
-       │ shift-Tab             : Previous pane                          │       
-       │ ctrl-n                : New connection                         │       
-       │ ctrl-o                : Import connections                     │       
-       │ ctrl-1 … ctrl-9       : Switch to session N                    │       
-       │ ctrl-PgDn             : Next session                           │       
-       │ ctrl-PgUp             : Previous session                       │       
-       │ ctrl-w                : Close this session                     │       
-       │ ctrl-/                : Show / hide the key hints              │       
-       │ ctrl-↑                : Grow the editor                        │       
-       │ ctrl-↓                : Shrink the editor                      │       
-       │ F11                   : Maximise the pane / restore            │       
-       │ ctrl-l                : Show the messages                      │       
-       │ Esc                   : Dismiss the message                    │       
-       │                                                                │       
-       │ Connection tree:                                               │       
- connec│ ?                     : Show / hide the help                   │       
- j scro└─────────────────────────────────────────────────── 1-22 of 121 ┘? help
+┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────┐
+│ Global                                                                       │
+│ ctrl-q               quit                                                    │
+│ ctrl-z               suspend to the shell                                    │
+│ F1                   show / hide the help                                    │
+│ ctrl-p               command palette                                         │
+│ Tab                  next pane                                               │
+│ shift-Tab            previous pane                                           │
+│ ctrl-n               new connection                                          │
+│ ctrl-o               import connections                                      │
+│ ctrl-/               show / hide the key hints                               │
+│ ctrl-↑               grow the editor                                         │
+│ ctrl-↓               shrink the editor                                       │
+│ F11                  maximise the pane / restore                             │
+│ ctrl-l               show the messages                                       │
+│ Esc                  dismiss the message                                     │
+│                                                                              │
+│ Tree                                                                         │
+│ ?                    show / hide the help                                    │
+│                                                                              │
+│ run:  F5 statement  F8 all  ctrl-e selection                                 │
+│ results:  / search  y copy cell  Y copy row  Enter inspect value             │
+│ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─── 1–18 of 146 ─┘

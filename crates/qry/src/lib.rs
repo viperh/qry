@@ -22,6 +22,7 @@ pub mod config_migrate;
 pub mod connections;
 pub mod db;
 pub mod errors;
+pub mod help_model;
 pub mod import;
 pub mod keymap;
 pub mod logging;

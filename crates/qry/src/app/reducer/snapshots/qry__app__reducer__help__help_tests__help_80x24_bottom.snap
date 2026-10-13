@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/reducer/help_tests.rs
+expression: "h.render(80, 24)"
+---
+┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────┐
+│ Command palette                                                              │
+│ ctrl-q               quit                                                    │
+│ F1                   show / hide the help                                    │
+│ ctrl-p               command palette                                         │
+│ ↑                    up                                                      │
+│ ↓                    down                                                    │
+│ Esc                  cancel / close                                          │
+│ Enter                submit                                                  │
+│                                                                              │
+│ Jobs                                                                         │
+│ ?                    show / hide the help                                    │
+│ :                    command palette                                         │
+│ k ↑                  up                                                      │
+│ j ↓                  down                                                    │
+│ h ←                  left                                                    │
+│ l →                  right                                                   │
+│ g g                  to the top                                              │
+│ G                    to the bottom                                           │
+│                                                                              │
+│ run:  F5 statement  F8 all  ctrl-e selection                                 │
+│ results:  / search  y copy cell  Y copy row  Enter inspect value             │
+│ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
+└───────────────────────────────────────────────────────────── 129–146 of 146 ─┘

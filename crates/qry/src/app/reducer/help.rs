@@ -1,23 +1,13 @@
-//! The help popup. Built from the config, so it always lists the keys that
-//! are actually bound, including a user's own.
+//! The help overlay's state. Its content comes from `help_model::build`
+//! over the live keymap, so it always lists the keys that are actually
+//! bound, including a user's own.
 
 use crate::{
     action::Action,
     app::state::{HelpState, Overlay, State},
     config::Config,
-    keymap::{KeyContext, chord_to_string},
+    help_model,
 };
-
-/// The contexts the help lists, with their titles. The inspector, the jobs
-/// drawer and the palette are left out until there is one to open.
-const SECTIONS: [(KeyContext, &str); 6] = [
-    (KeyContext::Global, "Global"),
-    (KeyContext::Tree, "Connection tree"),
-    (KeyContext::Editor, "Editor"),
-    (KeyContext::Results, "Results"),
-    (KeyContext::Dialog, "Dialogs"),
-    (KeyContext::Help, "Help"),
-];
 
 /// Shows the help from the top, or hides it.
 pub(super) fn toggle(state: &mut State) {
@@ -49,17 +39,14 @@ pub(super) fn act(state: &mut State, action: Action) {
 }
 
 impl HelpState {
-    /// One section per context, one line per action in the actions' order,
-    /// with every chord bound to it. A pane's binding and the `Global` one
-    /// it shadows are both listed, each under its own context.
+    /// Everything the help lists, from the keymap as it is now, from the
+    /// top.
     pub(crate) fn from_config(config: &Config) -> Self {
-        let sections = SECTIONS
-            .into_iter()
-            .map(|(context, title)| (title.to_string(), bindings(config, context)))
-            .filter(|(_, binds)| !binds.is_empty())
-            .collect();
+        let keymap = &config.keymap;
         Self {
-            sections,
+            groups: help_model::build(keymap),
+            footer: help_model::footer(keymap),
+            keys: help_model::help_keys(keymap),
             ..Self::default()
         }
     }
@@ -81,40 +68,6 @@ impl HelpState {
         };
         self.scroll.set(scroll.min(self.max_scroll.get()));
     }
-}
-
-/// `context`'s bindings as help lines: an action's chords on one line,
-/// plain and short ones first. Actions that read the same (the numbered
-/// sessions) share a line, written as a range: `ctrl-1 … ctrl-9`.
-fn bindings(config: &Config, context: KeyContext) -> Vec<(String, String)> {
-    let mut actions: Vec<Action> = config
-        .keymap
-        .bindings(context)
-        .map(|(_, action)| *action)
-        .collect();
-    actions.sort_by_key(Action::rank);
-    actions.dedup();
-    // The chords of each action, and the description they share.
-    let mut lines: Vec<(Vec<Vec<String>>, &'static str)> = Vec::new();
-    for action in actions {
-        let chords = config.keymap.chords_for(context, &action);
-        let keys = chords.iter().map(|chord| chord_to_string(chord)).collect();
-        match lines.last_mut() {
-            Some((all, desc)) if *desc == action.description() => all.push(keys),
-            _ => lines.push((vec![keys], action.description())),
-        }
-    }
-    lines
-        .into_iter()
-        .map(|(mut keys, desc)| {
-            let keys = match keys.as_mut_slice() {
-                [one] => one.join(" / "),
-                [first, .., last] => format!("{} … {}", first.join(" / "), last.join(" / ")),
-                [] => String::new(),
-            };
-            (keys, desc.to_string())
-        })
-        .collect()
 }
 
 #[cfg(test)]

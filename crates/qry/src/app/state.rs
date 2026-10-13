@@ -659,11 +659,14 @@ pub(crate) struct ResultsState {
     pub(crate) page_rows: Cell<usize>,
 }
 
-/// The help popup.
+/// The help overlay: what it lists, built from the keymap when it opens.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct HelpState {
-    /// `(title, [(keys, description)])`, in display order.
-    pub(crate) sections: Vec<(String, Vec<(String, String)>)>,
+    pub(crate) groups: Vec<crate::help_model::HelpGroup>,
+    /// The cheat-sheet pinned at the bottom.
+    pub(crate) footer: Vec<crate::help_model::FooterItem>,
+    /// The help's own keys, for its bottom border.
+    pub(crate) keys: Vec<(String, &'static str)>,
     /// First line in view; the view keeps it within `max_scroll`.
     pub(crate) scroll: Cell<usize>,
     /// Lines that fit, and the largest useful `scroll`, from the last draw.

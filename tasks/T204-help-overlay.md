@@ -174,21 +174,21 @@ pub fn draw(frame: &mut Frame, area: Rect, theme: &Theme, model: &[HelpGroup], f
 
 ## Acceptance criteria
 
-- [ ] `components/help.rs` and `describe_action` are removed, and help content comes only from `help_model::build(&keymap)`.
-- [ ] `?` (outside the editor) and `F1` (everywhere) open the overlay. `?`, `F1` and `Esc` close it. While it is open, no non-help action reaches any pane, which the harness checks.
-- [ ] The overlay fills the whole screen, uses the teal accent, and its title contains `qry` and the crate version.
-- [ ] The column count is 1, 2 or 3 at widths 80, 120 and 160, with a column gap of exactly 3 cells.
-- [ ] Packing is balanced: no column is more than one group taller than necessary, and a continuation group is never separated from its parent.
-- [ ] Group titles are bold teal, keys are bold amber, and descriptions and notes are dim. All of these are checked in the styled snapshots.
-- [ ] The key column is the widest key in that column, capped at half the column width. Overflow is truncated with `…`.
-- [ ] Every action bound in the default config appears in the help exactly once per context.
-- [ ] Remapping a key changes the help text, and unbinding every key of an action removes its entry.
-- [ ] Chords are ordered plain-first, then by length. `ctrl-1` to `ctrl-9` collapse into one row, and entries with the same description merge.
-- [ ] The footer cheat-sheet is pinned above the bottom border and does not scroll. Its keys come from the keymap.
-- [ ] The bottom border shows the help keys from the `Help` context. The ` a–b of n ` indicator appears only when the content scrolls, and its numbers are correct at the top and the bottom.
-- [ ] Scrolling is clamped at 0 and `max_scroll`. `G` lands exactly on the last page, and a resize re-clamps the offset.
-- [ ] The mode pill keeps showing the pre-help mode while the help is open.
-- [ ] The overlay renders without a panic at sizes 80x24 up to 300x100. Below 80x24 the too-small screen wins.
+- [x] `components/help.rs` and `describe_action` are removed, and help content comes only from `help_model::build(&keymap)`.
+- [x] `?` (outside the editor) and `F1` (everywhere) open the overlay. `?`, `F1` and `Esc` close it. While it is open, no non-help action reaches any pane, which the harness checks.
+- [x] The overlay fills the whole screen, uses the teal accent, and its title contains `qry` and the crate version.
+- [x] The column count is 1, 2 or 3 at widths 80, 120 and 160, with a column gap of exactly 3 cells.
+- [x] Packing is balanced: no column is more than one group taller than necessary, and a continuation group is never separated from its parent.
+- [x] Group titles are bold teal, keys are bold amber, and descriptions and notes are dim. All of these are checked in the styled snapshots.
+- [x] The key column is the widest key in that column, capped at half the column width. Overflow is truncated with `…`.
+- [x] Every action bound in the default config appears in the help exactly once per context.
+- [x] Remapping a key changes the help text, and unbinding every key of an action removes its entry.
+- [x] Chords are ordered plain-first, then by length. `ctrl-1` to `ctrl-9` collapse into one row, and entries with the same description merge.
+- [x] The footer cheat-sheet is pinned above the bottom border and does not scroll. Its keys come from the keymap.
+- [x] The bottom border shows the help keys from the `Help` context. The ` a–b of n ` indicator appears only when the content scrolls, and its numbers are correct at the top and the bottom.
+- [x] Scrolling is clamped at 0 and `max_scroll`. `G` lands exactly on the last page, and a resize re-clamps the offset.
+- [x] The mode pill keeps showing the pre-help mode while the help is open.
+- [x] The overlay renders without a panic at sizes 80x24 up to 300x100. Below 80x24 the too-small screen wins.
 
 ## Tests
 
@@ -222,3 +222,15 @@ Reducer tests, in `crates/qry/src/app/help_tests.rs`:
 insta snapshots, plain and styled (the styled ones use T002's `styled()` format):
 - `help_80x24_top`, `help_80x24_bottom`, `help_120x40`, `help_160x48`.
 - `help_120x40_remapped`: shows a user remap.
+
+## Implementation notes
+
+- **Where things live.** `help_model.rs` (crate root, as proposed): `HelpGroup`, `build(&Keymap)`, `description(context, action)`, `footer(&Keymap) -> Vec<FooterItem>` (`Piece::{Key, Text}`) and `help_keys(&Keymap)`. The overlay is `views/help.rs` (`column_count`, `COLUMN_GAP`, `pack`, `truncate`, `draw`); there was no `components/help.rs` left (T101 had moved it to `views/help.rs` + `reducer/help.rs`), and the old section builder in `reducer/help.rs` is gone. `HelpState` holds `groups`, `footer` and `keys`, built from the live keymap each time the help opens, plus the `scroll`/`page`/`max_scroll` cells.
+- **Groups.** Global (without the session actions), Tree, Editor · Editing, Editor · Running, Editor · Other (a continuation), Results · Navigation, Results · Copy & search, Results · Other (a continuation), Inspector, Sessions (Global's session actions, with a note about shift-Enter), Dialogs, Command palette, Jobs. There is no `KeyContext::Sessions`; the session keys live in Global, so the Sessions group is a subset of it. The Help context itself is not a group: its keys are in the bottom border.
+- **Rows.** Every chord of an action in display order (`j ↓`), the numbered sessions as `ctrl-1–9` (or `first … last` when remapped to something else), and actions with the same description in a group merged onto one row. Descriptions are `Action::description()` with its first letter lower-cased, or a `CONTEXT_DESCRIPTIONS` override (`Enter` in the tree is "connect / switch to its session").
+- **Packing** follows tachy: the limit counts group lines but not the blank lines between blocks, starts at `ceil(total / n)` and grows until the blocks fit in `n` columns, so `[10, 3, 3, 3, 10, 1]` in 2 columns gives 16. A continuation stays in its parent's block. The key column is the widest key in that screen column, capped at half the column; keys and descriptions are cut with `…` by display width.
+- **Frame.** The whole screen, `dialog_frame` with the teal accent and the title `Help — qry {version}`, over T203's backdrop (the top bar is covered, so the pill test checks `State::pill()` and the bar after closing). The cheat-sheet (`run:`, `results:`, `tree:`) is pinned above the bottom border with one blank row above it, items wrapped whole; its keys use `display_chord`, so `run:` shows `F5` (plain keys first) rather than `ctrl-Enter`. The border carries `k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close` from the Help context and, when it scrolls, ` a–b of n ` at the right.
+- **Keys.** `ctrl-u`/`ctrl-d` were added to the Help context for paging. `?` outside the editor and `F1` everywhere toggle it; Esc closes it. While it is open only the Help context resolves, so no other action reaches a pane (`help_swallows_other_actions`). Opening starts at the top; every draw re-clamps the scroll, so a resize does too.
+- **Tests.** `help_model_tests.rs` (the eight listed plus `the_footer_and_the_help_keys_come_from_the_keymap`), `views/help_tests.rs` (the eight listed plus `renders_at_every_size_without_panic`), and `app/reducer/help_tests.rs` (the spec's `app/help_tests.rs`, next to the reducer's help code it replaces: the five listed plus `a_resize_reclamps_the_scroll` and `help_snapshots` with `help_80x24_top`, `help_80x24_bottom`, `help_120x40`, `help_160x48` plain and styled and `help_120x40_remapped`). `keymap_tests::pane_binding_shadows_global` now reads the new groups.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (358 `qry` unit tests, 31 in `qry-core`) and the CI docs command.
+

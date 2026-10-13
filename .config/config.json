@@ -189,6 +189,8 @@
       "<up>": "Up",
       "<pageup>": "PageUp",
       "<pagedown>": "PageDown",
+      "<ctrl-u>": "PageUp",
+      "<ctrl-d>": "PageDown",
       "<home>": "Top",
       "<G>": "Bottom",
       "<end>": "Bottom",

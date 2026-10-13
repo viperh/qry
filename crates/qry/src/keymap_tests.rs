@@ -434,14 +434,15 @@ fn pane_binding_shadows_global() {
 
     let help = HelpState::from_config(&config);
     let line = |title: &str, desc: &str| {
-        let (_, lines) = help.sections.iter().find(|(t, _)| t == title).unwrap();
-        lines
+        let group = help.groups.iter().find(|g| g.title == title).unwrap();
+        group
+            .entries
             .iter()
             .find(|(_, d)| d == desc)
             .map(|(keys, _)| keys.clone())
     };
-    assert_eq!(line("Editor", "Indent").as_deref(), Some("Tab"));
-    assert_eq!(line("Global", "Next pane").as_deref(), Some("Tab"));
+    assert_eq!(line("Editor · Editing", "indent").as_deref(), Some("Tab"));
+    assert_eq!(line("Global", "next pane").as_deref(), Some("Tab"));
 }
 
 #[test]
