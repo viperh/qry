@@ -10,6 +10,7 @@ use crate::components::conntree::ConnTree;
 use crate::components::editor::Editor;
 use crate::components::exportform::ExportForm;
 use crate::components::form::Form;
+use crate::components::connexportform::ConnExportForm;
 use crate::components::importform::ImportForm;
 use crate::components::passwordform::PasswordForm;
 use crate::components::help::Help;
@@ -51,6 +52,7 @@ enum Awaiting {
     Connect,
     Export,
     Import,
+    ExportConnections,
 }
 
 /// The main screen: the panes, and whatever is on top of them.
@@ -120,6 +122,7 @@ impl Home {
                 self.asked.clone().unwrap_or_default(),
             ))),
             Mode::ImportModal => Some(Box::new(ImportForm::default())),
+            Mode::ConnExportModal => Some(Box::new(ConnExportForm::default())),
         }
     }
 
@@ -144,6 +147,9 @@ impl Home {
                     }
                     Action::Export(..) => Some((Awaiting::Export, "Exporting…")),
                     Action::Import { .. } => Some((Awaiting::Import, "Importing…")),
+                    Action::ExportConnections(..) => {
+                        Some((Awaiting::ExportConnections, "Exporting…"))
+                    }
                     _ => None,
                 };
                 if let Some(tx) = &self.command_tx {
@@ -277,6 +283,16 @@ impl Component for Home {
             }
             Action::Imported(_) if self.awaiting == Some(Awaiting::Import) => self.close_modal()?,
             Action::ImportFailed(message) if self.awaiting == Some(Awaiting::Import) => {
+                self.fail_modal(message);
+            }
+            Action::ConnectionsExported(_)
+                if self.awaiting == Some(Awaiting::ExportConnections) =>
+            {
+                self.close_modal()?
+            }
+            Action::ConnectionsExportFailed(message)
+                if self.awaiting == Some(Awaiting::ExportConnections) =>
+            {
                 self.fail_modal(message);
             }
             _ => {}
@@ -453,6 +469,34 @@ mod tests {
             warnings: Vec::new(),
         })))
         .unwrap();
+        assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
+    }
+
+    #[test]
+    fn exporting_connections_waits_for_the_file() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+
+        let ctrl_s = crossterm::event::KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL);
+        assert_eq!(
+            home.config.keybindings.0[&Mode::Home].get(&vec![ctrl_s]),
+            Some(&Action::ChangeMode(Mode::ConnExportModal))
+        );
+        open(&mut home, Mode::ConnExportModal);
+        assert!(shown(&mut home, 80, 50).contains("Export Connections"));
+        type_str_home(&mut home, "/root/b.json");
+
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert_eq!(rx.try_recv().unwrap(), Action::ExportConnections("/root/b.json".into()));
+        assert!(shown(&mut home, 80, 50).contains("Exporting"));
+
+        home.update(Action::ConnectionsExportFailed("cannot write /root/b.json".into())).unwrap();
+        assert!(shown(&mut home, 80, 50).contains("cannot write /root/b.json"));
+
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::ExportConnections(_))));
+        home.update(Action::ConnectionsExported("/tmp/b.json".into())).unwrap();
         assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
     }
 

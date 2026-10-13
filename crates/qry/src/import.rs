@@ -142,7 +142,7 @@ fn detect(value: &Value) -> Option<Format> {
 }
 
 /// `~/x` is the home directory's `x`, as a shell would read it.
-fn expand_home(path: &str) -> PathBuf {
+pub fn expand_home(path: &str) -> PathBuf {
     let path = path.trim();
     if let Some(rest) = path.strip_prefix("~/")
         && let Some(dirs) = directories::BaseDirs::new()

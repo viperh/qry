@@ -342,6 +342,17 @@ impl Component for ConnTree {
                 }
             }
             Action::Imported(imported) => self.import(*imported)?,
+            // The same list a save writes: everything but the scratch database.
+            Action::ExportConnections(path) => {
+                let connections = self.to_save();
+                if connections.is_empty() {
+                    self.send(Action::ConnectionsExportFailed(
+                        "There are no saved connections to export".into(),
+                    ))?;
+                } else {
+                    self.send(Action::WriteConnections { path, connections })?;
+                }
+            }
             Action::SecretNotStored(id) => {
                 if let Some(node) = self.connections.iter_mut().find(|n| n.record.id == id) {
                     // The keychain would not take it, so the record says so
@@ -499,6 +510,30 @@ mod tests {
         tree.update(imported(vec![new])).unwrap();
         assert!(matches!(rx.try_recv(), Ok(Action::Status(_))));
         assert!(rx.try_recv().is_err(), "nothing new, so no save");
+    }
+
+    #[test]
+    fn an_export_hands_the_saved_list_to_the_app() {
+        let (mut tree, mut rx) = tree();
+        tree.update(Action::ExportConnections("b.json".into())).unwrap();
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            Action::ConnectionsExportFailed("There are no saved connections to export".into())
+        );
+
+        let saved = record("app", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+        let mut scratch = record("scratch", ":memory:");
+        scratch.ephemeral = true;
+        tree.update(Action::Connect(Box::new(scratch))).unwrap();
+        tree.update(Action::Connected(":memory:".into())).unwrap();
+
+        tree.update(Action::ExportConnections("b.json".into())).unwrap();
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            Action::WriteConnections { path: "b.json".into(), connections: vec![saved] },
+            "everything but the scratch database"
+        );
     }
 
     #[test]

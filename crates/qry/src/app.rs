@@ -41,6 +41,7 @@ pub enum Mode {
     ExpoModal,
     PasswordModal,
     ImportModal,
+    ConnExportModal,
 }
 
 impl App {
@@ -207,6 +208,9 @@ impl App {
                 }
                 Action::ListTables => self.send_db(DbCommand::ListTables)?,
                 Action::Import { ref path, format } => self.import(path.clone(), format),
+                Action::WriteConnections { ref path, ref connections } => {
+                    self.export_connections(path.clone(), connections.clone());
+                }
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -253,6 +257,32 @@ impl App {
                 let _ = tx.send(Action::Status(StatusCode::Error(message.clone())));
             }
             let _ = tx.send(action);
+        });
+    }
+
+    /// Writes a backup of the connections off the event loop, answering the
+    /// modal that asked and the status bar.
+    fn export_connections(&self, path: String, list: Vec<StoredConnection>) {
+        let tx = self.action_tx.clone();
+        tokio::task::spawn_blocking(move || {
+            let path = crate::import::expand_home(&path);
+            let (answer, status) = match connections::export(&path, &list) {
+                Ok(written) => {
+                    let written = written.display().to_string();
+                    let count = list.len();
+                    let noun = if count == 1 { "connection" } else { "connections" };
+                    (
+                        Action::ConnectionsExported(written.clone()),
+                        StatusCode::Success(format!("Exported {count} {noun} to {written}")),
+                    )
+                }
+                Err(e) => {
+                    let message = format!("{e:#}");
+                    (Action::ConnectionsExportFailed(message.clone()), StatusCode::Error(message))
+                }
+            };
+            let _ = tx.send(Action::Status(status));
+            let _ = tx.send(answer);
         });
     }
 

@@ -6,7 +6,7 @@
 
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use color_eyre::eyre::{Context, bail};
 use qry_core::{
@@ -306,20 +306,53 @@ pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Resu
     file.version = VERSION;
     file.connections = connections.to_vec();
 
-    let temp = dir.join(TEMP);
-    let text = serde_json::to_string_pretty(&file)? + "\n";
+    write_atomically(&file, &dir.join(TEMP), &dir.join(FILE))
+}
+
+/// Writes a backup of the connections to `path`, in the format `load` and
+/// the importer read, and answers with where it went: `.json` is added to a
+/// path that has no extension. An existing file is replaced only if it is
+/// already a connection file, so a mistyped path cannot clobber anything
+/// else. Holds no password, since a record has nowhere to keep one.
+pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
+    let path = match path.extension() {
+        Some(_) => path.to_path_buf(),
+        None => path.with_extension("json"),
+    };
+    if path.is_dir() {
+        bail!("{} is a directory", path.display());
+    }
+    if let Ok(existing) = fs::read_to_string(&path)
+        && parse(&existing, &path).is_err()
+    {
+        bail!("{} already exists and is not a qry backup, so it was left alone", path.display());
+    }
+
+    let file = ConnectionFile {
+        version: VERSION,
+        connections: connections.to_vec(),
+        extra: Map::new(),
+    };
+    let mut temp = path.clone().into_os_string();
+    temp.push(".tmp");
+    write_atomically(&file, Path::new(&temp), &path)?;
+    Ok(path)
+}
+
+/// Writes `file` to `temp`, then renames it over `target`: a crash midway
+/// leaves the previous file intact. Readable by this user only.
+fn write_atomically(file: &ConnectionFile, temp: &Path, target: &Path) -> color_eyre::Result<()> {
+    let text = serde_json::to_string_pretty(file)? + "\n";
     {
         let mut handle =
-            File::create(&temp).wrap_err_with(|| format!("cannot write {}", temp.display()))?;
+            File::create(temp).wrap_err_with(|| format!("cannot write {}", temp.display()))?;
         handle.write_all(text.as_bytes())?;
         // On disk before the rename, so the rename cannot publish a partial file.
         handle.sync_all()?;
     }
-    restrict(&temp, 0o600)?;
+    restrict(temp, 0o600)?;
 
-    let final_path = dir.join(FILE);
-    fs::rename(&temp, &final_path)
-        .wrap_err_with(|| format!("cannot replace {}", final_path.display()))?;
+    fs::rename(temp, target).wrap_err_with(|| format!("cannot replace {}", target.display()))?;
     Ok(())
 }
 
@@ -542,6 +575,52 @@ mod tests {
         let config = oracle_config(&connection);
         assert_eq!(config.ssl_mode, SslMode::VerifyFull);
         assert_eq!(config.wallet.as_deref(), Some("/etc/oracle/wallet"));
+    }
+
+    #[test]
+    fn an_export_is_a_backup_the_importer_reads_back() {
+        let dir = TempDir::new();
+        let mut kept = postgres();
+        kept.secret = Secret::Keyring;
+        let list = vec![kept, oracle()];
+
+        // No extension: `.json` is added.
+        let written = export(&dir.0.join("backup"), &list).unwrap();
+        assert_eq!(written, dir.0.join("backup.json"));
+        let text = fs::read_to_string(&written).unwrap();
+        assert!(!text.contains("hunter2"), "a record has nowhere to keep a password");
+        assert!(!dir.0.join("backup.json.tmp").exists(), "the temp file was renamed away");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&written).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+
+        let imported = crate::import::from_file(
+            written.to_str().unwrap(),
+            crate::import::Format::Auto,
+        )
+        .unwrap();
+        assert_eq!(imported.format, crate::import::Format::Qry);
+        assert_eq!(imported.connections, list, "it comes back exactly as written");
+
+        // Writing it again replaces the old backup.
+        export(&written, &list[..1]).unwrap();
+        assert_eq!(parse(&fs::read_to_string(&written).unwrap(), &written).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn an_export_never_overwrites_a_file_that_is_not_a_backup() {
+        let dir = TempDir::new();
+        let other = dir.0.join("notes.txt");
+        fs::write(&other, "my notes").unwrap();
+        let err = export(&other, &[postgres()]).unwrap_err().to_string();
+        assert!(err.contains("not a qry backup"), "{err}");
+        assert_eq!(fs::read_to_string(&other).unwrap(), "my notes");
+
+        let err = export(&dir.0.join("no/such/dir/b.json"), &[postgres()]).unwrap_err();
+        assert!(err.to_string().contains("cannot write"), "{err}");
     }
 
     #[test]

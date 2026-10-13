@@ -18,6 +18,7 @@ mod connform;
 mod exportform;
 mod passwordform;
 mod importform;
+mod connexportform;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///

@@ -75,6 +75,14 @@ pub enum Action {
     /// saves.
     Imported(Box<Imported>),
     ImportFailed(String),
+    /// Write a backup of the connections to this file. The tree answers
+    /// with [`Action::WriteConnections`], since it holds the list.
+    ExportConnections(String),
+    /// For `App`, which writes the file off the event loop.
+    WriteConnections { path: String, connections: Vec<StoredConnection> },
+    /// Where the backup went, or why it could not be written.
+    ConnectionsExported(String),
+    ConnectionsExportFailed(String),
 }
 
 
