@@ -28,7 +28,7 @@ Commits use conventional-commit prefixes (`feat:`, `fix:`, `perf:`,
 
   The `#[path]` is needed for any file other than `lib.rs`, because a plain
   `mod foo_tests;` inside `foo.rs` would look for `foo/foo_tests.rs`. The
-  `no_inline_test_modules` check in `crates/qry/tests/workspace_lints.rs`
+  `no_inline_test_modules` check in `crates/qry/tests/workspace_metadata.rs`
   enforces this.
 - **Integration tests** live in `crates/<crate>/tests/*.rs`. Helpers they
   share go in `tests/common/mod.rs`, which starts with
