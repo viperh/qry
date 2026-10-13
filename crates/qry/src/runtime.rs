@@ -231,8 +231,11 @@ impl Executor {
                     tracing::error!("cannot remove the stored password: {e:#}");
                 }
             })),
-            Effect::StashPassword(password) => {
-                secrets::stash(password);
+            Effect::StashPassword {
+                connection,
+                password,
+            } => {
+                secrets::stash(&connection, password);
                 Executed::Done
             }
             Effect::ScheduleTimer { timer, after } => {

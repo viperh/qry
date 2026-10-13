@@ -16,16 +16,20 @@ pub(crate) struct PasswordForm {
     fields: [Field; 1],
     error: Option<String>,
     pending: Option<&'static str>,
+    /// The id of the connection asking, which the stash keys the password
+    /// by.
+    connection: String,
     /// Whose password this is, for the title.
     name: String,
 }
 
 impl PasswordForm {
-    pub(crate) fn new(name: impl Into<String>) -> Self {
+    pub(crate) fn new(connection: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             fields: [Field::masked()],
             error: None,
             pending: None,
+            connection: connection.into(),
             name: name.into(),
         }
     }
@@ -84,7 +88,10 @@ impl Form for PasswordForm {
     fn submit(&self) -> Result<Submission, String> {
         // Not trimmed: spaces can be part of a password.
         let typed = self.secret(PASSWORD).map(Password::duplicate);
-        Ok(Submission::PasswordEntered(typed.unwrap_or_default()))
+        Ok(Submission::PasswordEntered {
+            connection: self.connection.clone(),
+            password: typed.unwrap_or_default(),
+        })
     }
 }
 

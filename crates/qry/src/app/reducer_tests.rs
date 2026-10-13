@@ -376,12 +376,16 @@ fn need_password_opens_prompt_and_submit_awaits_connect() {
     h.type_str("x").keys("enter");
     let effects = h.take_effects();
     let [
-        Effect::StashPassword(password),
+        Effect::StashPassword {
+            connection,
+            password,
+        },
         Effect::Db(_, DbCommand::PasswordEntered),
     ] = effects.as_slice()
     else {
         panic!("expected the stash and then the worker, got {effects:?}");
     };
+    assert_eq!(connection, "c7f3a1e2", "keyed by the connection that asked");
     assert_eq!(password.as_str(), "x");
     assert!(h.render(80, 30).contains("Connecting"));
 
@@ -402,7 +406,7 @@ fn password_text_never_in_effects() {
     assert!(
         effects
             .iter()
-            .any(|e| matches!(e, Effect::StashPassword(_)))
+            .any(|e| matches!(e, Effect::StashPassword { .. }))
     );
     for effect in &effects {
         let shown = format!("{effect:?}");
@@ -420,7 +424,7 @@ fn password_text_never_in_effects() {
     assert!(matches!(
         effects.as_slice(),
         [
-            Effect::StashPassword(_),
+            Effect::StashPassword { .. },
             Effect::Db(_, DbCommand::Connect(_))
         ]
     ));

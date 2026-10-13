@@ -18,7 +18,7 @@ pub(super) fn answer(state: &mut State, answer: DbAnswer, fx: &mut Vec<Effect>) 
             tree::connect_failed(state);
         }
         // The worker cannot prompt, so it asks here.
-        DbAnswer::NeedPassword { name, .. } => dialogs::need_password(state, name),
+        DbAnswer::NeedPassword { id, name } => dialogs::need_password(state, id, name),
         DbAnswer::SecretNotStored(id) => tree::secret_not_stored(state, &id, fx),
         DbAnswer::QueryDone(result) => results::show(&mut state.results, result),
         DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export),

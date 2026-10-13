@@ -61,9 +61,9 @@ pub(super) fn edit_connection(state: &mut State, record: &StoredConnection) {
     state.awaiting = None;
 }
 
-/// The worker wants a password typed for `name`.
-pub(super) fn need_password(state: &mut State, name: String) {
-    state.open_dialog(DialogState::Password(PasswordForm::new(name)));
+/// The worker wants a password typed for connection `id`, called `name`.
+pub(super) fn need_password(state: &mut State, id: String, name: String) {
+    state.open_dialog(DialogState::Password(PasswordForm::new(id, name)));
     state.awaiting = None;
 }
 
@@ -87,7 +87,7 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
     let (awaiting, pending) = match &submission {
         // A typed password is the rest of a connection attempt, so the
         // prompt waits for the same answer.
-        Submission::Connect { .. } | Submission::PasswordEntered(_) => {
+        Submission::Connect { .. } | Submission::PasswordEntered { .. } => {
             (Awaiting::Connect, "Connecting…")
         }
         Submission::Export(_) => (Awaiting::Export, "Exporting…"),
@@ -101,12 +101,21 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
     match submission {
         Submission::Connect { record, password } => {
             if let Some(password) = password {
-                fx.push(Effect::StashPassword(password));
+                fx.push(Effect::StashPassword {
+                    connection: record.id.clone(),
+                    password,
+                });
             }
             connect(state, *record, fx);
         }
-        Submission::PasswordEntered(password) => {
-            fx.push(Effect::StashPassword(password));
+        Submission::PasswordEntered {
+            connection,
+            password,
+        } => {
+            fx.push(Effect::StashPassword {
+                connection,
+                password,
+            });
             fx.push(Effect::Db(state.session, DbCommand::PasswordEntered));
         }
         Submission::Export(config) => fx.push(Effect::Db(state.session, DbCommand::Export(config))),

@@ -37,10 +37,14 @@ pub enum Effect {
     },
     /// Remove this connection's password from the keychain.
     ForgetSecret(String),
-    /// Leave a typed password in `secrets::stash`, where the worker takes it
-    /// from. The `Db` effect that follows carries no password, only the
-    /// connection's record or nothing at all.
-    StashPassword(Password),
+    /// Leave a typed password in `secrets::stash` under the connection's id,
+    /// where that connection's worker takes it from. The `Db` effect that
+    /// follows carries no password, only the connection's record or nothing
+    /// at all.
+    StashPassword {
+        connection: String,
+        password: Password,
+    },
     /// Deliver `UiEvent::Timer(timer)` once `after` has passed. Nothing
     /// cancels one: the reducer ignores a timer it no longer waits for.
     ScheduleTimer {

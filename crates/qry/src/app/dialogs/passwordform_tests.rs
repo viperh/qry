@@ -10,7 +10,7 @@ use crate::{
 
 #[test]
 fn what_is_typed_is_kept_as_a_password_and_never_printed() {
-    let mut form = PasswordForm::new("prod");
+    let mut form = PasswordForm::new("c7f3a1e2", "prod");
     type_str(&mut form, " hunter2 ");
 
     assert!(!format!("{form:?}").contains("hunter2"));
@@ -18,13 +18,16 @@ fn what_is_typed_is_kept_as_a_password_and_never_printed() {
     assert!(!format!("{submitted:?}").contains("hunter2"));
     assert_eq!(
         submitted,
-        Submission::PasswordEntered(Password::new(" hunter2 "))
+        Submission::PasswordEntered {
+            connection: "c7f3a1e2".into(),
+            password: Password::new(" hunter2 ")
+        }
     );
 }
 
 #[test]
 fn the_popup_names_the_connection_and_masks_what_is_typed() {
-    let mut form = PasswordForm::new("prod");
+    let mut form = PasswordForm::new("c7f3a1e2", "prod");
     type_str(&mut form, "hunter2");
     let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
 

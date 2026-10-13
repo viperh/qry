@@ -38,12 +38,30 @@ fn a_password_is_typed_and_erased_by_character() {
 #[test]
 fn the_stash_hands_a_password_over_once() {
     let _guard = test_lock();
-    stash(Password::new("hunter2"));
+    stash("a", Password::new("hunter2"));
     assert_eq!(
-        take_stash().map(|p| p.as_str().to_string()),
+        take_stash("a").map(|p| p.as_str().to_string()),
         Some("hunter2".into())
     );
-    assert_eq!(take_stash(), None, "taken twice");
+    assert_eq!(take_stash("a"), None, "taken twice");
+}
+
+#[test]
+fn stash_is_keyed_by_connection() {
+    let _guard = test_lock();
+    stash("a", Password::new("CANARY-PW-a"));
+    stash("b", Password::new("CANARY-PW-b"));
+    assert_eq!(
+        take_stash("b").map(|p| p.as_str().to_string()),
+        Some("CANARY-PW-b".into()),
+        "b's own password"
+    );
+    assert_eq!(take_stash("b"), None, "and only that one");
+    assert_eq!(
+        take_stash("a").map(|p| p.as_str().to_string()),
+        Some("CANARY-PW-a".into()),
+        "a's is still waiting"
+    );
 }
 
 #[test]

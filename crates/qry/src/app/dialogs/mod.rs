@@ -61,8 +61,11 @@ pub(crate) enum Submission {
         password: Option<Password>,
     },
     /// The password prompt's answer, for the connection the worker asked
-    /// about.
-    PasswordEntered(Password),
+    /// about (its id).
+    PasswordEntered {
+        connection: String,
+        password: Password,
+    },
     /// Write the last result to a file.
     Export(ExportConfig),
     /// Read connections from another file.

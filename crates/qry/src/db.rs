@@ -25,8 +25,8 @@ pub enum DbCommand {
     /// Open this connection. The record holds no password: the worker
     /// resolves the secret from the keychain, the environment, or a prompt.
     Connect(Box<StoredConnection>),
-    /// A prompted password is waiting in the stash for the connection the
-    /// worker last asked about.
+    /// A prompted password is waiting in the stash, under the id of the
+    /// connection the worker last asked about.
     PasswordEntered,
     Query(String),
     /// Writes the last result to a file; no second trip to the database.
@@ -75,7 +75,7 @@ impl Worker {
             DbCommand::Connect(record) => self.connect(*record).await,
             DbCommand::PasswordEntered => match self.asked.take() {
                 Some(record) => {
-                    let typed = secrets::take_stash().unwrap_or_default();
+                    let typed = secrets::take_stash(&record.id).unwrap_or_default();
                     self.open(record, typed, true).await
                 }
                 None => Vec::new(),
@@ -98,7 +98,7 @@ impl Worker {
     /// and the stored mode is never rewritten behind their back.
     async fn connect(&mut self, record: StoredConnection) -> Vec<DbAnswer> {
         // A password typed into the New Connection form is waiting here.
-        if let Some(typed) = secrets::take_stash() {
+        if let Some(typed) = secrets::take_stash(&record.id) {
             return self.open(record, typed, true).await;
         }
         match record.secret.clone() {

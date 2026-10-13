@@ -7,7 +7,10 @@
 //! panic message: the runtime leaves what the prompt took in [`stash`] and
 //! the database worker takes it from there.
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Mutex,
+};
 
 use zeroize::Zeroizing;
 
@@ -83,13 +86,16 @@ impl std::fmt::Debug for Password {
 }
 
 /// Where a prompted password waits between the modal and the worker, so that
-/// it never has to ride in a message to the worker. One prompt is open at a
-/// time.
-static STASH: Mutex<Option<Password>> = Mutex::new(None);
+/// it never has to ride in a message to the worker. Keyed by connection id:
+/// two sessions can be asking at once, and each worker takes only the
+/// password typed for its own connection.
+static STASH: Mutex<BTreeMap<String, Password>> = Mutex::new(BTreeMap::new());
 
-pub(crate) fn stash(password: Password) {
+/// Leaves `password` for the worker opening connection `id`, in place of any
+/// left for it before.
+pub(crate) fn stash(id: &str, password: Password) {
     if let Ok(mut held) = STASH.lock() {
-        *held = Some(password);
+        held.insert(id.to_string(), password);
     }
 }
 
@@ -121,9 +127,9 @@ pub(crate) fn set_test_var(name: &str, value: &str) {
     unsafe { std::env::set_var(name, value) };
 }
 
-/// Takes what the prompt left, if anything.
-pub(crate) fn take_stash() -> Option<Password> {
-    STASH.lock().ok().and_then(|mut held| held.take())
+/// Takes what the prompt left for connection `id`, if anything.
+pub(crate) fn take_stash(id: &str) -> Option<Password> {
+    STASH.lock().ok().and_then(|mut held| held.remove(id))
 }
 
 /// Set `QRY_KEYRING=off` to keep passwords in memory instead of the OS

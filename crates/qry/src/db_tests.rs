@@ -69,7 +69,6 @@ async fn named_connection_shows_its_name() {
 #[allow(clippy::await_holding_lock)]
 async fn a_password_in_the_environment_is_used_without_asking() {
     let _guard = secrets::test_lock();
-    let _ = secrets::take_stash();
     secrets::set_test_var("QRY_TEST_DB_PASSWORD", "hunter2");
 
     let (db, mut answers) = spawn_first();
@@ -91,7 +90,6 @@ async fn a_password_in_the_environment_is_used_without_asking() {
 #[allow(clippy::await_holding_lock)]
 async fn a_password_that_is_not_stored_is_asked_for_then_used() {
     let _guard = secrets::test_lock();
-    let _ = secrets::take_stash();
 
     let (db, mut answers) = spawn_first();
     let mut record = sqlite("prompt", ":memory:");
@@ -104,20 +102,20 @@ async fn a_password_that_is_not_stored_is_asked_for_then_used() {
     assert_eq!(
         answers.recv().await,
         Some(DbAnswer::NeedPassword {
-            id,
+            id: id.clone(),
             name: "prompt".into()
         })
     );
 
     // The prompt leaves the password in the stash, not in the command.
-    secrets::stash(Password::new("hunter2"));
+    secrets::stash(&id, Password::new("hunter2"));
     db.send(DbCommand::PasswordEntered).unwrap();
     assert_eq!(
         answers.recv().await,
         Some(DbAnswer::Connected(":memory:".into()))
     );
     assert_eq!(
-        secrets::take_stash(),
+        secrets::take_stash(&id),
         None,
         "the stash is emptied by the worker"
     );
