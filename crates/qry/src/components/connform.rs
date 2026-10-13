@@ -3,14 +3,14 @@ use crate::components::form::{Field, Form};
 use crate::connections::{Driver, Secret, StoredConnection};
 use crate::secrets::{self, Password};
 
-const LABELS: [&str; 10] = [
+const LABELS: [&str; 11] = [
     "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
-    "Password in",
+    "Wallet", "Password in",
 ];
 /// Same, plus the variable name that only ENVIRONMENT shows.
-const LABELS_VAR: [&str; 11] = [
+const LABELS_VAR: [&str; 12] = [
     "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
-    "Password in", "Variable",
+    "Wallet", "Password in", "Variable",
 ];
 // Indexes into `LABELS` and `ConnForm::fields`.
 const NAME: usize = 0;
@@ -22,8 +22,9 @@ const PASSWORD: usize = 5;
 const DATABASE: usize = 6;
 const SCHEMA: usize = 7;
 const SSL_MODE: usize = 8;
-const STORE: usize = 9;
-const VAR: usize = 10;
+const WALLET: usize = 9;
+const STORE: usize = 10;
+const VAR: usize = 11;
 
 const DB_TYPES: [&str; 5] = ["PostgreSQL", "MySQL", "MariaDB", "SQLite", "Oracle"];
 /// Same order as `DB_TYPES`.
@@ -75,6 +76,7 @@ impl Default for ConnForm {
                 Field::text(),
                 // "prefer", libpq's own default
                 Field::choice(&SSL_MODES, 2),
+                Field::text_with_placeholder("Oracle only: folder with ewallet.pem"),
                 Field::choice(&STORES, KEYCHAIN),
             ],
             focus: 0,
@@ -111,8 +113,17 @@ impl ConnForm {
             _ => record.database.as_deref(),
         };
         form.set_text(DATABASE, database.unwrap_or_default());
-        if let Some(tls) = &record.tls
-            && let Some(mode) = SSL_MODES.iter().position(|m| m == tls)
+        // An old Oracle record keeps its wallet in `tls`; `oracle_tls`
+        // reads either shape, so saving the form writes the new one.
+        let tls = match record.driver {
+            Driver::Oracle => record.oracle_tls().ok().map(|(mode, wallet)| {
+                form.set_text(WALLET, wallet.as_deref().unwrap_or_default());
+                mode.to_string()
+            }),
+            _ => record.tls.clone(),
+        };
+        if let Some(tls) = tls
+            && let Some(mode) = SSL_MODES.iter().position(|m| *m == tls)
         {
             form.set_choice(SSL_MODE, mode);
         }
@@ -248,9 +259,13 @@ impl Form for ConnForm {
             Driver::Oracle => record.service = database,
             _ => record.database = database,
         }
-        // SQLite has no transport, and Oracle reads `tls` as a wallet path.
-        if !matches!(driver, Driver::Sqlite | Driver::Oracle) {
+        // SQLite has no transport.
+        if driver != Driver::Sqlite {
             record.tls = Some(SSL_MODES[self.selected(SSL_MODE)].to_string());
+        }
+        record.wallet = some(trimmed(WALLET));
+        if record.wallet.is_some() && driver != Driver::Oracle {
+            return Err("Wallet is only used by Oracle".into());
         }
 
         // Not trimmed: spaces can be part of a password.
@@ -403,6 +418,47 @@ mod tests {
         let built = record(&form);
         assert_eq!(built.service.as_deref(), Some("app"));
         assert_eq!(built.database, None);
+    }
+
+    #[test]
+    fn oracle_takes_an_ssl_mode_and_a_wallet() {
+        let _guard = secrets::test_lock();
+        let mut form = filled();
+        choose(&mut form, TYPE, "Oracle");
+        choose(&mut form, SSL_MODE, "verify-full");
+        set(&mut form, WALLET, " /etc/oracle/wallet ");
+        let built = record(&form);
+        assert_eq!(built.tls.as_deref(), Some("verify-full"));
+        assert_eq!(built.wallet.as_deref(), Some("/etc/oracle/wallet"));
+
+        // And opening it again shows both.
+        let form = ConnForm::editing(&built);
+        assert_eq!(form.selected(SSL_MODE), SSL_MODES.iter().position(|m| *m == "verify-full").unwrap());
+        assert_eq!(form.text(WALLET), "/etc/oracle/wallet");
+    }
+
+    #[test]
+    fn a_wallet_is_refused_for_anything_but_oracle() {
+        let _guard = secrets::test_lock();
+        let mut form = filled();
+        set(&mut form, WALLET, "/etc/oracle/wallet");
+        assert_eq!(form.submit().unwrap_err(), "Wallet is only used by Oracle");
+    }
+
+    #[test]
+    fn editing_an_old_oracle_record_moves_its_wallet_out_of_tls() {
+        let _guard = secrets::test_lock();
+        let mut saved = StoredConnection::new("erp", Driver::Oracle);
+        saved.host = Some("db.local".into());
+        saved.user = Some("alice".into());
+        saved.service = Some("ORCLPDB1".into());
+        saved.tls = Some("/etc/oracle/wallet".into());
+
+        let form = ConnForm::editing(&saved);
+        assert_eq!(form.text(WALLET), "/etc/oracle/wallet");
+        let built = record(&form);
+        assert_eq!(built.tls.as_deref(), Some("verify-full"));
+        assert_eq!(built.wallet.as_deref(), Some("/etc/oracle/wallet"));
     }
 
     #[test]

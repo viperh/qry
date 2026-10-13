@@ -35,6 +35,11 @@ impl Field {
         Field::Text(TextInput::default())
     }
 
+    /// A text field that shows `hint`, greyed, while it is empty.
+    pub fn text_with_placeholder(hint: &'static str) -> Self {
+        Field::Text(TextInput { placeholder: Some(hint), ..TextInput::default() })
+    }
+
     pub fn masked() -> Self {
         Field::Text(TextInput { masked: true, ..TextInput::default() })
     }

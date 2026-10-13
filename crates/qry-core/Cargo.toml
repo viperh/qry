@@ -21,6 +21,12 @@ tokio-postgres = "0.7.18"
 tokio-rusqlite = { version="0.8.0", features = ["bundled"] }
 mysql_async = "0.37.1"
 rust_xlsxwriter = "0.99.1"
-oracle = "0.6.3"
+# Oracle's own thin driver: pure Rust, no Instant Client. Still a beta, so
+# pinned exactly; read its changelog before raising the pin.
+oracledb = "=26.0.0-beta.4"
+# Already in the tree through oracledb; used to check a host name before TLS.
+rustls-pki-types = "1.15.1"
 
 [dev-dependencies]
+# A TLS server for the Oracle tests; already in the tree through oracledb.
+rustls = "0.23.45"

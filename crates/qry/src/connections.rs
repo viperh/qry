@@ -90,9 +90,13 @@ pub struct StoredConnection {
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
-    /// An SSL mode, or for Oracle a wallet path.
+    /// An SSL mode. Records written before Oracle spoke TLS may hold a
+    /// wallet directory here instead; see [`StoredConnection::oracle_tls`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tls: Option<String>,
+    /// Oracle: the directory holding `ewallet.pem`, used over TCPS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallet: Option<String>,
     /// SQLite: `ro`, `rw` or `rwc`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
@@ -124,6 +128,7 @@ impl StoredConnection {
             path: None,
             schema: None,
             tls: None,
+            wallet: None,
             mode: None,
             dsn: None,
             secret: if driver.needs_password() { Secret::Prompt } else { Secret::None },
@@ -163,8 +168,8 @@ impl StoredConnection {
         let user = required("user", &self.user)?;
         let password = password.to_string();
 
-        // Oracle reads `tls` as a wallet directory rather than an SSL mode.
         if self.driver == Driver::Oracle {
+            let (ssl_mode, wallet) = self.oracle_tls()?;
             return Ok(ConnectionConfig::Oracle(OracleConfig {
                 host,
                 port,
@@ -172,7 +177,8 @@ impl StoredConnection {
                 password,
                 service: required("service", &self.service)?,
                 schema: self.schema.clone(),
-                wallet: self.tls.clone(),
+                ssl_mode,
+                wallet,
             }));
         }
         let ssl_mode = self.ssl_mode()?;
@@ -205,6 +211,18 @@ impl StoredConnection {
             }),
             Driver::Oracle | Driver::Sqlite => unreachable!("handled above"),
         })
+    }
+
+    /// Oracle's SSL mode and wallet. Before qry spoke TLS to Oracle, `tls`
+    /// held a wallet directory rather than a mode; such a record still means
+    /// "TCPS with this wallet", and saving it again writes the new shape.
+    pub fn oracle_tls(&self) -> color_eyre::Result<(SslMode, Option<String>)> {
+        match &self.tls {
+            Some(tls) if !SslMode::ALL.iter().any(|mode| mode.to_string() == *tls) => {
+                Ok((SslMode::VerifyFull, Some(tls.clone())))
+            }
+            _ => Ok((self.ssl_mode()?, self.wallet.clone())),
+        }
     }
 
     fn ssl_mode(&self) -> color_eyre::Result<SslMode> {
@@ -467,6 +485,45 @@ mod tests {
             panic!("expected Sqlite");
         };
         assert!(config.read_only);
+    }
+
+    fn oracle() -> StoredConnection {
+        let mut connection = StoredConnection::new("erp", Driver::Oracle);
+        connection.host = Some("db.local".into());
+        connection.user = Some("alice".into());
+        connection.service = Some("ORCLPDB1".into());
+        connection
+    }
+
+    fn oracle_config(connection: &StoredConnection) -> OracleConfig {
+        let ConnectionConfig::Oracle(config) = connection.to_config("x").unwrap() else {
+            panic!("expected Oracle");
+        };
+        config
+    }
+
+    #[test]
+    fn an_oracle_record_carries_its_ssl_mode_and_wallet() {
+        let config = oracle_config(&oracle());
+        assert_eq!((config.port, config.ssl_mode, config.wallet), (1521, SslMode::Prefer, None));
+
+        let mut connection = oracle();
+        connection.tls = Some("verify-full".into());
+        connection.wallet = Some("/etc/oracle/wallet".into());
+        let config = oracle_config(&connection);
+        assert_eq!(config.ssl_mode, SslMode::VerifyFull);
+        assert_eq!(config.wallet.as_deref(), Some("/etc/oracle/wallet"));
+    }
+
+    #[test]
+    fn an_old_oracle_record_with_a_wallet_in_tls_means_tcps() {
+        let text = r#"{"id":"c1","name":"erp","driver":"oracle","host":"db.local",
+            "user":"alice","service":"ORCLPDB1","tls":"/etc/oracle/wallet",
+            "secret":{"mode":"prompt"}}"#;
+        let connection: StoredConnection = serde_json::from_str(text).unwrap();
+        let config = oracle_config(&connection);
+        assert_eq!(config.ssl_mode, SslMode::VerifyFull);
+        assert_eq!(config.wallet.as_deref(), Some("/etc/oracle/wallet"));
     }
 
     #[test]
