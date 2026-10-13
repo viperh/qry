@@ -43,9 +43,16 @@ struct Worker {
 /// Starts the worker and returns the sender used to reach it. Commands run one
 /// at a time, in order. The worker stops once every sender has been dropped.
 pub(crate) fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
+    spawn_worker(Worker::default(), action_tx)
+}
+
+/// Runs `worker` on its own task; tests hand in one whose driver is a fake.
+fn spawn_worker(
+    mut worker: Worker,
+    action_tx: UnboundedSender<Action>,
+) -> UnboundedSender<DbCommand> {
     let (tx, mut rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
-        let mut worker = Worker::default();
         while let Some(command) = rx.recv().await {
             for action in worker.run(command).await {
                 if action_tx.send(action).is_err() {
@@ -70,29 +77,14 @@ impl Worker {
             },
             DbCommand::Query(sql) => {
                 let started = Instant::now();
-                match self.driver.query(&sql).await {
-                    Ok(result) => {
-                        let took = took(started.elapsed());
-                        let summary = match result.rows.len() {
-                            // A CREATE or an INSERT returns no columns to fetch.
-                            _ if result.columns.is_empty() => {
-                                format!("Statement executed in {took}")
-                            }
-                            1 => format!("Fetched 1 row in {took}"),
-                            n => format!("Fetched {n} rows in {took}"),
-                        };
-                        let result = Arc::new(result);
-                        self.last = Some(result.clone());
-                        vec![Action::QueryDone(result), success(summary)]
-                    }
-                    Err(e) => vec![error(format!("{e:#}"))],
+                let actions = query_answer(self.driver.query(&sql).await, started.elapsed());
+                if let Some(Action::QueryDone(result)) = actions.first() {
+                    self.last = Some(result.clone());
                 }
+                actions
             }
             DbCommand::Export(config) => self.export(config).await,
-            DbCommand::ListTables => match self.driver.tables().await {
-                Ok(tables) => vec![Action::TablesLoaded(tables)],
-                Err(e) => vec![Action::TablesFailed(e.to_string()), error(format!("{e:#}"))],
-            },
+            DbCommand::ListTables => tables_answer(self.driver.tables().await),
         }
     }
 
@@ -151,15 +143,7 @@ impl Worker {
             Err(e) => return failed(&format!("{e:#}")),
         };
 
-        let shown = if record.name.is_empty() {
-            label.clone()
-        } else {
-            format!("{} ({label})", record.name)
-        };
-        let mut actions = vec![
-            Action::Connected(label),
-            success(format!("Connected to {shown}")),
-        ];
+        let mut actions = connected_answer(&record, label);
 
         // Only a freshly typed password is worth storing, and only once it is
         // known to work.
@@ -205,6 +189,51 @@ impl Worker {
             ],
         }
     }
+}
+
+/// What the worker reports for a finished query: the result and a summary
+/// for the status bar, or the error. The app harness in [`crate::testing`]
+/// answers with the same actions, so its stand-in worker cannot drift from
+/// this one.
+pub(crate) fn query_answer<E: std::fmt::Display>(
+    outcome: Result<QueryResult, E>,
+    elapsed: Duration,
+) -> Vec<Action> {
+    match outcome {
+        Ok(result) => {
+            let took = took(elapsed);
+            let summary = match result.rows.len() {
+                // A CREATE or an INSERT returns no columns to fetch.
+                _ if result.columns.is_empty() => format!("Statement executed in {took}"),
+                1 => format!("Fetched 1 row in {took}"),
+                n => format!("Fetched {n} rows in {took}"),
+            };
+            vec![Action::QueryDone(Arc::new(result)), success(summary)]
+        }
+        Err(e) => vec![error(format!("{e:#}"))],
+    }
+}
+
+/// What the worker reports for a table listing, for the tree.
+pub(crate) fn tables_answer<E: std::fmt::Display>(outcome: Result<Vec<String>, E>) -> Vec<Action> {
+    match outcome {
+        Ok(tables) => vec![Action::TablesLoaded(tables)],
+        Err(e) => vec![Action::TablesFailed(e.to_string()), error(format!("{e:#}"))],
+    }
+}
+
+/// What the worker reports once `record` is open as `label`: the answer the
+/// modal waits for, and the name the status bar shows.
+pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<Action> {
+    let shown = if record.name.is_empty() {
+        label.clone()
+    } else {
+        format!("{} ({label})", record.name)
+    };
+    vec![
+        Action::Connected(label),
+        success(format!("Connected to {shown}")),
+    ]
 }
 
 /// How long something took, in the unit that reads best: `0.4 ms`, `12 ms`,

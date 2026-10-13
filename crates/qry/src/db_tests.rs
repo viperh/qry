@@ -2,7 +2,10 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use qry_core::ExportType;
+use qry_core::{
+    DatabaseType, ExportType,
+    testing::{FakeDatabase, Reply, grid, result},
+};
 
 use super::*;
 use crate::connections::Driver as StoredDriver;
@@ -13,6 +16,15 @@ fn sqlite(name: &str, path: &str) -> StoredConnection {
     record.path = Some(path.to_string());
     record.secret = Secret::None;
     record
+}
+
+/// A worker already connected to `db`, running on its own task.
+fn spawn_fake(db: &FakeDatabase, action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
+    let worker = Worker {
+        driver: Driver::with_database(Box::new(db.clone())),
+        ..Worker::default()
+    };
+    spawn_worker(worker, action_tx)
 }
 
 fn in_memory() -> DbCommand {
@@ -165,16 +177,12 @@ async fn failures_become_error_status() {
     ));
 }
 
-fn temp_csv() -> String {
-    let name = format!("qry-worker-{}.csv", std::process::id());
-    std::env::temp_dir().join(name).display().to_string()
-}
-
 #[tokio::test]
 async fn export_writes_the_last_result() {
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
     let db = spawn(action_tx);
-    let path = temp_csv();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rows.csv").display().to_string();
 
     // Nothing has run yet, so there is nothing to export.
     db.send(DbCommand::Export(ExportConfig {
@@ -219,5 +227,52 @@ async fn export_writes_the_last_result() {
         std::fs::read_to_string(&path).unwrap(),
         "id,name\n1,alice\n2,\n"
     );
-    let _ = std::fs::remove_file(&path);
+}
+
+#[tokio::test]
+async fn a_driver_error_comes_back_as_a_status_error() {
+    let db = FakeDatabase::new(DatabaseType::Postgres)
+        .reply(Reply::Error("relation \"nope\" does not exist".into()));
+    let mut worker = Worker {
+        driver: Driver::with_database(Box::new(db.clone())),
+        ..Worker::default()
+    };
+
+    let actions = worker
+        .run(DbCommand::Query("SELECT * FROM nope".into()))
+        .await;
+    assert_eq!(actions, [error("relation \"nope\" does not exist".into())]);
+    assert!(
+        worker.last.is_none(),
+        "a failed query leaves nothing to export"
+    );
+    assert_eq!(db.calls(), ["SELECT * FROM nope"]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn commands_run_in_order_even_when_the_first_is_slow() {
+    let slow = result(&["slow"], &[&[Some("1")]]);
+    let fast = grid(2, 2);
+    let db = FakeDatabase::default()
+        .reply(Reply::Delay(
+            Duration::from_secs(5),
+            Box::new(Reply::Rows(slow.clone())),
+        ))
+        .reply(Reply::Rows(fast.clone()));
+    let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+    let worker = spawn_fake(&db, action_tx);
+
+    worker.send(DbCommand::Query("SELECT slow".into())).unwrap();
+    worker.send(DbCommand::Query("SELECT fast".into())).unwrap();
+
+    // The paused clock jumps over the delay as soon as every task is idle,
+    // so this waits on virtual time only.
+    let mut done = Vec::new();
+    while done.len() < 2 {
+        if let Some(Action::QueryDone(result)) = action_rx.recv().await {
+            done.push((*result).clone());
+        }
+    }
+    assert_eq!(done, [slow, fast]);
+    assert_eq!(db.calls(), ["SELECT slow", "SELECT fast"]);
 }
