@@ -15,8 +15,6 @@ use std::{
 use crossterm::event::KeyEvent;
 use qry_core::QueryResult;
 use ratatui_textarea::TextArea;
-use serde::{Deserialize, Serialize};
-use strum::Display;
 
 use super::dialogs::DialogState;
 use crate::{
@@ -35,7 +33,7 @@ impl SessionId {
 }
 
 /// The status bar's line.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Display, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum StatusCode {
     #[default]
     None,

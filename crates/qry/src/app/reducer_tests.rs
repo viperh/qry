@@ -484,7 +484,7 @@ fn query_done_is_never_printed_in_full() {
 }
 
 #[test]
-fn quit_and_suspend_are_effects() {
+fn quitting_is_an_effect_for_the_runtime() {
     let mut h = harness();
     h.keys("ctrl-q");
     assert_eq!(h.take_effects(), [Effect::Quit]);
