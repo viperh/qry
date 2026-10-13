@@ -55,15 +55,38 @@ tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "serde"] }
 
 # --- misc ---
+async-trait = "0.1.92"
+hex = "0.4.3"
+keyring = "4.2.0"
 libc = "0.2.186"
+ratatui-textarea = "0.9.2"
+serde_json = "1.0.151"
 strum = { version = "0.28.0", features = ["derive"] }
+zeroize = "1.9.0"
+
+# --- database drivers ---
+mysql_async = "0.37.1"
+# Oracle's own thin driver: pure Rust, no Instant Client. Still a beta, so
+# pinned exactly; read its changelog before raising the pin.
+oracledb = "=26.0.0-beta.4"
+# Already in the tree through oracledb; used to check a host name before TLS.
+rustls-pki-types = "1.15.1"
+tokio-postgres = "0.7.18"
+tokio-rusqlite = { version = "0.8.0", features = ["bundled"] }
+
+# --- export ---
+rust_xlsxwriter = "0.99.1"
 
 # --- build scripts ---
 anyhow = "1.0.103"
 vergen-gix = { version = "10.0.1", features = ["build", "cargo"] }
+# Embeds the icon and version info into the Windows executable.
+winresource = "0.1.31"
 
 # --- dev ---
 pretty_assertions = "1.4.1"
+# A TLS server for the Oracle tests; already in the tree through oracledb.
+rustls = "0.23.45"
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

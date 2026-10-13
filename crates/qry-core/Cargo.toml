@@ -11,22 +11,20 @@ rust-version.workspace = true
 # Keep this crate UI-agnostic: no ratatui, no crossterm, no clap.
 # Everything here should be testable without a terminal.
 [dependencies]
-anyhow.workspace = true
-async-trait = "0.1.92"
-color-eyre.workspace = true
-hex = "0.4.3"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+color-eyre = { workspace = true }
+hex = { workspace = true }
+mysql_async = { workspace = true }
+oracledb = { workspace = true }
+rust_xlsxwriter = { workspace = true }
+# Used to check a host name before TLS.
+rustls-pki-types = { workspace = true }
 serde = { workspace = true }
-tokio.workspace = true
-tokio-postgres = "0.7.18"
-tokio-rusqlite = { version="0.8.0", features = ["bundled"] }
-mysql_async = "0.37.1"
-rust_xlsxwriter = "0.99.1"
-# Oracle's own thin driver: pure Rust, no Instant Client. Still a beta, so
-# pinned exactly; read its changelog before raising the pin.
-oracledb = "=26.0.0-beta.4"
-# Already in the tree through oracledb; used to check a host name before TLS.
-rustls-pki-types = "1.15.1"
+tokio = { workspace = true }
+tokio-postgres = { workspace = true }
+tokio-rusqlite = { workspace = true }
 
 [dev-dependencies]
-# A TLS server for the Oracle tests; already in the tree through oracledb.
-rustls = "0.23.45"
+# A TLS server for the Oracle tests.
+rustls = { workspace = true }
