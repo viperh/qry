@@ -124,15 +124,15 @@ impl Theme {
 
 ## Acceptance criteria
 
-- [ ] `crates/qry/src/theme.rs` defines `Theme::DARK` with exactly the 22 hex values above.
-- [ ] `ColorSupport::from_env` implements the NO_COLOR > COLORTERM > Ansi256 precedence; `NO_COLOR=""` (empty) does not disable colour.
-- [ ] `adapt(Ansi256)` produces only `Color::Indexed(16..=255)` and keeps selection_bg/status_bg distinct from bg.
-- [ ] `adapt(NoColor)` produces only `Color::Reset` and every helper returns a modifier-only style.
-- [ ] Every existing component (editor, results, tree, forms, help, status) draws through helpers; `tests/no_raw_colors.rs` passes and fails when a raw colour is added (proved by a fixture).
-- [ ] `"theme"` config key and `--theme` flag work; an unknown name errors with the list of names.
-- [ ] `Styles`, `parse_style` and the `styles` config section are gone; an old config with `styles` still loads, with a warning.
-- [ ] `qry --version` shows the colour support.
-- [ ] `results.rs` test `the_selected_cell_is_highlighted` asserts `theme.cursor_cell()` instead of `Color::Green`.
+- [x] `crates/qry/src/theme.rs` defines `Theme::DARK` with exactly the 22 hex values above.
+- [x] `ColorSupport::from_env` implements the NO_COLOR > COLORTERM > Ansi256 precedence; `NO_COLOR=""` (empty) does not disable colour.
+- [x] `adapt(Ansi256)` produces only `Color::Indexed(16..=255)` and keeps selection_bg/status_bg distinct from bg.
+- [x] `adapt(NoColor)` produces only `Color::Reset` and every helper returns a modifier-only style.
+- [x] Every existing component (editor, results, tree, forms, help, status) draws through helpers; `tests/no_raw_colors.rs` passes and fails when a raw colour is added (proved by a fixture).
+- [x] `"theme"` config key and `--theme` flag work; an unknown name errors with the list of names.
+- [x] `Styles`, `parse_style` and the `styles` config section are gone; an old config with `styles` still loads, with a warning.
+- [x] `qry --version` shows the colour support.
+- [x] `results.rs` test `the_selected_cell_is_highlighted` asserts `theme.cursor_cell()` instead of `Color::Green`.
 
 ## Tests
 
@@ -158,3 +158,38 @@ impl Theme {
 
 Snapshots, styled (sverb `styled()` format: text plus `--- styles ---` runs) in `crates/qry/src/views/snapshots/`:
 - `theme_swatch_truecolor_80x24`, `theme_swatch_ansi256_80x24` and `theme_swatch_nocolor_80x24`: a debug view (test-only) that renders one line per helper with a sample. Changes to the palette show up in review.
+
+## Implementation notes
+
+- **Where the theme lives before T101.** There is no `State` yet, so `App` holds the resolved `theme: Theme` and passes `&Theme` down at draw time: `Component::draw(&mut self, frame, area, theme)`, `Form::render(frame, area, theme)`, `Help::draw(frame, area, theme)` and `TextInput::render(frame, area, focused, theme)`. T101 moves the field into `State` and keeps the `&Theme` parameter on the view functions. The editor restyles its `TextArea` on every draw (it used to on `set_focus`), because the theme only arrives with `draw`.
+- **Resolution.** `theme::resolve(cli, config, support) -> eyre::Result<Theme>` picks `--theme`, then the config's `"theme"`, then `dark`, and adapts it. `App::new(tick_rate, frame_rate, theme_flag)` calls it with `ColorSupport::detect()`, so an unknown config name fails before the terminal is touched (`unknown theme `neon`; the themes are: dark`). `--theme` uses clap's `PossibleValuesParser::new(Theme::NAMES)`, so a bad flag is a clap error (exit 2) that lists the names. The flag wins, so a bad config value is never looked at when the flag is given.
+- **`qry --version`** ends with `Colour support: 24-bit (truecolor)`, `256 colours` or `none (NO_COLOR)` (`ColorSupport`'s `Display`).
+- **Legacy `styles`.** `Config` keeps a private `styles: Option<serde::de::IgnoredAny>` only to notice the section. `Config::warnings()` returns one line, and `App::new` logs it with `tracing::warn!` and prints it to stderr as `qry: …` before the TUI starts. T205 can turn these into toasts. The embedded `.config/config.json` now has `"theme": "dark"` and no `"styles"`.
+- **T005 must drop `fuzz_style_parse`**: `parse_style` is gone. The T005 text still mentions it.
+- **`ThemeEnv`** moved to `theme.rs`, and `qry::testing` re-exports it. It gained `from_process()`, `truecolor()`, `no_color()`, `support()` and `adapt(theme)`. `Default` is the empty environment, which gives 256 colours. **`AppHarness` draws in truecolor by default** (`ThemeEnv::truecolor()`), so styled snapshots show the palette's hex values. `with_theme_env` now really changes the theme, and `AppHarness::theme()` returns the one it draws with. `ColorSupport::from_env(no_color, colorterm)` takes the two values, as this task specifies, rather than tachy's closure.
+- **Placeholder enums in `theme.rs`**, for the later tasks to move next to their owners and keep matching on:
+  - `Pill { Normal, Edit, Command }` (T202).
+  - `SessionStatus { Connecting, Open { label }, Failed(String), Closed }` (T103's shape). `session_dot(&SessionStatus)` takes a reference because of the payloads.
+  - `ToastLevel { Info, Success, Warning, Error }`. `Success` is already there for T205: it is fg on bg, like `Info`.
+  - `JobKind { Query, FetchMore, Export, Schema }` and `JobState { Queued, Running { rows }, Done { rows }, Failed, Cancelled }` (T305's shapes).
+- **`job_state(kind, &state)`** takes the kind too, as tachy's does: `▸` while running uses the kind's colour (T305). `job(kind)`: Query, FetchMore and Schema are teal (reading data), and Export is amber (as in tachy).
+- **Helpers beyond the T201 list**, each with a mono fallback and included in `every_helper_has_mono_fallback` and the swatch:
+  - `focused_border` (from tachy): amber, for the boxed panes until T202 removes the boxes.
+  - `value_ok` and `value_error` (from tachy; `job_state` and `session_dot` use them).
+  - `status_ok`: green on `status_bg`, for success messages in today's status panel.
+  - `editor_cursor`: bg on amber / REVERSED, for the text cursor.
+  - `dialog_heading(accent)`: bold accent on `surface_raised`, for help group titles.
+  - `field_border` (`border_inner`) and `field_border_focused` (amber), for today's boxed form fields.
+- **Monochrome choices not given by tachy:** `tab_running` is ITALIC. `border_strong` and `divider_focused` are BOLD. `pane_title` is DIM and `pane_title_focused` BOLD. `tree_connection_selected` is REVERSED|BOLD. `null_value`, `sql_comment` and `field_placeholder` are DIM|ITALIC. `sql_keyword` is BOLD. `editor_selection` is REVERSED. `line_number_current` is BOLD.
+- **How the existing screens map onto the helpers.** The layout is unchanged.
+  - The pane boxes stay: `border()` normally and `focused_border()` with focus. Titles use `pane_title` / `pane_title_focused`.
+  - `Home::draw` first fills the screen with `base()`, so text has the app's fg and bg.
+  - Results: the header uses `header`, with `header_active` on the cursor's column. Rows use `row(i)` stripes, and the selected row `row_selected`. The cursor cell is `cursor_cell` with focus and `row_selected` without. `NULL` is `null_value`. The scrollbars use `border` / `border_strong`.
+  - Tree: connections use `tree_connection`, and the selected one `tree_connection_selected`. Tables use `tree_object`, and a selected table `row_selected`. Notes and "No connections yet" use `tree_kind` / `dim`. The connection the worker is on still gets `.bold()`, a modifier and not a colour; T301 replaces it with `session_dot`.
+  - Forms and help: the body is `dialog`, and the border and title use `dialog_border(teal)` / `dialog_title(teal)`. Labels use `field` / `field_focused`, and the field boxes `field_border(_focused)`. The footer uses `hint`, `spinner` (pending) or `value_error`. Help keys are `hint_key`. T203 and T204 restyle these.
+  - Status panel: `status_warning` or `status_ok`, on `status_bg`.
+- **Snapshots.** Only `results_grid_80x24` changed (re-accepted after review: amber focused border, surface header with an amber active column, striped rows, a `selection_bg` row and an amber bold cursor cell). The other `home_tests` snapshots are text-only and did not change. The colour assertions in `home_tests::tree_is_focused_and_highlighted_at_startup` and in `conntree_tests` (renamed `the_selection_takes_the_selected_style_and_the_rest_the_plain_one`) now compare against theme helpers. `testing_tests::styled_lists_one_run_per_style_change` uses theme styles instead of `Color::Red` / `Color::Blue`.
+- **`no_raw_colors`** exempts only `src/theme.rs` and `src/theme_tests.rs` (tachy also exempted `config.rs`, whose parser is now gone). Test files under `src/` are scanned, so tests must also take colours from the theme (`Theme::DARK.coral`, `style.fg.unwrap_or_default()` for `Reset`). Besides `Color::…`, it flags `.<colour>()` and `.on_<colour>()` for ratatui's 16 `Stylize` colour names. It does not flag modifiers such as `.bold()`. The fixture is the shared `tests/fixtures/raw_color.rs.txt` at the repository root, read through `qry::testing::fixture`. A planted `.green()` in `statuspanel.rs` made the test fail with `statuspanel.rs:57: .green()`, and it was then reverted.
+- **`src/views.rs`** exists now, holding only `#[cfg(test)] mod swatch;`. T101 fills it. The swatch (`views/swatch.rs`) draws every helper on a sample of its name, in 4 columns of 20 at 80x24 (86 samples; `every_sample_fits_at_80x24` guards that). Helpers that take an argument share one line, such as `NORMAL EDIT COMMAND`, `session ● ◌ ✗` or `jobs ▸ ✓ ✗ – …`. A new helper should be added to the swatch and to `theme_tests::helpers()`.
+- **Test count:** 234 in all: 192 `qry` unit tests, 2 in `tests/harness.rs`, 3 in `tests/no_raw_colors.rs`, 6 in `tests/workspace_metadata.rs` and 31 in `qry-core`. The 7 `parse_style`/`parse_color` tests were removed.
+- **Not run here:** nightly rustfmt (there is no rustup on this machine). Stable `cargo fmt` cannot apply `imports_granularity` / `group_imports`, so the new `use` blocks were grouped by hand. CI on GitHub was not run.
