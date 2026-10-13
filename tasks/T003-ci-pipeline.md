@@ -129,14 +129,14 @@ python3 scripts/check-layering.py
 ## Acceptance criteria
 
 - [ ] `ci.yml` triggers on push to `master`, on pull requests and on `workflow_dispatch`. A push to `master` produces a run (link one in the PR).
-- [ ] The workflow has `concurrency` with `cancel-in-progress: true`, top-level `permissions: contents: read`, and the env block above.
+- [x] The workflow has `concurrency` with `cancel-in-progress: true`, top-level `permissions: contents: read`, and the env block above.
 - [ ] Jobs `fmt`, `clippy` (both feature sets), `docs`, `test`, `db`, `msrv`, `deny`, `layering`, `fuzz-smoke`, `bench-build`, `windows-build` and `ci-ok` exist, and all pass on `master`.
-- [ ] `grep -n "cargo " .github/workflows/ci.yml | grep -v -- "--locked"` returns only `cargo fmt` and `cargo fuzz` lines.
+- [x] `grep -n "cargo " .github/workflows/ci.yml | grep -v -- "--locked"` returns only `cargo fmt` and `cargo fuzz` lines.
 - [ ] The `msrv` job fails when one crate's `rust-version` is changed to differ (verify once on a throwaway branch).
 - [ ] The `layering` job fails when `ratatui` is added to `qry-core`'s dependencies (verify once on a throwaway branch; both the Rust test and the script must catch it).
-- [ ] `scripts/check-layering.py --self-test` exits 0, and `scripts/check-layering.py` exits 0 on the real workspace.
+- [x] `scripts/check-layering.py --self-test` exits 0, and `scripts/check-layering.py` exits 0 on the real workspace.
 - [ ] `ci-ok` fails when any other job fails, and is the only required status check (record the branch-protection setting in the PR description).
-- [ ] The README badge points at `ci.yml` on `master`.
+- [x] The README badge points at `ci.yml` on `master`.
 - [ ] A clean CI run of the whole workflow takes under 15 minutes wall time with a warm cache (record the time in the PR).
 
 ## Tests
@@ -164,3 +164,33 @@ Verification of the workflow itself, done once and recorded in the PR:
 | Mismatched `rust-version` | `msrv` |
 | Code using an API newer than the MSRV | `msrv` |
 | Any of the above | `ci-ok` |
+
+## Implementation notes
+
+- **Unticked boxes need GitHub.** The trigger box (a run linked from a push to `master`), "all jobs pass on `master`", the throwaway-branch checks for `msrv` and `layering`, `ci-ok` as the only required check, and the 15-minute timing can only be checked on GitHub. Nothing was pushed. Local stand-ins:
+  - **Mismatched `rust-version`:** with `qry-core` set to `rust-version = "1.95"`, the job's `cargo metadata | jq` step exits 5 (`workspace crates disagree on rust-version: ["1.95","1.96"]`). `every_crate_declares_the_workspace_rust_version` fails too.
+  - **`ratatui` in `qry-core`:** `qry_core_has_no_ui_dependencies` fails and prints `qry-core -> ratatui` and `qry-core -> ratatui -> ratatui-crossterm -> crossterm`. `check-layering.py` exits 1 with `qry-core -> ratatui (direct)` and `qry-core -> crossterm (via ratatui -> ratatui-crossterm)`, for both feature sets. `cargo deny … check bans` reports `error[banned]`. Each plant was reverted.
+  - **MSRV:** `cargo check --workspace --all-features --locked` passes with a standalone Rust 1.96.0 toolchain.
+  - The other job commands were run locally and pass: both clippy runs, `docs`, `test` (with `CI=true QRY_DB_TESTS=skip`), the `db` job's `cargo test -p qry-core`, `cargo bench --workspace --no-run`, the layering test and script, `cargo deny --all-features --locked check advisories bans licenses sources`, and the Windows job's commands (on Linux).
+  - `actionlint` 1.7.7 with `shellcheck` 0.10.0 reports nothing for `ci.yml`. It does flag `cd.yml:6` (`'[v]?[0-9]+…'`, a useless one-character class), which is left for T007.
+- **The `docs` job was red before this task.** `RUSTDOCFLAGS=-D warnings cargo doc …` failed on `qry`, so two fixes went into `crates/qry/src/lib.rs`:
+  - The outer `///` doc on `pub mod testing;` was turned into a `//` comment. With it, rustdoc resolved the module's own `//!` links (`AppHarness`, `Home`, `Effect`) from `lib.rs`'s scope, where they broke.
+  - A crate-level `#![allow(rustdoc::private_intra_doc_links, reason)]` was added. The library exists for the binary and its tests, and its docs are built with `--document-private-items`, so links to `pub(crate)` items resolve. Broken links (`rustdoc::broken_intra_doc_links`) still fail the job.
+- **`workspace_lints.rs` became `workspace_metadata.rs`** (moved with `git mv`, so history is kept). It holds the 4 T001 tests plus `qry_core_has_no_ui_dependencies` and `no_workspace_crate_depends_on_the_binary`, 6 tests in all. The test count is now 203.
+  - The resolved graph is loaded with `CargoOpt::AllFeatures` and `--locked`. Only `DependencyKind::Normal` edges count, on every target.
+  - `qry` dev-depends on itself (the T002 `test-util` self dev-dependency). That edge is exempt from "nothing depends on the binary", both in the Rust test and in the script.
+  - CONTRIBUTING's reference to the old file name was updated.
+- **`scripts/check-layering.py`** is stdlib only. It has a `RULES` table (`qry-core` forbids `ratatui`, `crossterm`, `clap`, `ratatui-textarea` and `keyring`; `qry` forbids nothing), and a workspace crate with no entry is an error. Violations print as `qry-core -> crossterm (via foo)`, or `(direct)` for a direct dependency. Two versions of one crate are reported once. Exit codes: 0 clean, 1 violations or a failed self-test, 2 when `cargo metadata` cannot run.
+  - `--self-test` checks four synthetic graphs: the planted `qry-core -> foo -> crossterm` (with a dev edge to `ratatui` that must not be reported), a clean graph, a dev dependency on `qry`, and a workspace crate without a rule.
+  - This is the only `scripts/*.py` for now.
+- **Deviations in `ci.yml`:**
+  - **`fuzz-smoke`** is gated by a step output (`steps.fuzz.outputs.present`, from `[ -f fuzz/Cargo.toml ]`), not by a job-level `if: hashFiles(…)`. GitHub does not allow `hashFiles` in `jobs.<id>.if`. Until T005 the job passes after the check step and prints a notice. It sets `RUSTUP_TOOLCHAIN: nightly` to override `rust-toolchain.toml`. T005 replaces the body with its own snippet (`cargo +nightly fuzz …`, `seed-corpus.sh`).
+  - **`bench-build`** runs `python3 scripts/bench-gate.py self-test` only `if: hashFiles('scripts/bench-gate.py') != ''`, which is allowed at step level. T006 can drop the condition.
+  - **`db`** has only the postgres service (`postgres:16`, user, password and database all `qry`, port 5432) and sets `QRY_TEST_POSTGRES_URL=postgres://qry:qry@localhost:5432/qry`, matching T004's table. It runs `cargo test -p qry-core --all-features --locked`. No code reads the URL yet. When T004 lands `db_or_skip!`, it must add the mysql, mariadb and oracle services and URLs in the same change, because under `CI` a missing URL panics. The `db` job does not set `QRY_DB_TESTS`. The job compiles only `qry-core`, so its checkout has no `fetch-depth: 0`.
+  - **`test`** sets `QRY_DB_TESTS: skip` at job level and `QRY_CONFIG`/`QRY_DATA` at step level. The `runner` context is not available in a job-level `env`.
+  - **`windows-build`** runs `git config --global core.autocrlf false` before checkout, so insta snapshots and fixtures keep LF line endings. Nothing has run on Windows yet, so the first GitHub run is the real test of its `--lib` tests.
+  - **`deny`** uses `EmbarkStudios/cargo-deny-action@v2` with `arguments: --all-features --locked`, as sverb does. The action places `arguments` before `command`, which is the order cargo-deny 0.20 needs. The same command passes locally.
+  - **`ci-ok`** passes when every needed job's result is `success` or `skipped`. Branch protection should require only `CI OK`, the job's display name. A job added later must be added to its `needs` list.
+  - The MSRV step name avoids the words "cargo metadata", so the `--locked` grep matches only `cargo fmt` and `cargo fuzz` lines.
+- **README:** the badge is now `actions/workflows/ci.yml/badge.svg?branch=master`. The Checks block lists `cargo deny --all-features check advisories bans licenses sources` rather than plain `cargo deny check`, to match the CI job (the cargo-deny 0.20 syntax from T001). T401 owns the final wording.
+
