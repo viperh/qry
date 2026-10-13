@@ -16,6 +16,7 @@ mod config;
 mod connections;
 mod db;
 mod errors;
+mod import;
 mod keymap;
 mod logging;
 mod secrets;

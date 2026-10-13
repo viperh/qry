@@ -137,6 +137,19 @@ impl StoredConnection {
         }
     }
 
+    /// Whether both open the same database as the same user, whatever they
+    /// are called. How an import tells a connection it already has.
+    pub fn same_target(&self, other: &Self) -> bool {
+        let port = |c: &Self| c.port.unwrap_or(c.driver.default_port());
+        self.driver == other.driver
+            && self.host == other.host
+            && port(self) == port(other)
+            && self.user == other.user
+            && self.database == other.database
+            && self.service == other.service
+            && self.path == other.path
+    }
+
     /// What the tree shows.
     pub fn title(&self) -> &str {
         if self.name.is_empty() { &self.id } else { &self.name }
@@ -260,8 +273,13 @@ pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e).wrap_err_with(|| format!("cannot read {}", file.display())),
     };
+    parse(&text, &file)
+}
 
-    let parsed: ConnectionFile = serde_json::from_str(&text)
+/// The connections in the text of a connection file, which `file` names in
+/// errors. Also how a copy of the file is imported as a backup.
+pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+    let parsed: ConnectionFile = serde_json::from_str(text)
         .wrap_err_with(|| format!("{} is not a connection file qry understands", file.display()))?;
     if parsed.version > VERSION {
         bail!(

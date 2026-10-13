@@ -6,7 +6,8 @@
       "<tab>": "FocusNext",
       "<shift-backtab>": "FocusPrev",
       "<Ctrl-n>": { "ChangeMode": "AddConnModal" },
-      "<Ctrl-e>": { "ChangeMode":  "ExpoModal"}
+      "<Ctrl-e>": { "ChangeMode":  "ExpoModal"},
+      "<Ctrl-o>": { "ChangeMode": "ImportModal" }
     },
     "AddConnModal": {
       "<esc>": { "ChangeMode": "Home" }
@@ -15,6 +16,9 @@
       "<esc>": { "ChangeMode": "Home" }
     },
     "PasswordModal": {
+      "<esc>": { "ChangeMode": "Home" }
+    },
+    "ImportModal": {
       "<esc>": { "ChangeMode": "Home" }
     }
 

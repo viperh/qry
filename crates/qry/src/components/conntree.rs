@@ -7,7 +7,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::Component;
 use crate::connections::{Secret, StoredConnection};
 use crate::keymap::TreeCommand;
-use crate::{action::Action, config::Config};
+use crate::import::Imported;
+use crate::{action::{Action, StatusCode}, config::Config};
 
 /// A connection the tree knows about, and what it has learned of it.
 struct Node {
@@ -110,6 +111,54 @@ impl ConnTree {
             self.send(Action::ForgetSecret(previous.id))?;
         }
         Ok(())
+    }
+
+    /// Adds what an import found that the tree does not have, saves once,
+    /// and says in the status bar what happened to the rest.
+    fn import(&mut self, imported: Imported) -> color_eyre::Result<()> {
+        let found = imported.connections.len();
+        let mut added = 0;
+        for record in imported.connections {
+            let known = self
+                .connections
+                .iter()
+                .any(|n| n.record.id == record.id || n.record.same_target(&record));
+            if known {
+                continue;
+            }
+            self.connections.push(Node {
+                record,
+                label: None,
+                expanded: false,
+                tables: None,
+                loading: false,
+                unsaved: false,
+            });
+            added += 1;
+        }
+        if added > 0 {
+            self.save()?;
+        }
+
+        let mut parts = vec![format!(
+            "Imported {added} connection{} from {}",
+            if added == 1 { "" } else { "s" },
+            imported.format
+        )];
+        if found > added {
+            parts.push(format!("{} already here", found - added));
+        }
+        for skipped in &imported.skipped {
+            parts.push(format!("skipped {}: {}", skipped.name, skipped.reason));
+        }
+        parts.extend(imported.warnings);
+        let message = parts.join("; ");
+        let status = if imported.skipped.is_empty() {
+            StatusCode::Success(message)
+        } else {
+            StatusCode::Error(message)
+        };
+        self.send(Action::Status(status))
     }
 
     /// The records worth writing: everything but the scratch database.
@@ -292,6 +341,7 @@ impl Component for ConnTree {
                     }
                 }
             }
+            Action::Imported(imported) => self.import(*imported)?,
             Action::SecretNotStored(id) => {
                 if let Some(node) = self.connections.iter_mut().find(|n| n.record.id == id) {
                     // The keychain would not take it, so the record says so
@@ -404,6 +454,51 @@ mod tests {
         (0..buffer.area.height)
             .map(|y| (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect())
             .collect()
+    }
+
+    fn imported(connections: Vec<StoredConnection>) -> Action {
+        Action::Imported(Box::new(Imported {
+            format: crate::import::Format::DBeaver,
+            connections,
+            skipped: vec![crate::import::Skipped {
+                name: "docs".into(),
+                reason: "uses the DBeaver provider `mongodb`".into(),
+            }],
+            warnings: vec!["prod has no user name; edit it before connecting".into()],
+        }))
+    }
+
+    #[test]
+    fn an_import_adds_what_is_new_saves_once_and_reports() {
+        let (mut tree, mut rx) = tree();
+        let saved = record("app", "app.db");
+        tree.update(Action::ConnectionsLoaded(vec![saved.clone()])).unwrap();
+
+        // The same file under another name and id is already here.
+        let mut same = record("app copy", "app.db");
+        same.id = "other-id".into();
+        let new = record("new", "new.db");
+        tree.update(imported(vec![same, new.clone(), saved.clone()])).unwrap();
+
+        let Ok(Action::SaveConnections(written)) = rx.try_recv() else {
+            panic!("expected one save");
+        };
+        let ids: Vec<&str> = written.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, [saved.id.as_str(), new.id.as_str()]);
+
+        let Ok(Action::Status(StatusCode::Error(message))) = rx.try_recv() else {
+            panic!("expected a status");
+        };
+        assert!(message.starts_with("Imported 1 connection from DBeaver"), "{message}");
+        assert!(message.contains("2 already here"), "{message}");
+        assert!(message.contains("skipped docs"), "{message}");
+        assert!(message.contains("no user name"), "{message}");
+        assert!(rx.try_recv().is_err());
+
+        // Importing it all again changes nothing and writes nothing.
+        tree.update(imported(vec![new])).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::Status(_))));
+        assert!(rx.try_recv().is_err(), "nothing new, so no save");
     }
 
     #[test]

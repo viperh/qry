@@ -39,7 +39,8 @@ pub enum Mode {
     Home,
     AddConnModal,
     ExpoModal,
-    PasswordModal
+    PasswordModal,
+    ImportModal,
 }
 
 impl App {
@@ -205,6 +206,7 @@ impl App {
                     });
                 }
                 Action::ListTables => self.send_db(DbCommand::ListTables)?,
+                Action::Import { ref path, format } => self.import(path.clone(), format),
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -224,6 +226,33 @@ impl App {
             if let Err(e) = connections::save(&list) {
                 let _ = tx.send(Action::Error(format!("cannot save connections: {e:#}")));
             }
+        });
+    }
+
+    /// Reads a file of connections off the event loop. The answer goes to the
+    /// modal that asked and to the tree, which adds what is new.
+    fn import(&self, path: String, format: crate::import::Format) {
+        let tx = self.action_tx.clone();
+        tokio::task::spawn_blocking(move || {
+            let action = match crate::import::from_file(&path, format) {
+                Ok(imported) if imported.connections.is_empty() => {
+                    Action::ImportFailed(match imported.skipped.first() {
+                        Some(first) => format!(
+                            "No connection qry can open; {} {}",
+                            first.name, first.reason
+                        ),
+                        None => "The file holds no connections".into(),
+                    })
+                }
+                Ok(imported) => Action::Imported(Box::new(imported)),
+                Err(e) => Action::ImportFailed(format!("{e:#}")),
+            };
+            // The modal's footer is one line; the status bar has room for
+            // the whole of a long path.
+            if let Action::ImportFailed(message) = &action {
+                let _ = tx.send(Action::Status(StatusCode::Error(message.clone())));
+            }
+            let _ = tx.send(action);
         });
     }
 

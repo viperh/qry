@@ -37,6 +37,7 @@ impl Help {
             ("New Connection", mode_bindings(config, Mode::AddConnModal)),
             ("Export", mode_bindings(config, Mode::ExpoModal)),
             ("Password", mode_bindings(config, Mode::PasswordModal)),
+            ("Import", mode_bindings(config, Mode::ImportModal)),
             ("Help", pane_bindings(panes.help.describe())),
         ];
         Self {
@@ -169,6 +170,7 @@ fn describe_action(action: &Action) -> String {
         Action::ChangeMode(Mode::Home) => "Close".into(),
         Action::ChangeMode(Mode::ExpoModal) => "Export to file".into(),
         Action::ChangeMode(Mode::PasswordModal) => "Ask for a password".into(),
+        Action::ChangeMode(Mode::ImportModal) => "Import connections".into(),
         Action::Suspend => "Suspend".into(),
         Action::ClearScreen => "Redraw the screen".into(),
         Action::Execute(sql) => format!("Run `{sql}`"),
@@ -205,6 +207,7 @@ mod tests {
                 "New Connection",
                 "Export",
                 "Password",
+                "Import",
                 "Help"
             ]
         );

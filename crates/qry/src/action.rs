@@ -6,6 +6,7 @@ use strum::Display;
 use qry_core::ExportConfig;
 use crate::app::Mode;
 use crate::connections::StoredConnection;
+use crate::import::{Format, Imported};
 
 /// Messages passed between the event loop, [`App`](crate::app::App) and every
 /// [`Component`](crate::components::Component).
@@ -67,6 +68,13 @@ pub enum Action {
     /// cloned once per component.
     QueryDone(Arc<QueryResult>),
     Export(ExportConfig),
+    /// Read connections from another file. `App` reads it off the event
+    /// loop and answers with one of the two below.
+    Import { path: String, format: Format },
+    /// What the file held. The tree adds what it does not have yet, and
+    /// saves.
+    Imported(Box<Imported>),
+    ImportFailed(String),
 }
 
 

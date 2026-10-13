@@ -10,6 +10,7 @@ use crate::components::conntree::ConnTree;
 use crate::components::editor::Editor;
 use crate::components::exportform::ExportForm;
 use crate::components::form::Form;
+use crate::components::importform::ImportForm;
 use crate::components::passwordform::PasswordForm;
 use crate::components::help::Help;
 use crate::components::results::Results;
@@ -49,6 +50,7 @@ impl Pane {
 enum Awaiting {
     Connect,
     Export,
+    Import,
 }
 
 /// The main screen: the panes, and whatever is on top of them.
@@ -117,6 +119,7 @@ impl Home {
             Mode::PasswordModal => Some(Box::new(PasswordForm::new(
                 self.asked.clone().unwrap_or_default(),
             ))),
+            Mode::ImportModal => Some(Box::new(ImportForm::default())),
         }
     }
 
@@ -140,6 +143,7 @@ impl Home {
                         Some((Awaiting::Connect, "Connecting…"))
                     }
                     Action::Export(..) => Some((Awaiting::Export, "Exporting…")),
+                    Action::Import { .. } => Some((Awaiting::Import, "Importing…")),
                     _ => None,
                 };
                 if let Some(tx) = &self.command_tx {
@@ -269,6 +273,10 @@ impl Component for Home {
                 self.fail_modal(message);
             }
             Action::ExportFailed(message) if self.awaiting == Some(Awaiting::Export) => {
+                self.fail_modal(message);
+            }
+            Action::Imported(_) if self.awaiting == Some(Awaiting::Import) => self.close_modal()?,
+            Action::ImportFailed(message) if self.awaiting == Some(Awaiting::Import) => {
                 self.fail_modal(message);
             }
             _ => {}
@@ -407,6 +415,45 @@ mod tests {
         let text = shown(&mut home, 80, 50);
         assert!(text.contains("could not write"), "{text}");
         assert!(text.contains("no/such/dir/rows.csv"), "{text}");
+    }
+
+    #[test]
+    fn an_import_waits_for_the_file_and_keeps_the_path_on_failure() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut home = home();
+        home.register_action_handler(tx).unwrap();
+
+        // Ctrl-o opens it from the main screen.
+        let ctrl_o = crossterm::event::KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL);
+        assert_eq!(
+            home.config.keybindings.0[&Mode::Home].get(&vec![ctrl_o]),
+            Some(&Action::ChangeMode(Mode::ImportModal))
+        );
+        open(&mut home, Mode::ImportModal);
+        type_str_home(&mut home, "~/nope.json");
+
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        let Ok(Action::Import { path, .. }) = rx.try_recv() else {
+            panic!("expected an import action");
+        };
+        assert_eq!(path, "~/nope.json");
+        assert!(shown(&mut home, 80, 50).contains("Importing"));
+
+        home.update(Action::ImportFailed("cannot read nope.json".into())).unwrap();
+        let text = shown(&mut home, 80, 50);
+        assert!(text.contains("cannot read nope.json") && text.contains("~/nope.json"), "{text}");
+
+        // A second try that works closes it.
+        home.handle_key_event(key(KeyCode::Enter)).unwrap();
+        assert!(matches!(rx.try_recv(), Ok(Action::Import { .. })));
+        home.update(Action::Imported(Box::new(crate::import::Imported {
+            format: crate::import::Format::Qry,
+            connections: Vec::new(),
+            skipped: Vec::new(),
+            warnings: Vec::new(),
+        })))
+        .unwrap();
+        assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
     }
 
     #[test]
