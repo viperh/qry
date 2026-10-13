@@ -48,3 +48,13 @@ fn version_shows_the_colour_support() {
         .unwrap();
     assert_eq!(line, format!("Colour support: {}", ColorSupport::detect()));
 }
+
+#[test]
+fn print_config_is_a_flag() {
+    assert!(!Cli::try_parse_from(["qry"]).unwrap().print_config);
+    assert!(
+        Cli::try_parse_from(["qry", "--print-config"])
+            .unwrap()
+            .print_config
+    );
+}

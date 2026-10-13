@@ -105,3 +105,19 @@ fn query_results_are_never_logged() {
     let connected = UiEvent::Db(SessionId::FIRST, DbAnswer::Connected("x".into()));
     assert!(log_line(&connected).is_some());
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_scheduled_timer_comes_back_as_an_event_once_it_runs_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let (executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let timer = crate::app::Timer::KeySequence(7);
+    let start = tokio::time::Instant::now();
+
+    finished(executor.execute(Effect::ScheduleTimer {
+        timer,
+        after: std::time::Duration::from_secs(1),
+    }))
+    .await;
+    assert_eq!(start.elapsed(), std::time::Duration::from_secs(1));
+    assert_eq!(events.try_recv().unwrap(), UiEvent::Timer(timer));
+}
