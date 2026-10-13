@@ -89,6 +89,24 @@ fn malformed_key_is_a_load_error_with_location() {
     }
 }
 
+/// `.envrc` points `QRY_CONFIG` at the repo's `.config/`, so the built-in
+/// file, comments and all, is also read as a user `config.json`.
+#[test]
+fn the_built_in_file_loads_as_a_user_config_json() {
+    let (_, format) = CONFIG_FILES
+        .iter()
+        .find(|(f, _)| *f == "config.json")
+        .unwrap();
+    let raw: RawFile = config::Config::builder()
+        .add_source(config::File::from_str(CONFIG, *format))
+        .build()
+        .unwrap()
+        .try_deserialize()
+        .unwrap();
+    let c = Config::layered(vec![("config.json".into(), raw)]).unwrap();
+    assert_eq!(bound(&c, KeyContext::Tree, "j"), Some(Action::Down));
+}
+
 /// A user file as `Config::new` reads one.
 fn read(json: &str) -> RawFile {
     config::Config::builder()

@@ -24,7 +24,10 @@ const EMBEDDED: &str = "the built-in config";
 /// are layered: a later one wins.
 const CONFIG_FILES: [(&str, config::FileFormat); 5] = [
     ("config.json5", config::FileFormat::Json5),
-    ("config.json", config::FileFormat::Json),
+    // JSON5 reads every JSON file too, and lets `config.json` carry comments
+    // like the built-in one does: pointing `QRY_CONFIG` at the repo's
+    // `.config/` (as `.envrc` does) layers that very file.
+    ("config.json", config::FileFormat::Json5),
     ("config.yaml", config::FileFormat::Yaml),
     ("config.toml", config::FileFormat::Toml),
     ("config.ini", config::FileFormat::Ini),
