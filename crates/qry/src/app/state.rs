@@ -19,7 +19,11 @@ use serde::{Deserialize, Serialize};
 use strum::Display;
 
 use super::dialogs::DialogState;
-use crate::{config::Config, config::KeySection, connections::StoredConnection, theme::Theme};
+use crate::{
+    config::{Config, KeySection},
+    connections::StoredConnection,
+    theme::Theme,
+};
 
 /// One open connection's worker. There is a single session for now, so the
 /// id is always [`SessionId::FIRST`]; several come with multiple sessions.

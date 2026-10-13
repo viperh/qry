@@ -18,11 +18,6 @@ use self::{
 };
 use crate::{config::KeySection, connections::StoredConnection, import::Format, secrets::Password};
 
-/// The form helpers (`key`, `press`, `type_str`, `render`), shared by every
-/// form's tests.
-#[cfg(test)]
-pub(crate) use form::form_tests;
-
 /// The open modal.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum DialogState {
@@ -86,3 +81,8 @@ pub(crate) enum Submission {
     /// Write a backup of the saved connections to this file.
     ExportConnections(String),
 }
+
+/// The form helpers (`key`, `press`, `type_str`, `render`), shared by every
+/// form's tests.
+#[cfg(test)]
+pub(crate) use form::form_tests;

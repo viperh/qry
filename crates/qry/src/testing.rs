@@ -28,8 +28,7 @@ pub use qry_core::testing::{Reply, grid, result};
 use qry_core::{QueryResult, testing::FakeDatabase};
 use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 
-pub use crate::app::Effect;
-pub use crate::theme::ThemeEnv;
+pub use crate::{app::Effect, theme::ThemeEnv};
 use crate::{
     app::{App, DbAnswer, FileAnswer, SessionId, State, UiEvent},
     config::{Config, KeySection, parse_key_event},
