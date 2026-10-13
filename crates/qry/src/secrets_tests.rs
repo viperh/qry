@@ -60,3 +60,17 @@ fn key_value_passwords_are_redacted() {
         "Server=db;Password=[redacted];Database=app"
     );
 }
+
+#[test]
+fn unit_tests_keep_passwords_in_memory_not_the_keychain() {
+    assert!(!keychain_enabled());
+    // A made-up id, so a real keychain entry could never be read here.
+    let id = "qry-test-in-memory-keychain";
+    assert_eq!(fetch(id).unwrap(), None);
+    store(id, &Password::new("hunter2")).unwrap();
+    assert_eq!(fetch(id).unwrap().unwrap().as_str(), "hunter2");
+    delete(id).unwrap();
+    assert_eq!(fetch(id).unwrap(), None);
+    // Deleting what is not there is not an error, as with the keychain.
+    delete(id).unwrap();
+}

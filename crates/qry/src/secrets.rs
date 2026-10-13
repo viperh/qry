@@ -7,7 +7,7 @@
 //! or a panic message: the prompt leaves it in [`stash`] and the database
 //! worker takes it from there.
 
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 use zeroize::Zeroizing;
 
@@ -82,9 +82,37 @@ pub(crate) fn take_stash() -> Option<Password> {
     STASH.lock().ok().and_then(|mut held| held.take())
 }
 
+/// Set `QRY_KEYRING=off` to keep passwords in memory instead of the OS
+/// keychain, for the life of the process. Tests run this way so they never
+/// prompt for, read or write the developer's real keychain; this crate's own
+/// unit tests always do, whatever the variable says.
+pub const KEYRING_ENV: &str = "QRY_KEYRING";
+
+/// The stand-in keychain used when the real one is switched off, keyed by
+/// connection id.
+static MEMORY: Mutex<Option<HashMap<String, Password>>> = Mutex::new(None);
+
+/// Whether passwords go to the OS keychain rather than [`MEMORY`].
+fn keychain_enabled() -> bool {
+    !cfg!(test) && !std::env::var(KEYRING_ENV).is_ok_and(|value| value.eq_ignore_ascii_case("off"))
+}
+
+/// Runs `f` on the in-memory keychain. A poisoned lock is taken anyway: a
+/// single insert or remove cannot leave the map half-changed.
+fn with_memory<T>(f: impl FnOnce(&mut HashMap<String, Password>) -> T) -> T {
+    let mut held = MEMORY
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    f(held.get_or_insert_with(HashMap::new))
+}
+
 /// Stores a password in the OS keychain under a connection's id. Blocking:
 /// call it from `spawn_blocking`.
 pub(crate) fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
+    if !keychain_enabled() {
+        with_memory(|memory| memory.insert(id.to_string(), password.clone()));
+        return Ok(());
+    }
     let entry = keyring::Entry::new(SERVICE, id)?;
     entry.set_password(password.as_str())?;
     Ok(())
@@ -94,6 +122,9 @@ pub(crate) fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
 /// keychain works but has no entry; an error means it could not be reached,
 /// which is the cue to prompt instead.
 pub(crate) fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
+    if !keychain_enabled() {
+        return Ok(with_memory(|memory| memory.get(id).cloned()));
+    }
     let entry = keyring::Entry::new(SERVICE, id)?;
     match entry.get_password() {
         Ok(password) => Ok(Some(Password::new(password))),
@@ -105,6 +136,10 @@ pub(crate) fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
 /// Removes a connection's password. A missing entry is not an error: the end
 /// state is the same.
 pub(crate) fn delete(id: &str) -> color_eyre::Result<()> {
+    if !keychain_enabled() {
+        with_memory(|memory| memory.remove(id));
+        return Ok(());
+    }
     let entry = keyring::Entry::new(SERVICE, id)?;
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
