@@ -7,15 +7,22 @@ use crossterm::event::KeyCode;
 use super::*;
 use crate::{
     components::form_tests::{key, press, render, type_str},
+    secrets::Password,
     testing::buffer_lines,
 };
 
 fn set(form: &mut ConnForm, field: usize, value: &str) {
-    let Field::Text(input) = &mut form.fields[field] else {
-        panic!("{} is not a text field", LABELS[field]);
-    };
-    input.value = value.into();
-    input.cursor = input.len();
+    match &mut form.fields[field] {
+        Field::Text(input) => {
+            input.value = value.into();
+            input.cursor = input.len();
+        }
+        Field::Secret(input) => {
+            input.value = Password::new(value);
+            input.cursor = input.len();
+        }
+        Field::Choice { .. } => panic!("{} is not a text field", LABELS[field]),
+    }
 }
 
 fn choose(form: &mut ConnForm, field: usize, option: &str) {
@@ -196,7 +203,11 @@ fn editing_opens_the_form_filled_in_and_keeps_the_id() {
     assert_eq!(form.text(PORT), "6543");
     assert_eq!(form.text(DATABASE), "app");
     assert_eq!(form.text(SCHEMA), "reporting");
-    assert_eq!(form.text(PASSWORD), "", "the password is never shown back");
+    assert_eq!(
+        form.secret(PASSWORD).as_str(),
+        "",
+        "the password is never shown back"
+    );
 
     let shown = buffer_lines(&render(&form, 80, 60)).join("\n");
     assert!(shown.contains("(unchanged)"), "{shown}");

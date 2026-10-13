@@ -15,9 +15,11 @@ use zeroize::Zeroizing;
 const SERVICE: &str = "qry";
 
 /// A password. Cleared when dropped, and it cannot be printed: its `Debug`
-/// shows `[redacted]` and it has no `Display`.
-#[derive(Clone, Default, PartialEq, Eq)]
-pub(crate) struct Password(Zeroizing<String>);
+/// shows `[redacted]` and it has no `Display`. It is not `Clone` either, so a
+/// copy is always an explicit [`Password::duplicate`] rather than a stray
+/// `.clone()`.
+#[derive(Default, PartialEq, Eq)]
+pub struct Password(Zeroizing<String>);
 
 impl Password {
     pub(crate) fn new(value: impl Into<String>) -> Self {
@@ -30,6 +32,47 @@ impl Password {
 
     pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// A second copy, for the one place that has to keep one too (the
+    /// in-memory keychain, and a prompt's buffer when the state is cloned).
+    pub(crate) fn duplicate(&self) -> Self {
+        Self::new(self.as_str())
+    }
+
+    /// Length in characters, for a cursor that moves by character.
+    pub(crate) fn chars(&self) -> usize {
+        self.0.chars().count()
+    }
+
+    /// Inserts `c` before the character at `at`, typing one key into a
+    /// prompt. The text moves to a fresh buffer before it can outgrow this
+    /// one, so a reallocation never leaves a copy behind uncleared.
+    pub(crate) fn insert(&mut self, at: usize, c: char) {
+        if self.0.len() + c.len_utf8() > self.0.capacity() {
+            let mut grown = Zeroizing::new(String::with_capacity((self.0.capacity() * 2).max(16)));
+            grown.push_str(&self.0);
+            // The old buffer is cleared as it drops.
+            self.0 = grown;
+        }
+        let at = self.byte_index(at);
+        self.0.insert(at, c);
+    }
+
+    /// Removes the character at `at`, if there is one. Removing never
+    /// reallocates, so nothing is left behind.
+    pub(crate) fn remove(&mut self, at: usize) {
+        if at < self.chars() {
+            let at = self.byte_index(at);
+            self.0.remove(at);
+        }
+    }
+
+    fn byte_index(&self, at: usize) -> usize {
+        self.0
+            .char_indices()
+            .nth(at)
+            .map_or(self.0.len(), |(i, _)| i)
     }
 }
 
@@ -110,7 +153,7 @@ fn with_memory<T>(f: impl FnOnce(&mut HashMap<String, Password>) -> T) -> T {
 /// call it from `spawn_blocking`.
 pub(crate) fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
     if !keychain_enabled() {
-        with_memory(|memory| memory.insert(id.to_string(), password.clone()));
+        with_memory(|memory| memory.insert(id.to_string(), password.duplicate()));
         return Ok(());
     }
     let entry = keyring::Entry::new(SERVICE, id)?;
@@ -123,7 +166,9 @@ pub(crate) fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
 /// which is the cue to prompt instead.
 pub(crate) fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
     if !keychain_enabled() {
-        return Ok(with_memory(|memory| memory.get(id).cloned()));
+        return Ok(with_memory(|memory| {
+            memory.get(id).map(Password::duplicate)
+        }));
     }
     let entry = keyring::Entry::new(SERVICE, id)?;
     match entry.get_password() {

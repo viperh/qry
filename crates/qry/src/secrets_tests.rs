@@ -8,8 +8,31 @@ use super::*;
 fn a_password_cannot_be_printed() {
     let password = Password::new("hunter2");
     assert_eq!(format!("{password:?}"), "[redacted]");
-    assert_eq!(format!("{:?}", Some(password.clone())), "Some([redacted])");
+    assert_eq!(
+        format!("{:?}", Some(password.duplicate())),
+        "Some([redacted])"
+    );
     assert_eq!(password.as_str(), "hunter2");
+}
+
+#[test]
+fn a_password_is_typed_and_erased_by_character() {
+    let mut password = Password::default();
+    for (at, c) in "hélo".chars().enumerate() {
+        password.insert(at, c);
+    }
+    password.insert(3, 'l');
+    assert_eq!(password.as_str(), "héllo");
+    assert_eq!(password.chars(), 5);
+
+    password.remove(1);
+    password.remove(9);
+    assert_eq!(password.as_str(), "hllo");
+    // Long enough to outgrow its first buffer.
+    for _ in 0..40 {
+        password.insert(0, 'x');
+    }
+    assert_eq!(password.chars(), 44);
 }
 
 #[test]

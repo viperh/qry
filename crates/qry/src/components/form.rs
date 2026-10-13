@@ -13,8 +13,9 @@ use ratatui::{
 
 use crate::{
     action::Action,
-    components::textinput::{TextInput, typed_char},
+    components::textinput::{SecretInput, TextInput, typed_char},
     keymap::FormCommand,
+    secrets::Password,
     theme::Theme,
 };
 
@@ -26,6 +27,8 @@ pub(super) const MODAL_WIDTH: u16 = 60;
 
 pub(crate) enum Field {
     Text(TextInput),
+    /// A password: typed like text, shown as dots, kept in a [`Password`].
+    Secret(SecretInput),
     /// Cycled with ← / → (or Space) instead of typed.
     Choice {
         options: &'static [&'static str],
@@ -47,10 +50,20 @@ impl Field {
     }
 
     pub(crate) fn masked() -> Self {
-        Field::Text(TextInput {
-            masked: true,
-            ..TextInput::default()
-        })
+        Field::Secret(SecretInput::default())
+    }
+
+    /// Whether typing a character inserts it here.
+    fn is_typed(&self) -> bool {
+        matches!(self, Field::Text(_) | Field::Secret(_))
+    }
+
+    fn insert(&mut self, c: char) {
+        match self {
+            Field::Text(input) => input.insert(c),
+            Field::Secret(input) => input.insert(c),
+            Field::Choice { .. } => {}
+        }
     }
 
     pub(crate) fn choice(options: &'static [&'static str], selected: usize) -> Self {
@@ -60,6 +73,15 @@ impl Field {
     fn apply(&mut self, command: FormCommand) {
         match self {
             Field::Text(input) => match command {
+                FormCommand::Left => input.move_left(),
+                FormCommand::Right => input.move_right(),
+                FormCommand::LineStart => input.move_home(),
+                FormCommand::LineEnd => input.move_end(),
+                FormCommand::DeleteBack => input.delete_back(),
+                FormCommand::DeleteForward => input.delete_forward(),
+                _ => {}
+            },
+            Field::Secret(input) => match command {
                 FormCommand::Left => input.move_left(),
                 FormCommand::Right => input.move_right(),
                 FormCommand::LineStart => input.move_home(),
@@ -81,6 +103,7 @@ impl Field {
     fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
         match self {
             Field::Text(input) => input.render(frame, area, focused, theme),
+            Field::Secret(input) => input.render(frame, area, focused, theme),
             Field::Choice { options, selected } => {
                 let option = options[*selected];
                 let line = if focused {
@@ -131,14 +154,23 @@ pub(crate) trait Form {
     fn text(&self, field: usize) -> &str {
         match &self.fields()[field] {
             Field::Text(input) => &input.value,
-            Field::Choice { .. } => "",
+            Field::Secret(_) | Field::Choice { .. } => "",
+        }
+    }
+
+    /// What a password field holds; empty for any other field.
+    fn secret(&self, field: usize) -> &Password {
+        static EMPTY: std::sync::LazyLock<Password> = std::sync::LazyLock::new(Password::default);
+        match &self.fields()[field] {
+            Field::Secret(input) => &input.value,
+            Field::Text(_) | Field::Choice { .. } => &EMPTY,
         }
     }
 
     fn selected(&self, field: usize) -> usize {
         match &self.fields()[field] {
             Field::Choice { selected, .. } => *selected,
-            Field::Text(_) => 0,
+            Field::Text(_) | Field::Secret(_) => 0,
         }
     }
 
@@ -149,12 +181,10 @@ pub(crate) trait Form {
         let count = self.labels().len();
 
         if let Some(c) = typed_char(key)
-            && matches!(self.fields()[focus], Field::Text(_))
+            && self.fields()[focus].is_typed()
         {
             self.set_error(None);
-            if let Field::Text(input) = &mut self.fields_mut()[focus] {
-                input.insert(c);
-            }
+            self.fields_mut()[focus].insert(c);
             self.after_change();
             return;
         }

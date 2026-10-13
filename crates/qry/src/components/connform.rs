@@ -2,7 +2,7 @@ use crate::{
     action::Action,
     components::form::{Field, Form},
     connections::{Driver, Secret, StoredConnection},
-    secrets::{self, Password},
+    secrets,
 };
 
 const LABELS: [&str; 11] = [
@@ -168,7 +168,7 @@ impl ConnForm {
         match &record.secret {
             Secret::Keyring => {
                 form.set_choice(STORE, KEYCHAIN);
-                if let Field::Text(input) = &mut form.fields[PASSWORD] {
+                if let Field::Secret(input) = &mut form.fields[PASSWORD] {
                     input.placeholder = Some("(unchanged)");
                 }
             }
@@ -314,7 +314,7 @@ impl Form for ConnForm {
         }
 
         // Not trimmed: spaces can be part of a password.
-        let password = self.text(PASSWORD).to_string();
+        let password = self.secret(PASSWORD);
         record.secret = match (driver.needs_password(), self.selected(STORE)) {
             (false, _) => Secret::None,
             (true, ENVIRONMENT) => match some(trimmed(VAR)) {
@@ -332,10 +332,12 @@ impl Form for ConnForm {
 
         // Checks the fields this driver needs, with the same messages the
         // worker would give.
-        record.to_config(&password).map_err(|e| e.to_string())?;
+        record
+            .to_config(password.as_str())
+            .map_err(|e| e.to_string())?;
 
         if !password.is_empty() {
-            secrets::stash(Password::new(password));
+            secrets::stash(password.duplicate());
         }
         Ok(Action::Connect(Box::new(record)))
     }

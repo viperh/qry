@@ -1,7 +1,7 @@
 use crate::{
     action::Action,
     components::form::{Field, Form},
-    secrets::{self, Password},
+    secrets,
 };
 
 const LABELS: [&str; 1] = ["Password"];
@@ -81,7 +81,7 @@ impl Form for PasswordForm {
 
     fn submit(&self) -> Result<Action, String> {
         // Not trimmed: spaces can be part of a password.
-        secrets::stash(Password::new(self.text(PASSWORD).to_string()));
+        secrets::stash(self.secret(PASSWORD).duplicate());
         Ok(Action::PasswordEntered)
     }
 }
