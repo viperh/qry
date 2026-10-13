@@ -179,6 +179,18 @@ impl AppHarness {
         self
     }
 
+    /// The main screen, for this crate's tests that check state the screen
+    /// does not show.
+    pub(crate) fn home(&self) -> &Home {
+        &self.home
+    }
+
+    /// The main screen, for this crate's tests that set up state no key
+    /// reaches directly, such as which form field has focus.
+    pub(crate) fn home_mut(&mut self) -> &mut Home {
+        &mut self.home
+    }
+
     /// The terminal environment set with [`with_theme_env`](Self::with_theme_env).
     pub fn theme_env(&self) -> &ThemeEnv {
         &self.theme_env
