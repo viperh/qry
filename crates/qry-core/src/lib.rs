@@ -8,6 +8,9 @@ pub mod oracle;
 pub mod postgres;
 pub mod shared;
 pub mod sqlite;
+/// Fakes and fixtures for tests; never in a release build.
+#[cfg(any(test, feature = "test-util"))]
+pub mod testing;
 
 pub use exporter::Exporter;
 use mariadb::{MariaDb, MariadbConfig};
@@ -150,6 +153,13 @@ impl std::fmt::Debug for Driver {
 impl Driver {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A driver already connected to `db`, so the worker can be tested with a
+    /// [`FakeDatabase`](crate::testing::FakeDatabase) instead of a server.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn with_database(db: Box<dyn Database>) -> Self {
+        Self { db: Some(db) }
     }
 
     /// Opens a connection, replacing any previous one, and returns its label.
