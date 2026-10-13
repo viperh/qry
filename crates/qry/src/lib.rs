@@ -26,6 +26,7 @@ pub mod import;
 pub mod keymap;
 pub mod logging;
 pub mod secrets;
+pub mod theme;
 pub mod tui;
 
 // Drives the app without a terminal, for tests. Compiled for this crate's

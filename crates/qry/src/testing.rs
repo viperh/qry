@@ -27,6 +27,7 @@ use qry_core::{QueryResult, testing::FakeDatabase};
 use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
+pub use crate::theme::ThemeEnv;
 use crate::{
     action::Action,
     app::Mode,
@@ -52,17 +53,6 @@ pub const SIZES: &[(u16, u16)] = &[
     (160, 48),
     (300, 100),
 ];
-
-/// The terminal environment the theme reads (`NO_COLOR`, `COLORTERM`). The
-/// harness only stores it until the theme system lands (T201), which moves
-/// this type next to the theme and starts honouring it.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ThemeEnv {
-    /// `NO_COLOR` is set to anything non-empty.
-    pub no_color: bool,
-    /// The value of `COLORTERM`, such as `truecolor`.
-    pub colorterm: Option<String>,
-}
 
 /// An answer the stand-in worker will deliver once the virtual clock reaches
 /// `due`, in milliseconds since the harness was made.
