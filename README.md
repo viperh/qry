@@ -12,7 +12,7 @@ The workspace deliberately splits the UI from everything else:
 
 ```
 Cargo.toml              workspace manifest — all dependency versions live here
-.config/config.json     default keybindings and styles, baked into the binary
+.config/config.json     default theme and key bindings, baked into the binary
 .envrc                  direnv: keep config/data/logs inside the repo
 crates/
   qry/                  the binary: terminal, rendering, input, config, logging
@@ -27,10 +27,12 @@ crates/
         dialogs/        the modal forms
       views.rs, views/  free functions drawing the State with a Theme
       runtime.rs        the event loop: terminal, tasks, files, keychain, effects
-      action.rs         the commands keys are bound to
+      action.rs         Action: the one command vocabulary keys are bound to
+      keymap.rs         key contexts, chord parsing and display, lookup
       db.rs             the database worker
       cli.rs            clap argument parsing
-      config.rs         layered config, keybinding and style parsing
+      config.rs         layered config: theme and key bindings
+      config_migrate.rs reads the pre-context keybinding format
       errors.rs         panic hooks, color-eyre, human-panic
       logging.rs        tracing subscriber writing to a log file
       tui.rs            terminal setup/teardown and the crossterm event stream
@@ -48,12 +50,13 @@ if you later add a second front end (a CLI, a daemon, a web UI).
 cargo run -p qry
 ```
 
-`q`, `Ctrl-q quit
+`Ctrl-q` quits and `F1` lists the keys; the defaults are in
 `.config/config.json`.
 
 ```sh
 cargo run -p qry -- --tick-rate 4 --frame-rate 60
 cargo run -p qry -- --version    # prints git info and the resolved directories
+cargo run -p qry -- --print-config # prints the config in effect
 ```
 
 ## Configuration
@@ -64,8 +67,12 @@ looks in the per-user config directory (printed by `--version`) for
 and layers whatever it finds on top. Set `QRY_CONFIG` to override that
 directory outright.
 
-Keybindings are keyed by mode, then by key sequence: `"<Ctrl-a>"` for a single
-chord, `"<g><g>"` for a sequence. Every value must name an `Action` variant.
+Key bindings are keyed by context (`Global`, `Tree`, `Editor`, `Results`,
+`Dialog`, `Help`, …), then by key: `"<ctrl-a>"` for a single chord, `"<g><g>"`
+for a sequence. Every value must name an `Action` variant, or be `null` to
+unbind a default. A user file only needs the keys it changes. A config in the
+old per-mode format is converted with a warning. `qry --print-config` prints
+the bindings in effect.
 
 ## Logging
 
