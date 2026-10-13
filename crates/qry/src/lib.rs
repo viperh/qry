@@ -27,6 +27,7 @@ pub mod keymap;
 pub mod logging;
 pub mod runtime;
 pub mod secrets;
+pub mod sessions;
 pub mod theme;
 pub mod tui;
 pub mod views;

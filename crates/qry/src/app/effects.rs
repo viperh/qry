@@ -15,9 +15,12 @@ use crate::{connections::StoredConnection, db::DbCommand, import::Format, secret
 pub enum Effect {
     /// Hand this command to the session's database worker.
     Db(SessionId, DbCommand),
-    /// Open a session on this connection. Its answers come back as
-    /// `UiEvent::Db` with the same id.
+    /// Open a session on this connection: start a worker of its own and
+    /// connect it. Its answers come back as `UiEvent::Db` with the same id.
     OpenSession(SessionId, Box<StoredConnection>),
+    /// Drop the session's worker, which closes its connection once the
+    /// command it is running, if any, is done.
+    CloseSession(SessionId),
     /// Write these to disk. Ephemeral records (the scratch database) are
     /// never in the list.
     SaveConnections(Vec<StoredConnection>),

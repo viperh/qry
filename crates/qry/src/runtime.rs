@@ -19,9 +19,10 @@ use crate::{
     app::{App, DbAnswer, Effect, FileAnswer, SessionId, UiEvent},
     config::{Config, get_data_dir},
     connections::{self, StoredConnection},
-    db::{self, DbCommand},
+    db::Answers,
     import::Format,
     secrets,
+    sessions::SessionManager,
     theme::{self, ColorSupport},
     tui::{Event, Tui},
     views,
@@ -85,11 +86,18 @@ impl Runtime {
                 None => {
                     let incoming = tokio::select! {
                         event = tui.next_event() => Incoming::Terminal(event),
-                        Some((id, answer)) = self.answers.recv() => Incoming::Event(UiEvent::Db(id, answer)),
+                        Some((id, answer)) = self.answers.recv() => Incoming::Answer(id, answer),
                         Some(event) = self.events.recv() => Incoming::Event(event),
                     };
                     match incoming {
                         Incoming::Event(event) => event,
+                        // A closed session's worker may still be finishing
+                        // a command; nobody is listening for it.
+                        Incoming::Answer(id, answer) if !self.executor.sessions.contains(id) => {
+                            debug!("dropped an answer for closed session {}: {answer:?}", id.0);
+                            continue;
+                        }
+                        Incoming::Answer(id, answer) => UiEvent::Db(id, answer),
                         Incoming::Terminal(Some(Event::Key(key))) => UiEvent::Key(key),
                         Incoming::Terminal(Some(Event::Tick)) => UiEvent::Tick(Instant::now()),
                         Incoming::Terminal(Some(Event::Resize(w, h))) => {
@@ -143,6 +151,7 @@ impl Runtime {
 /// What woke the loop.
 enum Incoming {
     Terminal(Option<Event>),
+    Answer(SessionId, DbAnswer),
     Event(UiEvent),
 }
 
@@ -184,14 +193,16 @@ pub(crate) enum Executed {
 pub(crate) struct Executor {
     /// Where the connections file lives.
     data_dir: PathBuf,
-    /// The one session's worker.
-    db: UnboundedSender<DbCommand>,
+    /// The open sessions' workers.
+    pub(crate) sessions: SessionManager,
+    /// Where every worker sends its answers.
+    answers: Answers,
     events: UnboundedSender<UiEvent>,
 }
 
 impl Executor {
-    /// An executor writing under `data_dir`, with its worker started, and
-    /// where the worker's answers and the files' outcomes arrive.
+    /// An executor writing under `data_dir`, with no session open yet, and
+    /// where the workers' answers and the files' outcomes arrive.
     pub(crate) fn new(
         data_dir: PathBuf,
     ) -> (
@@ -203,21 +214,29 @@ impl Executor {
         let (events_tx, events) = mpsc::unbounded_channel();
         let executor = Self {
             data_dir,
-            db: db::spawn(SessionId::FIRST, answers_tx),
+            sessions: SessionManager::default(),
+            answers: answers_tx,
             events: events_tx,
         };
         (executor, answers, events)
     }
 
-    pub(crate) fn execute(&self, effect: Effect) -> Executed {
+    pub(crate) fn execute(&mut self, effect: Effect) -> Executed {
         match effect {
             Effect::Db(id, command) => {
-                self.send_db(id, command);
+                if self.sessions.send(id, command).is_err() {
+                    self.worker_stopped(id);
+                }
                 Executed::Done
             }
-            // There is one worker for now: opening a session connects it.
             Effect::OpenSession(id, record) => {
-                self.send_db(id, DbCommand::Connect(record));
+                if (self.sessions.open(id, *record, self.answers.clone())).is_err() {
+                    self.worker_stopped(id);
+                }
+                Executed::Done
+            }
+            Effect::CloseSession(id) => {
+                self.sessions.close(id);
                 Executed::Done
             }
             Effect::SaveConnections(list) => Executed::Spawned(self.save_connections(list)),
@@ -251,17 +270,12 @@ impl Executor {
         }
     }
 
-    /// Hands a command to the database worker. If the worker has stopped,
-    /// says so instead of failing silently.
-    fn send_db(&self, id: SessionId, command: DbCommand) {
-        if self.db.send(command).is_err() {
-            self.report(UiEvent::Db(id, DbAnswer::WorkerStopped));
-        }
-    }
-
-    fn report(&self, event: UiEvent) {
+    /// A command could not reach session `id`'s worker: says so instead of
+    /// failing silently. For a session the app has closed, it drops this
+    /// too.
+    fn worker_stopped(&self, id: SessionId) {
         // The loop holds the receiver for as long as it runs.
-        let _ = self.events.send(event);
+        let _ = self.events.send(UiEvent::Db(id, DbAnswer::WorkerStopped));
     }
 
     /// Writes the connections off the event loop, reporting a failure

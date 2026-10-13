@@ -173,6 +173,10 @@ async fn failures_become_error_status() {
     db.send(DbCommand::Query("SELECT 1".into())).unwrap();
     assert_eq!(
         answers.recv().await,
+        Some(DbAnswer::QueryFailed("not connected to a database".into()))
+    );
+    assert_eq!(
+        answers.recv().await,
         Some(error("not connected to a database".into()))
     );
 
@@ -180,6 +184,10 @@ async fn failures_become_error_status() {
     answers.recv().await; // Connected
     answers.recv().await; // its status message
     db.send(DbCommand::Query("SELEC nonsense".into())).unwrap();
+    assert!(matches!(
+        answers.recv().await,
+        Some(DbAnswer::QueryFailed(_))
+    ));
     assert!(matches!(
         answers.recv().await,
         Some(DbAnswer::Status(StatusCode::Error(_)))
@@ -249,7 +257,13 @@ async fn a_driver_error_comes_back_as_a_status_error() {
     let answers = worker
         .run(DbCommand::Query("SELECT * FROM nope".into()))
         .await;
-    assert_eq!(answers, [error("relation \"nope\" does not exist".into())]);
+    assert_eq!(
+        answers,
+        [
+            DbAnswer::QueryFailed("relation \"nope\" does not exist".into()),
+            error("relation \"nope\" does not exist".into())
+        ]
+    );
     assert!(
         worker.last.is_none(),
         "a failed query leaves nothing to export"

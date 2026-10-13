@@ -21,6 +21,7 @@ pub(super) fn answer(state: &mut State, answer: DbAnswer, fx: &mut Vec<Effect>) 
         DbAnswer::NeedPassword { id, name } => dialogs::need_password(state, id, name),
         DbAnswer::SecretNotStored(id) => tree::secret_not_stored(state, &id, fx),
         DbAnswer::QueryDone(result) => results::show(&mut state.results, result),
+        DbAnswer::QueryFailed(_) => {}
         DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export),
         DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export, &message),
         DbAnswer::TablesLoaded(tables) => tree::tables_loaded(state, tables),

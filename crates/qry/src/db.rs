@@ -218,7 +218,10 @@ pub(crate) fn query_answer<E: std::fmt::Display>(
             };
             vec![DbAnswer::QueryDone(Arc::new(result)), success(summary)]
         }
-        Err(e) => vec![error(format!("{e:#}"))],
+        Err(e) => vec![
+            DbAnswer::QueryFailed(e.to_string()),
+            error(format!("{e:#}")),
+        ],
     }
 }
 
