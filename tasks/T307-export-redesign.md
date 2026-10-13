@@ -1,0 +1,164 @@
+# T307 — Export redesign
+
+**Phase:** 3 — Features · **Depends on:** T203, T305 · **Blocks:** —
+
+## Description
+
+### Current state
+
+- **Form:** `ctrl-e` (`Mode::ExpoModal`) opens `ExportForm` (`crates/qry/src/components/exportform.rs`). Its fields are Path, Type `‹CSV|Excel|Text|JSON›`, Separator `‹COMMA|PIPE|TAB|SEMICOLON|OTHER›`, and Custom, which appears only for OTHER.
+- **Submit:** submitting sends `Action::Export(ExportConfig)`. The worker (`db.rs`) writes `self.last`, the **single last result**, through `qry_core::Exporter` (`crates/qry-core/src/exporter.rs`).
+- **Waiting:** while the worker writes, the modal waits on `Awaiting::Export` and shows "Exporting…". It closes on `Exported`, or keeps the path and shows the error on `ExportFailed`. These behaviours are tested in `home.rs` and must be kept.
+- **Limitations:**
+  - It exports only what was fetched. With T305 row limits that would silently be the first 1000 rows.
+  - The header row is always written. There is no NULL representation option.
+  - An existing file is overwritten without asking.
+  - Formats are limited to CSV, Excel, Text and JSON.
+  - `ExportType::with_extension` appends the extension.
+
+### Target design
+
+**Dialog.** An amber-accented `dialog_frame` (T203), 80 wide at most, 15 rows, over the backdrop. It is opened by `ctrl-e` from the Results context or the palette command "Export result…".
+
+```
+┌ Export · result 2 orders · 7 rows (all fetched) ──────────────────────────┐
+│                                                                            │
+│ › Path          ~/exports/orders.csv▏                                      │
+│   Format        ‹ CSV ›                                                    │
+│   Rows          ‹ fetched rows (1 000) ›   all rows (re-run)   selection  │
+│   Separator     ‹ , comma ›                                                │
+│   Header        ‹ yes ›                                                    │
+│   NULL as       (empty)                                                    │
+│   Encoding      ‹ UTF-8 ›                                                  │
+│                                                                            │
+│   → /home/viperh/exports/orders.csv  · exists, will ask before overwriting │
+└─ Enter export · Tab next · ←→ change · Esc cancel ────────────────────────┘
+```
+
+**Dialog behaviour:**
+
+- The current field is marked `› ` (T203 convention). Choices are drawn `‹ value ›`.
+- Fields appear or disappear by format: Separator only for CSV/Text; Encoding only for text formats; Header for all but JSON and JSON lines.
+- The last line is a live preview of the resolved path: `~` expanded, extension added, and a dim `exists` warning when the file is already there.
+
+**Formats:**
+
+| Format | Ext | Notes |
+|---|---|---|
+| CSV | csv | RFC 4180 quoting; separator choice incl. custom single char; `\r\n` optional |
+| TSV | tsv | tabs/newlines in values escaped as `\t` `\n` |
+| JSON | json | array of objects; NULL → `null`; numbers unquoted when `ValueKind` is numeric (T303) |
+| JSON lines | jsonl | one object per line |
+| Excel | xlsx | typed cells by `ValueKind` (numbers/dates/bools), bold frozen header, autofilter, column widths |
+| Markdown | md | pipe table, pipes escaped |
+| SQL INSERT | sql | `INSERT INTO <table>` with table name field (default from result tab name), batch size 100 rows/statement, dialect quoting (T303 `copy.rs`) |
+| Text | txt | existing plain delimited (kept for compatibility) |
+
+**Row scopes:**
+
+- **Fetched rows:** writes what is in memory, the default. The header line shows `(all fetched)` or, when truncated, `(1 000 of more)` in amber, so truncation is never silent.
+- **All rows (re-run):** starts a T305 `JobKind::Export` job that re-runs the result's SQL in its session with no row limit, streaming batches straight to the file (no full materialisation).
+  - Progress shows in the jobs drawer and status line (`exporting · 120 000 rows · 3.1 s`), and the job is cancellable.
+  - The dialog closes as soon as the job starts. Success or failure arrives as a toast (T205).
+  - Re-running is warned about when the statement is not a `SELECT`/`WITH` (lexer check, T302): `re-running may change data` in coral, with a confirm.
+- **Selection:** the selected rows or range, if the grid has one (T303), otherwise disabled.
+
+**Overwrite.** If the target exists, Enter opens a coral confirm dialog, `orders.csv exists — overwrite?`, with `Overwrite` / `Cancel`. The write is atomic (temp file in the same dir, then rename), so a failed export never leaves a half-written file over an existing one.
+
+**Completion feedback:**
+
+- **Fetched-scope exports** keep today's in-dialog wait: "Exporting…", then close on success, or keep the path with an error on failure.
+- **Success** shows a green toast, `✓ exported 1 000 rows to ~/exports/orders.csv`.
+- **Remembered values:** the dialog remembers the last directory, format and separator per session.
+
+### qry-core split
+
+`crates/qry-core/src/exporter.rs` becomes a streaming writer:
+
+```rust
+pub enum ExportType { Csv, Tsv, Json, JsonLines, Excel, Markdown, SqlInsert, Text }
+pub struct ExportOptions { pub separator: char, pub header: bool, pub null_as: String,
+                           pub crlf: bool, pub table: Option<String>, pub dialect: Dialect, pub batch: usize }
+pub trait RowSink { fn begin(&mut self, cols: &[ColumnMeta]) -> Result<()>;
+                    fn rows(&mut self, rows: &[Vec<Option<String>>]) -> Result<()>;
+                    fn finish(self: Box<Self>) -> Result<u64>; }
+pub fn sink(etype: ExportType, path: &Path, opts: &ExportOptions) -> Result<Box<dyn RowSink>>;
+pub fn resolve_path(input: &str, etype: ExportType, home: &Path) -> PathBuf; // ~, extension
+```
+
+- `ExportConfig` and `ExportType::with_extension` keep their current tests. Every existing exporter test is ported to `exporter_tests.rs`.
+- `Excel` buffers in `rust_xlsxwriter`, which is in-memory by nature. When the row count exceeds 1 048 575, a clear error is returned before writing.
+- The worker side (qry `db.rs` / session worker from T103) pipes `RowStream` batches (T305) into a `RowSink`.
+
+### Edge cases
+
+- The path is a directory, the parent is missing, or permission is denied: show a clear error naming the path, and keep the dialog open (existing behaviour, `a_failed_export_keeps_the_modal_and_the_path`).
+- There is no result to export: the palette command is disabled, and `ctrl-e` gives a dim toast `nothing to export`.
+- A custom separator must be a single non-quote, non-newline character.
+- The result's session closes during an all-rows export: the job is Cancelled, the temp file is removed, and the original is untouched.
+- Values with embedded NUL bytes in CSV are written as-is. Excel strips characters below 0x20 except tab/newline, with a warning in the toast.
+- Windows paths and `~user` are not expanded (only `~` and `~/`).
+
+### Out of scope
+
+Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, scheduled exports.
+
+## Acceptance criteria
+
+- [ ] The amber export dialog uses the T203 frame, `› ` focus marker, `‹ ›` choices, live path preview, and format-dependent fields.
+- [ ] All eight formats are written correctly. Excel cells are typed by `ValueKind`, with a bold frozen header and autofilter.
+- [ ] Header and NULL-as options apply to every format they make sense for.
+- [ ] Fetched-row exports of truncated results are visibly labelled. All-rows exports stream through a cancellable job, with no full materialisation (memory bounded by `fetch_size`).
+- [ ] An existing file prompts before overwrite. Writes are atomic: a failed or cancelled export leaves the original intact and no temp file behind.
+- [ ] Non-SELECT re-runs are warned about and confirmed.
+- [ ] The existing modal behaviours (wait, keep path on failure, close on success, ignore answers meant for other modals) still hold, with their tests ported.
+- [ ] Success and failure toasts show the row count and resolved path.
+
+## Tests
+
+**Unit tests** — `crates/qry-core/src/exporter_tests.rs`:
+
+- The ported existing tests.
+- Resolve path: `resolve_path_expands_tilde_and_adds_extension`, `resolve_path_keeps_existing_extension_case_insensitive`.
+- Text formats:
+  - `csv_rfc4180_quoting_and_crlf_option`
+  - `csv_custom_separator_validation`
+  - `tsv_escapes_tab_and_newline`
+  - `json_numbers_unquoted_by_kind`
+  - `jsonl_one_object_per_line`
+  - `markdown_escapes_pipes`
+  - `header_off_omits_first_line`
+  - `null_as_applies_to_text_formats`
+- SQL INSERT: `sql_insert_batches_and_quotes_per_dialect`.
+- Excel: `excel_types_cells_and_freezes_header` (read back with `calamine` as a dev-dep), `excel_too_many_rows_errors_before_writing`.
+- Atomicity: `atomic_write_leaves_original_on_failure` (a sink that fails mid-way).
+
+**Proptest:** `prop_csv_export_round_trips` writes random tables with quotes, separators, newlines and NULLs, then reads them back with the `csv` crate and gets the same table, with `null_as` distinguishing NULL from empty.
+
+**Unit tests** — `crates/qry/src/components/exportform_tests.rs`:
+
+- Fields: `fields_change_with_format`, `preview_shows_resolved_path_and_exists_warning`.
+- Scopes:
+  - `truncated_result_labels_fetched_scope`
+  - `all_rows_scope_emits_export_job_and_closes`
+  - `non_select_rerun_requires_confirm`
+- Overwrite: `existing_file_opens_overwrite_confirm`.
+- Remembered values: `remembers_last_dir_and_format_per_session`.
+- The ported `home.rs` export tests (`a_failed_export_keeps_the_modal_and_the_path`, `a_written_export_closes_the_modal`, `an_answer_meant_for_another_modal_is_ignored`).
+
+**Snapshots** — plain and styled:
+
+- `export_dialog_csv_80x24`
+- `export_dialog_excel_80x24`
+- `export_dialog_sql_insert_80x24`
+- `export_dialog_truncated_warning_80x24`
+- `export_overwrite_confirm_80x24`
+- `export_job_in_drawer_120x40`
+
+**DB integration tests** (T004 `db_or_skip!`):
+
+- `export_all_rows_streams_without_materialising` (SQLite always; Postgres with `generate_series(1, 200000)`). Assert the file line count, and peak buffered rows ≤ `fetch_size` via a counting sink.
+- `export_sql_insert_reimports_identically`, for each backend.
+- `cancelled_export_removes_temp_and_keeps_original`
+
+**Fuzz:** not applicable (no untrusted input parsed).
