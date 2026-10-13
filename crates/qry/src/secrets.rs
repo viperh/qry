@@ -17,18 +17,18 @@ const SERVICE: &str = "qry";
 /// A password. Cleared when dropped, and it cannot be printed: its `Debug`
 /// shows `[redacted]` and it has no `Display`.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct Password(Zeroizing<String>);
+pub(crate) struct Password(Zeroizing<String>);
 
 impl Password {
-    pub fn new(value: impl Into<String>) -> Self {
+    pub(crate) fn new(value: impl Into<String>) -> Self {
         Self(Zeroizing::new(value.into()))
     }
 
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
@@ -43,7 +43,7 @@ impl std::fmt::Debug for Password {
 /// it never has to ride in an action. One prompt is open at a time.
 static STASH: Mutex<Option<Password>> = Mutex::new(None);
 
-pub fn stash(password: Password) {
+pub(crate) fn stash(password: Password) {
     if let Ok(mut held) = STASH.lock() {
         *held = Some(password);
     }
@@ -52,19 +52,39 @@ pub fn stash(password: Password) {
 /// The stash is process-wide, so tests that use it take this first rather
 /// than stealing each other's passwords.
 #[cfg(test)]
-pub fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+pub(crate) fn test_lock() -> std::sync::MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+/// Sets an environment variable for a test.
+///
+/// This is the one place in the workspace allowed to use `unsafe` (the
+/// workspace lints deny it everywhere else). `std::env::set_var` is unsafe
+/// since edition 2024 because another thread could be reading the
+/// environment through libc at the same moment. Tests only set `QRY_TEST_*`
+/// names that no other code reads, and std serialises its own environment
+/// access, so a concurrent read can only come from a C library, which the
+/// unit tests do not call while setting these.
+#[cfg(test)]
+#[allow(unsafe_code, reason = "edition 2024 makes set_var unsafe; see above")]
+pub(crate) fn set_test_var(name: &str, value: &str) {
+    debug_assert!(
+        name.starts_with("QRY_TEST_"),
+        "test variables are QRY_TEST_*"
+    );
+    // SAFETY: see the function documentation.
+    unsafe { std::env::set_var(name, value) };
+}
+
 /// Takes what the prompt left, if anything.
-pub fn take_stash() -> Option<Password> {
+pub(crate) fn take_stash() -> Option<Password> {
     STASH.lock().ok().and_then(|mut held| held.take())
 }
 
 /// Stores a password in the OS keychain under a connection's id. Blocking:
 /// call it from `spawn_blocking`.
-pub fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
+pub(crate) fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
     let entry = keyring::Entry::new(SERVICE, id)?;
     entry.set_password(password.as_str())?;
     Ok(())
@@ -73,7 +93,7 @@ pub fn store(id: &str, password: &Password) -> color_eyre::Result<()> {
 /// Reads a connection's password from the OS keychain. `Ok(None)` means the
 /// keychain works but has no entry; an error means it could not be reached,
 /// which is the cue to prompt instead.
-pub fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
+pub(crate) fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
     let entry = keyring::Entry::new(SERVICE, id)?;
     match entry.get_password() {
         Ok(password) => Ok(Some(Password::new(password))),
@@ -84,7 +104,7 @@ pub fn fetch(id: &str) -> color_eyre::Result<Option<Password>> {
 
 /// Removes a connection's password. A missing entry is not an error: the end
 /// state is the same.
-pub fn delete(id: &str) -> color_eyre::Result<()> {
+pub(crate) fn delete(id: &str) -> color_eyre::Result<()> {
     let entry = keyring::Entry::new(SERVICE, id)?;
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -93,7 +113,7 @@ pub fn delete(id: &str) -> color_eyre::Result<()> {
 }
 
 /// A password from a named environment variable, if it is set and not empty.
-pub fn from_env(var: &str) -> Option<Password> {
+pub(crate) fn from_env(var: &str) -> Option<Password> {
     match std::env::var(var) {
         Ok(value) if !value.is_empty() => Some(Password::new(value)),
         _ => None,
@@ -102,7 +122,7 @@ pub fn from_env(var: &str) -> Option<Password> {
 
 /// Replaces the password in anything that looks like a DSN, so an error or a
 /// status message cannot carry one to the screen or the log.
-pub fn redact(message: &str) -> String {
+pub(crate) fn redact(message: &str) -> String {
     let mut out = String::with_capacity(message.len());
     let mut rest = message;
 

@@ -42,8 +42,7 @@ async fn named_connection_shows_its_name() {
 async fn a_password_in_the_environment_is_used_without_asking() {
     let _guard = secrets::test_lock();
     let _ = secrets::take_stash();
-    // SAFETY: the name belongs to this test.
-    unsafe { std::env::set_var("QRY_TEST_DB_PASSWORD", "hunter2") };
+    secrets::set_test_var("QRY_TEST_DB_PASSWORD", "hunter2");
 
     let (action_tx, mut action_rx) = mpsc::unbounded_channel();
     let db = spawn(action_tx);

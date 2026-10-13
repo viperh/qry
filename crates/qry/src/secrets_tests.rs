@@ -25,11 +25,8 @@ fn the_stash_hands_a_password_over_once() {
 
 #[test]
 fn an_environment_variable_is_read_only_when_it_has_a_value() {
-    // SAFETY: single-threaded within this test, and the names are its own.
-    unsafe {
-        std::env::set_var("QRY_TEST_PASSWORD", "hunter2");
-        std::env::set_var("QRY_TEST_EMPTY", "");
-    }
+    set_test_var("QRY_TEST_PASSWORD", "hunter2");
+    set_test_var("QRY_TEST_EMPTY", "");
     assert_eq!(
         from_env("QRY_TEST_PASSWORD").map(|p| p.as_str().to_string()),
         Some("hunter2".into())
