@@ -119,7 +119,14 @@ fn the_defaults_are_the_documented_ones() {
         assert_eq!(at(K::Editor, raw), None, "{raw}");
         assert_eq!(at(K::Global, raw), None, "{raw}");
     }
-    // Passed through to a dialog's field.
+    // F1 and ctrl-p work in every context but a dialog, which passes
+    // ctrl-p through to its field.
+    for context in [K::Global, K::Dialog, K::Help, K::Palette] {
+        assert_eq!(at(context, "F1"), Some(A::Help), "{context}");
+    }
+    for context in [K::Global, K::Help, K::Palette] {
+        assert_eq!(at(context, "ctrl-p"), Some(A::Palette), "{context}");
+    }
     assert_eq!(at(K::Dialog, "ctrl-p"), None);
 }
 

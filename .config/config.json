@@ -154,7 +154,8 @@
       "<G>": "Bottom"
     },
     // A dialog's text field types plain characters even where they are
-    // bound, so Space types a space there.
+    // bound, so Space types a space there. ctrl-p is left unbound, so it
+    // goes to the field.
     "Dialog": {
       "<enter>": "Submit",
       "<esc>": "Cancel",
@@ -183,6 +184,7 @@
       "<?>": "Help",
       "<f1>": "Help",
       "<esc>": "Cancel",
+      "<ctrl-p>": "Palette",
       "<ctrl-q>": "Quit"
     },
     "Palette": {

@@ -145,6 +145,7 @@ expression: "Config::embedded().effective_json()"
       "ctrl-q": "Quit",
       "?": "Help",
       "F1": "Help",
+      "ctrl-p": "Palette",
       "k": "Up",
       "↑": "Up",
       "j": "Down",
