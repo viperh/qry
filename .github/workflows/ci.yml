@@ -1,26 +1,33 @@
 name: CI # Continuous Integration
 
+# Modelled on sverb's ci.yml (tasks/T003-ci-pipeline.md). Every cargo
+# invocation uses --locked; only fmt and fuzz cannot take it.
+
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  # Secrets go to an in-memory map instead of the OS keyring (no keyring
+  # daemon on the runners).
+  QRY_KEYRING: "off"
 
 jobs:
 
-  test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --locked --all-features --workspace
-
-  rustfmt:
+  fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -40,13 +47,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # vergen-gix (crates/qry/build.rs) reads git history
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy check
-        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: Clippy (all features)
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Clippy (no default features)
+        run: cargo clippy --workspace --all-targets --no-default-features --locked -- -D warnings
 
   docs:
     name: Docs
@@ -54,10 +65,262 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps --document-private-items --all-features --workspace
+        run: cargo doc --no-deps --document-private-items --all-features --workspace --locked
+
+  # Unit tests, SQLite integration tests and snapshots. Real-server database
+  # tests (T004) skip here: their URLs are unset, and QRY_DB_TESTS=skip tells
+  # `db_or_skip!` that skipping is intended, because otherwise it panics
+  # under CI. The `db` job runs them.
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    env:
+      QRY_DB_TESTS: skip
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        env: # `runner` is only available at step level
+          QRY_CONFIG: ${{ runner.temp }}/qry/config
+          QRY_DATA: ${{ runner.temp }}/qry/data
+        run: cargo test --workspace --all-features --locked
+
+  # Database drivers against real servers. T004 adds the mysql, mariadb and
+  # oracle services and narrows the run to the `db_*` test targets; until
+  # then this is postgres plus the existing qry-core tests.
+  db:
+    name: Database (services)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qry
+          POSTGRES_PASSWORD: qry
+          POSTGRES_DB: qry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      QRY_TEST_POSTGRES_URL: postgres://qry:qry@localhost:5432/qry
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run qry-core tests
+        run: cargo test -p qry-core --all-features --locked
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install stable toolchain (to read the MSRV)
+        uses: dtolnay/rust-toolchain@stable
+      # The MSRV lives only in `[workspace.package] rust-version`; read it from there.
+      - name: Read rust-version
+        id: msrv
+        run: |
+          msrv="$(cargo metadata --no-deps --format-version 1 --locked \
+            | jq -r '[.packages[].rust_version // empty] | unique
+                     | if length == 1 then .[0]
+                       else error("workspace crates disagree on rust-version: \(.)") end')"
+          echo "MSRV is $msrv"
+          echo "version=$msrv" >> "$GITHUB_OUTPUT"
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ steps.msrv.outputs.version }}
+      # `+toolchain` overrides rust-toolchain.toml (channel = "stable").
+      - name: Check on MSRV
+        run: cargo +${{ steps.msrv.outputs.version }} check --workspace --all-features --locked
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # The action passes `arguments` before `command`, which is the order
+      # cargo-deny 0.20 needs for --all-features.
+      - name: Check advisories, bans, licenses and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+          arguments: --all-features --locked
+
+  # qry-core must never depend on a UI crate, and nothing may depend on the
+  # binary. deny.toml bans the same crates; these are two more, independent
+  # implementations of the rule.
+  layering:
+    name: Crate layering
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Workspace metadata and layering test
+        run: cargo test -p qry --test workspace_metadata --locked
+      - name: Layering script self-test
+        run: python3 scripts/check-layering.py --self-test
+      - name: Check dependency direction (script)
+        run: python3 scripts/check-layering.py
+
+  # Every fuzz target for 30 s. The targets arrive with T005; until fuzz/
+  # exists the job only checks out and reports the skip. (`hashFiles` is
+  # not available in a job-level `if`, so the gate is a step.) The nightly
+  # runs are T005's fuzz.yml.
+  fuzz-smoke:
+    name: Fuzz (30 s per target)
+    runs-on: ubuntu-latest
+    env:
+      # Overrides rust-toolchain.toml (channel = "stable"); cargo-fuzz needs nightly.
+      RUSTUP_TOOLCHAIN: nightly
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # in case a target links qry (vergen-gix)
+      - name: Look for fuzz targets
+        id: fuzz
+        run: |
+          if [ -f fuzz/Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::fuzz/Cargo.toml does not exist yet (T005); skipping"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install nightly toolchain
+        if: steps.fuzz.outputs.present == 'true'
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        if: steps.fuzz.outputs.present == 'true'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        if: steps.fuzz.outputs.present == 'true'
+        with:
+          workspaces: fuzz
+      - name: Build every target
+        if: steps.fuzz.outputs.present == 'true'
+        run: cargo fuzz build
+      - name: Run every target for 30 s
+        if: steps.fuzz.outputs.present == 'true'
+        run: |
+          status=0
+          for target in $(cargo fuzz list); do
+            echo "::group::$target"
+            mkdir -p "fuzz/corpus/$target"
+            if ! cargo fuzz run "$target" "fuzz/corpus/$target" -- \
+                 -max_total_time=30 -rss_limit_mb=2048 -timeout=10; then
+              echo "::error::fuzz target $target crashed"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
+      - name: Upload crashes
+        if: failure() && steps.fuzz.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  # Benchmarks must compile. T006 adds the criterion benches and
+  # scripts/bench-gate.py; the self-test step runs once that script exists.
+  bench-build:
+    name: Benchmarks compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build benchmarks
+        run: cargo bench --workspace --no-run --locked
+      - name: Gate script self-test
+        if: hashFiles('scripts/bench-gate.py') != ''
+        run: python3 scripts/bench-gate.py self-test
+
+  # The one non-Linux job: keeps the winresource build script and the
+  # cfg(not(windows)) signal-hook code honest. CD covers macOS.
+  windows-build:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+      # Snapshots and fixtures are compared byte for byte; keep LF endings.
+      - name: Disable CRLF conversion
+        run: git config --global core.autocrlf false
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build -p qry --locked
+      - name: Unit tests
+        run: cargo test -p qry --locked --lib
+
+  # The only required status check in branch protection. It needs every
+  # other job, so a job added later is covered here and needs no settings
+  # change: add it to `needs`. `always()` makes it run (and fail) when a
+  # needed job failed or was cancelled; a skipped job counts as passing.
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - fmt
+      - clippy
+      - docs
+      - test
+      - db
+      - msrv
+      - deny
+      - layering
+      - fuzz-smoke
+      - bench-build
+      - windows-build
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
