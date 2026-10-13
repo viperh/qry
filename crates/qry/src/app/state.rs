@@ -23,6 +23,7 @@ use crate::{
     config::Config,
     connections::{Driver, Secret, StoredConnection},
     keymap::KeyContext,
+    notice::{NoticeLog, TimeOfDay, Toasts},
     theme::{Pill, Theme},
 };
 
@@ -279,15 +280,6 @@ impl Default for Chrome {
     }
 }
 
-/// The status bar's line.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum StatusCode {
-    #[default]
-    None,
-    Success(String),
-    Error(String),
-}
-
 /// The pane the keys go to while nothing is on top of the panes.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Focus {
@@ -330,6 +322,18 @@ impl Focus {
 pub(crate) enum Overlay {
     Dialog(DialogState),
     Help(HelpState),
+    Messages(MessagesState),
+}
+
+/// The Messages dialog: which entry of the history, newest first, is
+/// selected.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct MessagesState {
+    pub(crate) selected: usize,
+    /// First line in view; kept by the view.
+    pub(crate) scroll: Cell<usize>,
+    /// Lines that fit, from the last draw, for PageUp/PageDown.
+    pub(crate) page: Cell<usize>,
 }
 
 /// An answer a modal is waiting for, so a late one meant for a modal that has
@@ -393,7 +397,12 @@ pub struct State {
     /// first.
     pub(crate) password_queue: Vec<PasswordRequest>,
     pub(crate) tree: TreeState,
-    pub(crate) status: StatusCode,
+    /// The toast on screen and those waiting.
+    pub(crate) toasts: Toasts,
+    /// Every notice so far, for the Messages dialog.
+    pub(crate) messages: NoticeLog,
+    /// The wall-clock time of day, from the last `UiEvent::Clock`.
+    pub(crate) clock: TimeOfDay,
     /// The start of a multi-key binding typed so far, normalised.
     pub(crate) pending_keys: Vec<KeyEvent>,
     /// Which `Timer::KeySequence` is the live one: each key that leaves a
@@ -422,7 +431,9 @@ impl Default for State {
             sessions: Sessions::default(),
             password_queue: Vec::new(),
             tree: TreeState::default(),
-            status: StatusCode::default(),
+            toasts: Toasts::default(),
+            messages: NoticeLog::default(),
+            clock: TimeOfDay::default(),
             pending_keys: Vec::new(),
             key_timer: 0,
             spinner: 0,
@@ -476,21 +487,21 @@ impl State {
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) => None,
         })
     }
 
     pub(crate) fn dialog_mut(&mut self) -> Option<&mut DialogState> {
         self.overlays.iter_mut().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) => None,
         })
     }
 
     pub(crate) fn help(&self) -> Option<&HelpState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Help(help) => Some(help),
-            Overlay::Dialog(_) => None,
+            Overlay::Dialog(_) | Overlay::Messages(_) => None,
         })
     }
 
@@ -510,7 +521,8 @@ impl State {
     /// overlay's alone, or the focused pane's and then `Global`.
     pub fn contexts(&self) -> Vec<KeyContext> {
         match self.overlays.last() {
-            Some(Overlay::Help(_)) => vec![KeyContext::Help],
+            // The Messages dialog scrolls and closes with the help's keys.
+            Some(Overlay::Help(_) | Overlay::Messages(_)) => vec![KeyContext::Help],
             Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
             None => vec![self.focus.context(), KeyContext::Global],
         }
@@ -521,7 +533,7 @@ impl State {
     /// the pill of what is underneath.
     pub fn pill(&self) -> Pill {
         let overlays = self.overlays.iter().rev().map(|overlay| match overlay {
-            Overlay::Help(_) => KeyContext::Help,
+            Overlay::Help(_) | Overlay::Messages(_) => KeyContext::Help,
             Overlay::Dialog(_) => KeyContext::Dialog,
         });
         overlays

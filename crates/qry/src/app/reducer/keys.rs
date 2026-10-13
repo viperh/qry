@@ -107,8 +107,8 @@ fn typing_into_dialog(state: &State, key: KeyEvent) -> bool {
             .is_some_and(|dialog| dialog.form().is_typing())
 }
 
-/// A key bound to nothing: the editor types it, and a confirm dialog takes
-/// `y` and `n`. (A dialog's text field took its characters before the
+/// A key bound to nothing: the editor types it, a confirm dialog takes
+/// `y` and `n`, and the Messages dialog `y` and `c`. (A dialog's text field took its characters before the
 /// lookup.)
 fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<Effect>) {
     let Some(c) = typed_char(key) else {
@@ -117,6 +117,7 @@ fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<E
     match context {
         KeyContext::Editor => state.editor_mut().textarea.insert_char(c),
         KeyContext::Dialog => _ = super::dialogs::confirm_shortcut(state, c, fx),
+        KeyContext::Help => _ = super::notices::shortcut(state, c, fx),
         _ => {}
     }
 }

@@ -98,7 +98,7 @@ fn db_answer() -> impl Strategy<Value = DbAnswer> {
             "orders".into()
         ])),
         Just(DbAnswer::TablesFailed("connection lost".into())),
-        Just(DbAnswer::Status(StatusCode::Error("e".into()))),
+        Just(DbAnswer::Notice(crate::notice::Notice::error("e"))),
         Just(DbAnswer::WorkerStopped),
     ]
 }

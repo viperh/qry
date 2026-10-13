@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/messages_tests.rs
+expression: "h.render(80, 24)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+      No connections yet      │ 1                                               
+                              │                                                 
+    ┌ Messages ────────────────────────────────────────────────────────────┐    
+    │ 12:04:31  ✗ cannot save connections: permission denied (os error 13) │    
+    │             while writing /home/u/.local/share/qry/connections.json  │    
+    │ 12:03:58  ✓ Connected to app@db.local:5432/app                       │    
+    │ 12:03:40  ✓ Exported 3 connections to /home/u/qry-backup.json        │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    │                                                                      │    
+    └─j/k scroll  y copy  c clear  Esc close ──────────────────────────────┘    
+                              │                                                 
+                              │                                                 
+ connecting to scratch… · sqlite · :memory:                                     
+ j scroll  Esc close                                                     ? help

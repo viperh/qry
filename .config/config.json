@@ -42,6 +42,9 @@
       // ctrl-z suspends, so maximising is F11.
       "<f11>": "ToggleMaximise",
       "<ctrl-/>": "ToggleHints",
+      "<ctrl-l>": "ShowMessages",
+      // Only when nothing else takes Esc: the panes leave it unbound.
+      "<esc>": "DismissToast",
       "<ctrl-z>": "Suspend"
     },
     "Tree": {

@@ -29,7 +29,9 @@ expression: "Config::embedded().effective_json()"
       "ctrl-/": "ToggleHints",
       "ctrl-↑": "GrowEditor",
       "ctrl-↓": "ShrinkEditor",
-      "F11": "ToggleMaximise"
+      "F11": "ToggleMaximise",
+      "ctrl-l": "ShowMessages",
+      "Esc": "DismissToast"
     },
     "Tree": {
       "?": "Help",

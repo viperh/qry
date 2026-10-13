@@ -9,6 +9,7 @@ mod files;
 pub(crate) mod help;
 mod keys;
 mod mouse;
+pub(crate) mod notices;
 mod results;
 mod sessions;
 mod tree;
@@ -22,14 +23,17 @@ use crate::{action::Action, connections::StoredConnection, db::DbCommand, keymap
 
 pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     let mut fx = Vec::new();
-    // Nothing reacts to a tick yet.
-    state.dirty |= !matches!(event, UiEvent::Tick(_));
+    // Nothing on screen follows the tick or the clock.
+    state.dirty |= !matches!(event, UiEvent::Tick(_) | UiEvent::Clock(_));
     match event {
         UiEvent::Started => start(state, &mut fx),
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Resize(w, h) => state.size = (w, h),
         UiEvent::Tick(_) => {}
+        UiEvent::Clock(now) => state.clock = now,
+        UiEvent::Notice(notice) => notices::notify(state, notice, &mut fx),
+        UiEvent::Timer(Timer::Toast(n)) => notices::expired(state, n, &mut fx),
         UiEvent::Timer(Timer::KeySequence(n)) => keys::timed_out(state, n, &mut fx),
         UiEvent::Timer(Timer::Spinner(n)) => dialogs::spin(state, n, &mut fx),
         // A closed session's worker may still answer; nobody is listening.
@@ -67,7 +71,11 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             }
         }
         Action::ClearScreen => fx.push(Effect::ClearScreen),
+        Action::Help if notices::showing_messages(state) => notices::act(state, action),
         Action::Help => help::toggle(state),
+        Action::ShowMessages if notices::showing_messages(state) => notices::act(state, action),
+        Action::ShowMessages => notices::show_messages(state),
+        Action::DismissToast => notices::dismiss(state, fx),
         Action::FocusNext => state.focus = state.focus.next(),
         Action::FocusPrev => state.focus = state.focus.prev(),
         Action::FocusTree => state.focus = Focus::Tree,
@@ -93,6 +101,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Editor => editor::run(state, action, fx),
             KeyContext::Results => results::run(state, action),
             KeyContext::Dialog => dialogs::act(state, action, fx),
+            KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
             KeyContext::Help => help::act(state, action),
             KeyContext::Global | KeyContext::Inspector | KeyContext::Palette | KeyContext::Jobs => {
             }

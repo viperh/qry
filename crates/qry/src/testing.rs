@@ -296,7 +296,8 @@ impl AppHarness {
     }
 
     /// Returns and clears the effects recorded so far. A waiting dialog's
-    /// spinner timers are delivered on the virtual clock but not recorded.
+    /// spinner timers and the toasts' lifetimes are delivered on the
+    /// virtual clock but not recorded.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
     }
@@ -333,9 +334,10 @@ impl AppHarness {
                             due: self.now.saturating_add(after),
                             events: vec![UiEvent::Timer(*timer)],
                         });
-                        // A spinner's frames are pacing, not something a
-                        // test asks for: delivered, but not recorded.
-                        if matches!(timer, Timer::Spinner(_)) {
+                        // A spinner's frames and a toast's lifetime are
+                        // pacing, not something a test asks for: delivered,
+                        // but not recorded.
+                        if matches!(timer, Timer::Spinner(_) | Timer::Toast(_)) {
                             continue;
                         }
                     }

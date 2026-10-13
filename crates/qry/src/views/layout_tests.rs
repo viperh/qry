@@ -150,8 +150,14 @@ fn jobs_drawer_and_hints_take_rows_from_the_body() {
     assert_eq!(screen.jobs.unwrap().height, 4);
     assert_eq!(screen.jobs.unwrap().bottom(), screen.status.y);
     assert_eq!(screen.tree.height, base.tree.height - 4);
-    // The toast sits on the last body row.
-    assert_eq!(screen.toast.y, screen.tree.bottom() - 1);
+    // The toast sits on the drawer's last row while it is open, and on
+    // the results' last row otherwise.
+    assert_eq!(screen.toast.y, screen.status.y - 1);
+    assert_eq!(base.toast.y, base.results.bottom() - 1);
+    assert_eq!(
+        (base.toast.x, base.toast.width),
+        (base.results.x, base.results.width)
+    );
 }
 
 #[test]

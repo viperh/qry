@@ -54,6 +54,8 @@ pub enum Effect {
         timer: Timer,
         after: Duration,
     },
+    /// Put this text on the system clipboard, through the terminal (OSC 52).
+    CopyToClipboard(String),
     /// Redraw the whole terminal.
     ClearScreen,
     Suspend,

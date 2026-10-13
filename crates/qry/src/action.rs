@@ -72,6 +72,10 @@ pub enum Action {
     ShrinkEditor,
     /// Maximises the focused right-hand region, or restores the split.
     ToggleMaximise,
+    /// Opens the Messages dialog: every notice so far.
+    ShowMessages,
+    /// Takes the toast away before its time.
+    DismissToast,
 
     Cancel,
     Submit,
@@ -159,6 +163,8 @@ impl Action {
             Self::GrowEditor => "Grow the editor",
             Self::ShrinkEditor => "Shrink the editor",
             Self::ToggleMaximise => "Maximise the pane / restore",
+            Self::ShowMessages => "Show the messages",
+            Self::DismissToast => "Dismiss the message",
             Self::Cancel => "Cancel / close",
             Self::Submit => "Submit",
             Self::NextField => "Next field",

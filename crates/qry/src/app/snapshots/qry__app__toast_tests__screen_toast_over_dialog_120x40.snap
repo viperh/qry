@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/toast_tests.rs
+expression: text
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+ ▸ ◌ scratch                  │ 1                                                                                       
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                        ┌ New Connection ──────────────────────────────────────────────────────┐                        
+                        │ › Name                                                               │                        
+                        │   Type         ‹ PostgreSQL ›                                        │                        
+                        │   Host                                                               │                        
+                        │   Port                                                               │                        
+                        │   User                                                               │                        
+                        │   Password                                                           │                        
+                        │   Database                                                           │                        
+                        │   Schema                                                             │                        
+                        │   SSL mode     ‹ prefer ›                                            │                        
+                        │   Wallet       Oracle only: folder with ewallet.pem                  │                        
+                        │   Password in  ‹ KEYCHAIN ›                                          │                        
+                        │                                                                      │                        
+                        │ Enter connect · Esc cancel · Tab next                                │                        
+                        └──────────────────────────────────────────────────────────────────────┘                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ ✗ cannot save connections: permission denied (os error 13)                              
+ connecting to scratch… · sqlite · :memory:                                                                             
+ Enter submit  Tab next field  Esc cancel                                                                       F1 help

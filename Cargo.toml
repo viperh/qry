@@ -59,6 +59,8 @@ clap = { version = "4.6.1", features = [
 config = "0.15.25"
 directories = "6.0.0"
 json5 = "1.3.1"
+# The local time of day for the message history; already in the tree through oracledb.
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 
 # --- errors / diagnostics ---

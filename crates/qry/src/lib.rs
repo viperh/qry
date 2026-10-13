@@ -25,6 +25,7 @@ pub mod errors;
 pub mod import;
 pub mod keymap;
 pub mod logging;
+pub mod notice;
 pub mod runtime;
 pub mod secrets;
 pub mod sessions;

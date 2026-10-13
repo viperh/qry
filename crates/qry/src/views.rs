@@ -8,12 +8,14 @@ pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
 pub(crate) mod layout;
+pub(crate) mod messages;
 pub(crate) mod overlay;
 pub(crate) mod pane_title;
 pub(crate) mod results;
 pub(crate) mod status_line;
 #[cfg(test)]
 mod swatch;
+pub(crate) mod toast;
 pub(crate) mod top_bar;
 pub(crate) mod tree;
 
@@ -88,6 +90,8 @@ pub fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
     }
 
     draw_overlays(state, theme, frame, area);
+    // Last, so it shows over any overlay.
+    toast::draw(state, theme, frame, screen.toast);
 }
 
 /// The open overlays over a dimmed screen, the last one on top.
@@ -110,6 +114,7 @@ fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
                 area,
             ),
             Overlay::Help(help) => help::draw(help, theme, frame, area),
+            Overlay::Messages(messages) => messages::draw(messages, state, theme, frame, area),
         }
     }
 }

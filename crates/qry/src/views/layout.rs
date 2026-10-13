@@ -69,8 +69,9 @@ pub(crate) struct ScreenLayout {
     pub jobs: Option<Rect>,
     pub status: Rect,
     pub hints: Option<Rect>,
-    /// The last row of the body, where a toast is drawn over whatever is
-    /// there, so the layout never jumps.
+    /// Where a toast is drawn over whatever is there, so the layout never
+    /// jumps: the last row of the right-hand side, or of the jobs drawer
+    /// when it is open.
     pub toast: Rect,
 }
 
@@ -183,7 +184,12 @@ pub(crate) fn compute_layout(input: &LayoutInput) -> Option<ScreenLayout> {
         jobs,
         status,
         hints,
-        toast: Rect::new(body.x, body.bottom() - 1, body.width, 1),
+        toast: Rect::new(
+            right.x,
+            jobs.map_or(body.bottom(), |jobs| jobs.bottom()) - 1,
+            right.width,
+            1,
+        ),
     })
 }
 

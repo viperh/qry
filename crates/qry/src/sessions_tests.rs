@@ -22,7 +22,7 @@ fn memory(name: &str) -> StoredConnection {
 async fn next(answers: &mut UnboundedReceiver<(SessionId, DbAnswer)>, id: SessionId) -> DbAnswer {
     loop {
         let (from, answer) = answers.recv().await.expect("a worker answers");
-        if !matches!(answer, DbAnswer::Status(_)) {
+        if !matches!(answer, DbAnswer::Notice(_)) {
             assert_eq!(from, id, "an answer from the wrong session: {answer:?}");
             return answer;
         }

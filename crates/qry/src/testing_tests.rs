@@ -158,8 +158,11 @@ fn a_fake_database_answers_queries_on_the_virtual_clock() {
     h.advance(500);
     let text = h.render(80, 24);
     assert!(text.contains("r1c1"), "{text}");
-    // The second answer waited for the first, as the worker runs in order.
-    assert!(text.contains("no such table: nope"), "{text}");
+    // The second answer waited for the first, as the worker runs in order;
+    // its toast waits behind the first one's.
+    assert!(text.contains("(+1)"), "{text}");
+    h.advance(4000);
+    assert!(h.render(80, 24).contains("no such table: nope"));
     assert_eq!(h.take_effects().len(), 2);
 }
 

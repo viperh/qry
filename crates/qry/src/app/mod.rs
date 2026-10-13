@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub use self::{
     effects::Effect,
     event::{DbAnswer, FileAnswer, Timer, UiEvent},
-    state::{SessionId, SessionStatus, State, StatusCode},
+    state::{SessionId, SessionStatus, State},
 };
 use crate::{config::Config, theme::Theme};
 
@@ -94,6 +94,10 @@ mod screen_tests;
 #[cfg(test)]
 #[path = "sessions_tests.rs"]
 mod sessions_tests;
+
+#[cfg(test)]
+#[path = "toast_tests.rs"]
+mod toast_tests;
 
 #[cfg(test)]
 #[path = "purity_tests.rs"]

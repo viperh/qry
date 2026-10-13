@@ -12,11 +12,9 @@ use qry_core::{Driver, ExportConfig, Exporter, QueryResult};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::{
-    app::{
-        event::DbAnswer,
-        state::{SessionId, StatusCode},
-    },
+    app::{event::DbAnswer, state::SessionId},
     connections::{Secret, StoredConnection},
+    notice::Notice,
     secrets::{self, Password},
 };
 
@@ -263,11 +261,11 @@ fn took(elapsed: Duration) -> String {
 }
 
 fn success(message: String) -> DbAnswer {
-    DbAnswer::Status(StatusCode::Success(message))
+    DbAnswer::Notice(Notice::success(message))
 }
 
 fn error(message: String) -> DbAnswer {
-    DbAnswer::Status(StatusCode::Error(message))
+    DbAnswer::Notice(Notice::error(message))
 }
 
 /// A connection that did not open: the short message for the modal, the whole

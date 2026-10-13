@@ -8,8 +8,12 @@ use std::{sync::Arc, time::Instant};
 use crossterm::event::{KeyEvent, MouseEvent};
 use qry_core::QueryResult;
 
-use super::state::{SessionId, StatusCode};
-use crate::{connections::StoredConnection, import::Imported};
+use super::state::SessionId;
+use crate::{
+    connections::StoredConnection,
+    import::Imported,
+    notice::{Notice, TimeOfDay},
+};
 
 /// An event delivered to [`App::handle`](super::App::handle).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +27,12 @@ pub enum UiEvent {
     Resize(u16, u16),
     /// The tick-rate timer, at the moment the runtime saw it.
     Tick(Instant),
+    /// The wall-clock time of day, sent as it changes, for the timestamps
+    /// of the message history.
+    Clock(TimeOfDay),
+    /// Something the runtime has to tell the user, such as a keychain that
+    /// would not forget a password. It is logged too.
+    Notice(Notice),
     /// A timer the reducer asked for with `Effect::ScheduleTimer` ran out.
     Timer(Timer),
     /// A session's database worker answered.
@@ -41,6 +51,9 @@ pub enum Timer {
     /// The next frame of a waiting dialog's spinner, numbered as
     /// `State::spinner_timer` counts them.
     Spinner(u64),
+    /// The visible toast's lifetime ran out, numbered as `Toasts` counts
+    /// its timers.
+    Toast(u64),
 }
 
 /// The outcome of an effect that reads or writes a file.
@@ -94,8 +107,8 @@ pub enum DbAnswer {
     /// The tables of whatever is connected, for the tree.
     TablesLoaded(Vec<String>),
     TablesFailed(String),
-    /// A line for the status bar.
-    Status(StatusCode),
+    /// Something to tell the user, as a toast and in the history.
+    Notice(Notice),
     /// The worker has gone, so nothing sent to it will be answered.
     WorkerStopped,
 }
@@ -124,7 +137,7 @@ impl std::fmt::Debug for DbAnswer {
             Self::ExportFailed(message) => f.debug_tuple("ExportFailed").field(message).finish(),
             Self::TablesLoaded(tables) => f.debug_tuple("TablesLoaded").field(tables).finish(),
             Self::TablesFailed(message) => f.debug_tuple("TablesFailed").field(message).finish(),
-            Self::Status(status) => f.debug_tuple("Status").field(status).finish(),
+            Self::Notice(notice) => f.debug_tuple("Notice").field(notice).finish(),
             Self::WorkerStopped => f.write_str("WorkerStopped"),
         }
     }

@@ -7,11 +7,12 @@ use crate::{
     app::{
         dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
-        state::{Awaiting, Node, Row, SessionId, SessionStatus, State, StatusCode},
+        state::{Awaiting, Node, Row, SessionId, SessionStatus, State},
     },
     connections::{Secret, StoredConnection},
     db::DbCommand,
     import::Imported,
+    notice::Notice,
 };
 
 /// Remembers a connection the app is about to open, adding it to the tree if
@@ -72,11 +73,12 @@ pub(super) fn import(state: &mut State, imported: Imported, fx: &mut Vec<Effect>
     }
     parts.extend(imported.warnings);
     let message = parts.join("; ");
-    state.status = if imported.skipped.is_empty() {
-        StatusCode::Success(message)
+    let notice = if imported.skipped.is_empty() {
+        Notice::success(message)
     } else {
-        StatusCode::Error(message)
+        Notice::warning(message)
     };
+    super::notices::notify(state, notice, fx);
 }
 
 /// The records worth writing: everything but the scratch database.

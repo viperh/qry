@@ -29,7 +29,6 @@ fn prod() -> AppHarness {
     h.state_mut().tree.selected = 1;
     h.keys("enter");
     h.db(DbAnswer::Connected("app@db.local:5432/app".into()));
-    h.state_mut().status = StatusCode::None;
     h
 }
 
@@ -94,18 +93,6 @@ fn in_transaction_is_coral() {
     h.keys("f8");
     h.db(DbAnswer::QueryDone(Arc::new(grid(0, 0))));
     assert!(line(&h, 80).contains("auto-commit"));
-}
-
-#[test]
-fn a_message_takes_the_room_of_the_items() {
-    let mut h = prod();
-    h.state_mut().status = StatusCode::Success("Exported 1 connection to /tmp/b.json".into());
-    let text = line(&h, 80);
-    assert!(
-        text.contains("Exported 1 connection to /tmp/b.json"),
-        "{text}"
-    );
-    assert!(text.starts_with(" prod"), "{text}");
 }
 
 #[test]

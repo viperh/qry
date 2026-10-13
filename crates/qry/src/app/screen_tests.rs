@@ -25,7 +25,6 @@ fn screen() -> AppHarness {
         &["id", "name"],
         &[&[Some("1"), Some("alice")], &[Some("2"), None]],
     ))));
-    h.state_mut().status = StatusCode::None;
     h.keys("shift-tab");
     h
 }

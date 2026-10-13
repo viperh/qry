@@ -9,6 +9,7 @@ use qry_core::{
 
 use super::*;
 use crate::connections::Driver as StoredDriver;
+use crate::notice::Level;
 
 /// A SQLite connection that needs no password.
 fn sqlite(name: &str, path: &str) -> StoredConnection {
@@ -135,7 +136,10 @@ async fn a_failed_connection_is_reported_for_the_modal_and_the_status_bar() {
     assert!(!message.is_empty());
     assert!(matches!(
         answers.recv().await,
-        Some(DbAnswer::Status(StatusCode::Error(_)))
+        Some(DbAnswer::Notice(Notice {
+            level: Level::Error,
+            ..
+        }))
     ));
 }
 
@@ -157,7 +161,11 @@ async fn query_result_comes_back_as_db_answers() {
         panic!("expected QueryDone");
     };
     assert_eq!(result.columns, ["one"]);
-    let Some(DbAnswer::Status(StatusCode::Success(message))) = answers.recv().await else {
+    let Some(DbAnswer::Notice(Notice {
+        level: Level::Success,
+        text: message,
+    })) = answers.recv().await
+    else {
         panic!("expected a status message");
     };
     assert!(message.starts_with("Fetched 1 row in "), "{message}");
@@ -190,7 +198,10 @@ async fn failures_become_error_status() {
     ));
     assert!(matches!(
         answers.recv().await,
-        Some(DbAnswer::Status(StatusCode::Error(_)))
+        Some(DbAnswer::Notice(Notice {
+            level: Level::Error,
+            ..
+        }))
     ));
 }
 

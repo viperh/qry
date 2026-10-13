@@ -180,6 +180,8 @@ fn exporting_connections_waits_for_the_file() {
         count: 1,
     });
     assert_eq!(h.dialog_title(), None);
+    // Its toast shows once the failure's has had its 8 s.
+    h.advance(8000);
     assert!(
         h.render(80, 24)
             .contains("Exported 1 connection to /tmp/b.json")
@@ -454,12 +456,12 @@ fn help_opens_scrolls_and_closes_with_configured_keys() {
 }
 
 #[test]
-fn a_status_answer_reaches_the_status_bar() {
+fn a_notice_answer_becomes_a_toast() {
     let mut h = harness();
-    assert_eq!(h.state().status, StatusCode::None);
-    h.db(DbAnswer::Status(StatusCode::Error("e".into())));
-    assert_eq!(h.state().status, StatusCode::Error("e".into()));
-    assert!(h.render(80, 24).contains("Error: e"));
+    assert!(h.state().toasts.visible().is_none());
+    h.db(DbAnswer::Notice(crate::notice::Notice::error("e")));
+    assert_eq!(h.state().toasts.visible().unwrap().0.notice.text, "e");
+    assert!(h.render(80, 24).contains("✗ e"));
 }
 
 #[test]

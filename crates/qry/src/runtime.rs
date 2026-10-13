@@ -21,6 +21,7 @@ use crate::{
     connections::{self, StoredConnection},
     db::Answers,
     import::Format,
+    notice::{Notice, TimeOfDay},
     secrets,
     sessions::SessionManager,
     theme::{self, ColorSupport},
@@ -82,7 +83,11 @@ impl Runtime {
         // The layout depends on the size, which only a resize reports
         // after this.
         let size = tui.terminal.size()?;
-        let mut queued = vec![UiEvent::Resize(size.width, size.height)];
+        let mut clock = time_of_day();
+        let mut queued = vec![
+            UiEvent::Clock(clock),
+            UiEvent::Resize(size.width, size.height),
+        ];
         let mut next = Some(UiEvent::Started);
         loop {
             let event = match next.take().or_else(|| queued.pop()) {
@@ -104,7 +109,14 @@ impl Runtime {
                         Incoming::Answer(id, answer) => UiEvent::Db(id, answer),
                         Incoming::Terminal(Some(Event::Key(key))) => UiEvent::Key(key),
                         Incoming::Terminal(Some(Event::Mouse(mouse))) => UiEvent::Mouse(mouse),
-                        Incoming::Terminal(Some(Event::Tick)) => UiEvent::Tick(Instant::now()),
+                        Incoming::Terminal(Some(Event::Tick)) => {
+                            let now = time_of_day();
+                            if now != clock {
+                                clock = now;
+                                queued.push(UiEvent::Clock(now));
+                            }
+                            UiEvent::Tick(Instant::now())
+                        }
                         Incoming::Terminal(Some(Event::Resize(w, h))) => {
                             tui.resize(Rect::new(0, 0, w, h))?;
                             UiEvent::Resize(w, h)
@@ -124,6 +136,9 @@ impl Runtime {
                 debug!("{effect:?}");
                 match self.executor.execute(effect) {
                     Executed::Terminal(Effect::Quit) => quit = true,
+                    Executed::Terminal(Effect::CopyToClipboard(text)) => {
+                        crate::tui::copy_to_clipboard(&text)?;
+                    }
                     Executed::Terminal(Effect::Suspend) => {
                         tui.suspend()?;
                         tui.enter()?;
@@ -150,6 +165,12 @@ impl Runtime {
         tui.draw(|frame| views::draw(state, &state.theme, frame, frame.area()))?;
         Ok(())
     }
+}
+
+/// The local time of day, in seconds since midnight.
+pub(crate) fn time_of_day() -> TimeOfDay {
+    use chrono::Timelike;
+    TimeOfDay(chrono::Local::now().num_seconds_from_midnight())
 }
 
 /// What woke the loop.
@@ -249,11 +270,16 @@ impl Executor {
             Effect::ExportConnections { path, connections } => {
                 Executed::Spawned(self.export_connections(path, connections))
             }
-            Effect::ForgetSecret(id) => Executed::Spawned(tokio::task::spawn_blocking(move || {
-                if let Err(e) = secrets::delete(&id) {
-                    tracing::error!("cannot remove the stored password: {e:#}");
-                }
-            })),
+            Effect::ForgetSecret(id) => {
+                let events = self.events.clone();
+                Executed::Spawned(tokio::task::spawn_blocking(move || {
+                    if let Err(e) = secrets::delete(&id) {
+                        let message = format!("cannot remove the stored password: {e:#}");
+                        tracing::error!("{message}");
+                        let _ = events.send(UiEvent::Notice(Notice::error(message)));
+                    }
+                }))
+            }
             Effect::StashPassword {
                 connection,
                 password,
@@ -268,9 +294,10 @@ impl Executor {
                     let _ = events.send(UiEvent::Timer(timer));
                 }))
             }
-            effect @ (Effect::ClearScreen | Effect::Suspend | Effect::Quit) => {
-                Executed::Terminal(effect)
-            }
+            effect @ (Effect::ClearScreen
+            | Effect::Suspend
+            | Effect::Quit
+            | Effect::CopyToClipboard(_)) => Executed::Terminal(effect),
         }
     }
 

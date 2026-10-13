@@ -23,6 +23,6 @@ expression: "h.render(80, 24)"
                               │                                                 
                               │                                                 
                               │                                                 
-                              │                                                 
- scratch · sqlite · :memory: · auto-commit  Connected to scratch (:memory:)     
+                              │ ✓ Connected to scratch (:memory:)               
+ scratch · sqlite · :memory: · auto-commit                                      
  Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands    ? help

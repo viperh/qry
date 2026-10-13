@@ -10,10 +10,11 @@ use crate::{
     app::{
         dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
-        state::{SessionId, SessionStatus, State, StatusCode, scratch_record},
+        state::{SessionId, SessionStatus, State, scratch_record},
     },
     connections::StoredConnection,
     db::DbCommand,
+    notice::Notice,
 };
 
 /// What a session binding does.
@@ -99,10 +100,8 @@ pub(super) fn close(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
     };
     fx.push(Effect::CloseSession(id));
     if session.running > 0 {
-        state.status = StatusCode::Error(format!(
-            "Closed {}: its running query was cancelled",
-            session.title
-        ));
+        let text = format!("Closed {}: its running query was cancelled", session.title);
+        super::notices::notify(state, Notice::warning(text), fx);
     }
     // Nobody is left to answer these.
     state.password_queue.retain(|request| request.session != id);

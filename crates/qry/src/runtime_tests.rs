@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::notice::Level;
 use crate::{
-    app::StatusCode,
     connections::{Driver, Secret},
     db::DbCommand,
 };
@@ -85,7 +85,13 @@ async fn db_worker_answers_with_db_answer() {
     );
     assert!(matches!(
         answers.recv().await,
-        Some((_, DbAnswer::Status(StatusCode::Success(_))))
+        Some((
+            _,
+            DbAnswer::Notice(Notice {
+                level: Level::Success,
+                ..
+            })
+        ))
     ));
     let Some((_, DbAnswer::QueryDone(result))) = answers.recv().await else {
         panic!("expected QueryDone");

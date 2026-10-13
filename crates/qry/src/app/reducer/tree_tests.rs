@@ -167,9 +167,13 @@ fn an_import_adds_what_is_new_saves_once_and_reports() {
     let ids: Vec<&str> = written.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(ids, [saved_one.id.as_str(), new.id.as_str()]);
 
-    let StatusCode::Error(message) = &tree.state.status else {
-        panic!("expected a status, got {:?}", tree.state.status);
-    };
+    let (_, notice) = tree.state.messages.newest_first().next().unwrap();
+    assert_eq!(
+        notice.level,
+        crate::notice::Level::Warning,
+        "some were skipped"
+    );
+    let message = &notice.text;
     assert!(
         message.starts_with("Imported 1 connection from DBeaver"),
         "{message}"
@@ -179,9 +183,8 @@ fn an_import_adds_what_is_new_saves_once_and_reports() {
     assert!(message.contains("no user name"), "{message}");
 
     // Importing it all again changes nothing and writes nothing.
-    tree.state.status = StatusCode::None;
     import(&mut tree.state, imported(vec![new]), &mut tree.fx);
-    assert_ne!(tree.state.status, StatusCode::None);
+    assert_eq!(tree.state.messages.len(), 2, "it still says so");
     assert!(tree.take().is_empty(), "nothing new, so no save");
 }
 

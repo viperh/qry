@@ -1,0 +1,5 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "text(&toast, queued, width)"
+---
+ Fetched 204 rows in 38 ms

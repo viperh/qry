@@ -4080,6 +4080,7 @@ dependencies = [
  "anyhow",
  "better-panic",
  "cargo_metadata",
+ "chrono",
  "clap",
  "color-eyre",
  "config",

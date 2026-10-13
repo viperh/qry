@@ -1,0 +1,10 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "styled(&drawn(&toast, queued, width))"
+---
+ ✗ Connection failed: could not connect to server: Connection… ×2  ctrl-l  (+1) 
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+65,0 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+73,0 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+79,0 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE

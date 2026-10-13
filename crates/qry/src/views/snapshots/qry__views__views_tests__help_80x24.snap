@@ -20,9 +20,9 @@ expression: "h.render(80, 24)"
        │ ctrl-↑                : Grow the editor                        │       
        │ ctrl-↓                : Shrink the editor                      │       
        │ F11                   : Maximise the pane / restore            │       
+       │ ctrl-l                : Show the messages                      │       
+       │ Esc                   : Dismiss the message                    │       
        │                                                                │       
        │ Connection tree:                                               │       
-       │ ?                     : Show / hide the help                   │       
-       │ :                     : Command palette                        │       
- connec│ e                     : Edit this connection                   │       
- j scro└─────────────────────────────────────────────────── 1-22 of 119 ┘? help
+ connec│ ?                     : Show / hide the help                   │       
+ j scro└─────────────────────────────────────────────────── 1-22 of 121 ┘? help

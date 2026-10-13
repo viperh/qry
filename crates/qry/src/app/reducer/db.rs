@@ -1,6 +1,6 @@
 //! The database workers' answers, each from one session.
 
-use super::{dialogs, results, tree};
+use super::{dialogs, notices, results, tree};
 use crate::app::{
     effects::Effect,
     event::DbAnswer,
@@ -58,7 +58,7 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
         DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export(id), &message),
         DbAnswer::TablesLoaded(tables) => tree::tables_loaded(state, id, tables),
         DbAnswer::TablesFailed(_) => tree::tables_failed(state, id),
-        DbAnswer::Status(status) => state.status = status,
+        DbAnswer::Notice(notice) => notices::notify(state, notice, fx),
         // Nothing sent to it will be answered, so nothing is running there
         // any more; the status line says why.
         DbAnswer::WorkerStopped => {

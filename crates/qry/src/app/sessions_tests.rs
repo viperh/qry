@@ -269,10 +269,8 @@ fn close_with_running_job_asks_first() {
     assert_eq!(s.effects(), [Effect::CloseSession(prod)]);
     assert!(s.h.state().dialog().is_none());
     assert_eq!(s.active(), SessionId::FIRST);
-    let StatusCode::Error(message) = &s.h.state().status else {
-        panic!("expected the cancellation reported");
-    };
-    assert!(message.contains("cancelled"), "{message}");
+    let (_, notice) = s.h.state().messages.newest_first().next().unwrap();
+    assert!(notice.text.contains("cancelled"), "{notice:?}");
 }
 
 #[test]

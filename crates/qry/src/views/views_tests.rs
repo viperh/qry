@@ -28,8 +28,8 @@ fn home_unchanged_snapshots() {
     let mut h = harness();
     h.send(UiEvent::Started)
         .db(DbAnswer::Connected(":memory:".into()))
-        .db(DbAnswer::Status(crate::app::StatusCode::Success(
-            "Connected to scratch (:memory:)".into(),
+        .db(DbAnswer::Notice(crate::notice::Notice::success(
+            "Connected to scratch (:memory:)",
         )));
     insta::assert_snapshot!("home_unchanged_80x24", h.render(80, 24));
     insta::assert_snapshot!("home_unchanged_160x48", h.render(160, 48));
