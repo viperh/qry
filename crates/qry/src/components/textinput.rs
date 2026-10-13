@@ -4,7 +4,6 @@ use ratatui::layout::Rect;
 use ratatui::prelude::Stylize;
 use ratatui::widgets::Paragraph;
 
-
 #[derive(Default)]
 pub(crate) struct TextInput {
     pub value: String,
@@ -27,7 +26,6 @@ pub fn typed_char(key: KeyEvent) -> Option<char> {
         _ => None,
     }
 }
-
 
 // Editing operations. Which key runs which is decided by the config (see
 // `crate::keymap::FormCommand`), not here.
@@ -117,7 +115,10 @@ mod tests {
         assert_eq!(typed('\\', KeyModifiers::NONE), Some('\\'));
         assert_eq!(typed('A', KeyModifiers::SHIFT), Some('A'));
         // AltGr, as Windows reports it.
-        assert_eq!(typed('\\', KeyModifiers::CONTROL | KeyModifiers::ALT), Some('\\'));
+        assert_eq!(
+            typed('\\', KeyModifiers::CONTROL | KeyModifiers::ALT),
+            Some('\\')
+        );
         assert_eq!(typed('c', KeyModifiers::CONTROL), None);
         assert_eq!(typed('d', KeyModifiers::ALT), None);
     }

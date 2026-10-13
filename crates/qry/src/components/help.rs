@@ -38,7 +38,10 @@ impl Help {
             ("Export", mode_bindings(config, Mode::ExpoModal)),
             ("Password", mode_bindings(config, Mode::PasswordModal)),
             ("Import", mode_bindings(config, Mode::ImportModal)),
-            ("Export Connections", mode_bindings(config, Mode::ConnExportModal)),
+            (
+                "Export Connections",
+                mode_bindings(config, Mode::ConnExportModal),
+            ),
             ("Help", pane_bindings(panes.help.describe())),
         ];
         Self {
@@ -145,7 +148,11 @@ fn mode_bindings(config: &Config, mode: Mode) -> Vec<(String, String)> {
     let mut by_action: Vec<(String, Vec<String>)> = Vec::new();
     for (sequence, action) in bindings {
         let desc = describe_action(action);
-        let keys = sequence.iter().map(display_key).collect::<Vec<_>>().join(" ");
+        let keys = sequence
+            .iter()
+            .map(display_key)
+            .collect::<Vec<_>>()
+            .join(" ");
         match by_action.iter_mut().find(|(d, _)| *d == desc) {
             Some((_, all)) => all.push(keys),
             None => by_action.push((desc, vec![keys])),
@@ -187,10 +194,17 @@ mod tests {
 
     fn text(help: &mut Help, width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal.draw(|frame| help.draw(frame, frame.area()).unwrap()).unwrap();
+        terminal
+            .draw(|frame| help.draw(frame, frame.area()).unwrap())
+            .unwrap();
         let buffer = terminal.backend().buffer();
         (0..buffer.area.height)
-            .map(|y| (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect::<String>() + "\n")
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+                    + "\n"
+            })
             .collect()
     }
 
@@ -217,17 +231,26 @@ mod tests {
 
         let find = |title: &str, desc: &str| {
             let (_, binds) = help.sections.iter().find(|(t, _)| t == title).unwrap();
-            binds.iter().find(|(_, d)| d == desc).map(|(k, _)| k.clone())
+            binds
+                .iter()
+                .find(|(_, d)| d == desc)
+                .map(|(k, _)| k.clone())
         };
         assert_eq!(find("Global", "Quit").as_deref(), Some("Ctrl-q"));
         assert_eq!(find("Connection tree", "Connect").as_deref(), Some("Enter"));
-        assert_eq!(find("Connection tree", "Expand or collapse").as_deref(), Some("Space"));
+        assert_eq!(
+            find("Connection tree", "Expand or collapse").as_deref(),
+            Some("Space")
+        );
         assert_eq!(find("Editor", "Run query").as_deref(), Some("F8"));
         assert_eq!(find("Results", "Up a row").as_deref(), Some("↑ / i"));
         assert_eq!(find("Results", "Last row").as_deref(), Some("G"));
         assert_eq!(find("New Connection", "Close").as_deref(), Some("Esc"));
         assert_eq!(find("Export", "Close").as_deref(), Some("Esc"));
-        assert_eq!(find("Forms", "Previous field").as_deref(), Some("Shift-Tab"));
+        assert_eq!(
+            find("Forms", "Previous field").as_deref(),
+            Some("Shift-Tab")
+        );
         assert_eq!(find("Forms", "Submit the form").as_deref(), Some("Enter"));
     }
 

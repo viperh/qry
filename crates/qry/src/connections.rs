@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use color_eyre::eyre::{Context, bail};
 use qry_core::{
-    ConnectionConfig, SslMode, mariadb::MariadbConfig, mysql::MySqlConfig,
-    oracle::OracleConfig, postgres::PostgresConfig, sqlite::SqliteConfig,
+    ConnectionConfig, SslMode, mariadb::MariadbConfig, mysql::MySqlConfig, oracle::OracleConfig,
+    postgres::PostgresConfig, sqlite::SqliteConfig,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -131,7 +131,11 @@ impl StoredConnection {
             wallet: None,
             mode: None,
             dsn: None,
-            secret: if driver.needs_password() { Secret::Prompt } else { Secret::None },
+            secret: if driver.needs_password() {
+                Secret::Prompt
+            } else {
+                Secret::None
+            },
             extra: Map::new(),
             ephemeral: false,
         }
@@ -152,7 +156,11 @@ impl StoredConnection {
 
     /// What the tree shows.
     pub fn title(&self) -> &str {
-        if self.name.is_empty() { &self.id } else { &self.name }
+        if self.name.is_empty() {
+            &self.id
+        } else {
+            &self.name
+        }
     }
 
     /// Builds what the driver needs, given the password from wherever this
@@ -279,8 +287,12 @@ pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
 /// The connections in the text of a connection file, which `file` names in
 /// errors. Also how a copy of the file is imported as a backup.
 pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
-    let parsed: ConnectionFile = serde_json::from_str(text)
-        .wrap_err_with(|| format!("{} is not a connection file qry understands", file.display()))?;
+    let parsed: ConnectionFile = serde_json::from_str(text).wrap_err_with(|| {
+        format!(
+            "{} is not a connection file qry understands",
+            file.display()
+        )
+    })?;
     if parsed.version > VERSION {
         bail!(
             "{} was written by a newer qry (version {}, this build understands {VERSION})",
@@ -325,7 +337,10 @@ pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Resu
     if let Ok(existing) = fs::read_to_string(&path)
         && parse(&existing, &path).is_err()
     {
-        bail!("{} already exists and is not a qry backup, so it was left alone", path.display());
+        bail!(
+            "{} already exists and is not a qry backup, so it was left alone",
+            path.display()
+        );
     }
 
     let file = ConnectionFile {
@@ -385,7 +400,10 @@ fn mint_id() -> String {
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut hasher = DefaultHasher::new();
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().hash(&mut hasher);
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .hash(&mut hasher);
     std::process::id().hash(&mut hasher);
     COUNTER.fetch_add(1, Ordering::Relaxed).hash(&mut hasher);
     format!("{:08x}", hasher.finish() as u32)
@@ -490,7 +508,10 @@ mod tests {
         .unwrap();
 
         let mut loaded = load_from(&dir.0).unwrap();
-        assert_eq!(loaded[0].extra.get("colour").and_then(Value::as_str), Some("red"));
+        assert_eq!(
+            loaded[0].extra.get("colour").and_then(Value::as_str),
+            Some("red")
+        );
         loaded[0].name = "renamed".into();
         save_to(&dir.0, &loaded).unwrap();
 
@@ -556,7 +577,10 @@ mod tests {
     #[test]
     fn an_oracle_record_carries_its_ssl_mode_and_wallet() {
         let config = oracle_config(&oracle());
-        assert_eq!((config.port, config.ssl_mode, config.wallet), (1521, SslMode::Prefer, None));
+        assert_eq!(
+            (config.port, config.ssl_mode, config.wallet),
+            (1521, SslMode::Prefer, None)
+        );
 
         let mut connection = oracle();
         connection.tls = Some("verify-full".into());
@@ -588,8 +612,14 @@ mod tests {
         let written = export(&dir.0.join("backup"), &list).unwrap();
         assert_eq!(written, dir.0.join("backup.json"));
         let text = fs::read_to_string(&written).unwrap();
-        assert!(!text.contains("hunter2"), "a record has nowhere to keep a password");
-        assert!(!dir.0.join("backup.json.tmp").exists(), "the temp file was renamed away");
+        assert!(
+            !text.contains("hunter2"),
+            "a record has nowhere to keep a password"
+        );
+        assert!(
+            !dir.0.join("backup.json.tmp").exists(),
+            "the temp file was renamed away"
+        );
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -597,17 +627,23 @@ mod tests {
             assert_eq!(mode & 0o777, 0o600);
         }
 
-        let imported = crate::import::from_file(
-            written.to_str().unwrap(),
-            crate::import::Format::Auto,
-        )
-        .unwrap();
+        let imported =
+            crate::import::from_file(written.to_str().unwrap(), crate::import::Format::Auto)
+                .unwrap();
         assert_eq!(imported.format, crate::import::Format::Qry);
-        assert_eq!(imported.connections, list, "it comes back exactly as written");
+        assert_eq!(
+            imported.connections, list,
+            "it comes back exactly as written"
+        );
 
         // Writing it again replaces the old backup.
         export(&written, &list[..1]).unwrap();
-        assert_eq!(parse(&fs::read_to_string(&written).unwrap(), &written).unwrap().len(), 1);
+        assert_eq!(
+            parse(&fs::read_to_string(&written).unwrap(), &written)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -632,10 +668,22 @@ mod tests {
 
         connection = postgres();
         connection.tls = Some("nonsense".into());
-        assert!(connection.to_config("x").unwrap_err().to_string().contains("not an SSL mode"));
+        assert!(
+            connection
+                .to_config("x")
+                .unwrap_err()
+                .to_string()
+                .contains("not an SSL mode")
+        );
 
         connection = postgres();
         connection.dsn = Some("postgres://db/app".into());
-        assert!(connection.to_config("x").unwrap_err().to_string().contains("DSN"));
+        assert!(
+            connection
+                .to_config("x")
+                .unwrap_err()
+                .to_string()
+                .contains("DSN")
+        );
     }
 }

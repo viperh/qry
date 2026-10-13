@@ -6,19 +6,19 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, config::Config, tui::Event};
-pub mod home;
+mod connexportform;
+mod connform;
 mod conntree;
 mod editor;
+mod exportform;
+mod form;
+mod help;
+pub mod home;
+mod importform;
+mod passwordform;
 mod results;
 mod statuspanel;
-mod help;
 mod textinput;
-mod form;
-mod connform;
-mod exportform;
-mod passwordform;
-mod importform;
-mod connexportform;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
@@ -132,7 +132,6 @@ pub trait Component {
     /// * [`color_eyre::Result<()>`] - An Ok result or an error.
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()>;
 
-
     /// Sets the focus for this component
     /// Needs to be handled above
     /// # Arguments
@@ -143,5 +142,4 @@ pub trait Component {
     ///
     ///
     fn set_focus(&mut self, focus: bool);
-
 }

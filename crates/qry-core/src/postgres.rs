@@ -1,11 +1,10 @@
-
-use crate::{DatabaseType, Database};
+use crate::shared::{QueryResult, SslMode};
+use crate::{Database, DatabaseType};
+use anyhow::Result;
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
-use async_trait::async_trait;
-use crate::shared::{QueryResult, SslMode};
-use serde::{Serialize, Deserialize};
-use anyhow::Result;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostgresConfig {
@@ -57,7 +56,11 @@ impl Postgres {
                 .await?;
         }
 
-        Ok(Self { client, driver, config })
+        Ok(Self {
+            client,
+            driver,
+            config,
+        })
     }
 }
 
@@ -67,7 +70,10 @@ impl Database for Postgres {
         DatabaseType::Postgres
     }
     fn label(&self) -> String {
-        format!("{}@{}:{}/{}", self.config.user, self.config.host, self.config.port, self.config.database)
+        format!(
+            "{}@{}:{}/{}",
+            self.config.user, self.config.host, self.config.port, self.config.database
+        )
     }
     async fn query(&self, sql: &str) -> Result<QueryResult> {
         let messages = self.client.simple_query(sql).await?;
@@ -82,18 +88,22 @@ impl Database for Postgres {
                     if columns.is_empty() {
                         columns = row.columns().iter().map(|c| c.name().to_string()).collect();
                     }
-                    rows.push((0..row.len()).map(|i| row.get(i).map(str::to_string)).collect());
-                },
+                    rows.push(
+                        (0..row.len())
+                            .map(|i| row.get(i).map(str::to_string))
+                            .collect(),
+                    );
+                }
                 SimpleQueryMessage::CommandComplete(n) => affected = n,
                 _ => {}
             }
         }
 
-        Ok(QueryResult{ columns,
-                        rows,
-                        affected: Some(affected)
-            }
-        )
+        Ok(QueryResult {
+            columns,
+            rows,
+            affected: Some(affected),
+        })
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {

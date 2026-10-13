@@ -1,8 +1,8 @@
-use std::fmt::{Debug};
-use async_trait::async_trait;
 use crate::DatabaseType;
 use anyhow::{Result, bail};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
 /// When to use TLS. Same names and meaning as libpq's `sslmode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,8 +35,6 @@ impl SslMode {
     }
 }
 
-
-
 impl std::fmt::Display for SslMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
@@ -51,8 +49,7 @@ impl std::fmt::Display for SslMode {
 }
 
 #[async_trait]
-pub trait Database: Send + Sync{
-
+pub trait Database: Send + Sync {
     fn kind(&self) -> DatabaseType;
     fn label(&self) -> String;
     async fn query(&self, query: &str) -> Result<QueryResult>;
@@ -78,7 +75,11 @@ pub trait Database: Send + Sync{
             DatabaseType::Oracle => bail!("listing tables is not supported for this database"),
         };
         let result = self.query(sql).await?;
-        Ok(result.rows.iter().filter_map(|row| row.first().cloned().flatten()).collect())
+        Ok(result
+            .rows
+            .iter()
+            .filter_map(|row| row.first().cloned().flatten())
+            .collect())
     }
 }
 

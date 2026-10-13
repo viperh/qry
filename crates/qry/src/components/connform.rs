@@ -4,13 +4,32 @@ use crate::connections::{Driver, Secret, StoredConnection};
 use crate::secrets::{self, Password};
 
 const LABELS: [&str; 11] = [
-    "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
-    "Wallet", "Password in",
+    "Name",
+    "Type",
+    "Host",
+    "Port",
+    "User",
+    "Password",
+    "Database",
+    "Schema",
+    "SSL mode",
+    "Wallet",
+    "Password in",
 ];
 /// Same, plus the variable name that only ENVIRONMENT shows.
 const LABELS_VAR: [&str; 12] = [
-    "Name", "Type", "Host", "Port", "User", "Password", "Database", "Schema", "SSL mode",
-    "Wallet", "Password in", "Variable",
+    "Name",
+    "Type",
+    "Host",
+    "Port",
+    "User",
+    "Password",
+    "Database",
+    "Schema",
+    "SSL mode",
+    "Wallet",
+    "Password in",
+    "Variable",
 ];
 // Indexes into `LABELS` and `ConnForm::fields`.
 const NAME: usize = 0;
@@ -36,7 +55,14 @@ const DRIVERS: [Driver; 5] = [
     Driver::Oracle,
 ];
 /// Same order as `SslMode::ALL`.
-const SSL_MODES: [&str; 6] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
+const SSL_MODES: [&str; 6] = [
+    "disable",
+    "allow",
+    "prefer",
+    "require",
+    "verify-ca",
+    "verify-full",
+];
 
 /// Where the password is kept between sessions. qry never writes one to a
 /// file of its own, so these are the only choices.
@@ -101,9 +127,18 @@ impl ConnForm {
         };
 
         form.set_text(NAME, &record.name);
-        form.set_choice(TYPE, DRIVERS.iter().position(|d| *d == record.driver).unwrap_or(0));
+        form.set_choice(
+            TYPE,
+            DRIVERS
+                .iter()
+                .position(|d| *d == record.driver)
+                .unwrap_or(0),
+        );
         form.set_text(HOST, record.host.as_deref().unwrap_or_default());
-        form.set_text(PORT, &record.port.map(|p| p.to_string()).unwrap_or_default());
+        form.set_text(
+            PORT,
+            &record.port.map(|p| p.to_string()).unwrap_or_default(),
+        );
         form.set_text(USER, record.user.as_deref().unwrap_or_default());
         form.set_text(SCHEMA, record.schema.as_deref().unwrap_or_default());
         // The one field the drivers disagree about.
@@ -169,7 +204,11 @@ impl ConnForm {
 
 impl Form for ConnForm {
     fn title(&self) -> &'static str {
-        if self.editing { "Edit Connection" } else { "New Connection" }
+        if self.editing {
+            "Edit Connection"
+        } else {
+            "New Connection"
+        }
     }
 
     fn hint(&self) -> &'static str {
@@ -177,7 +216,11 @@ impl Form for ConnForm {
     }
 
     fn labels(&self) -> &'static [&'static str] {
-        if self.fields.len() > LABELS.len() { &LABELS_VAR } else { &LABELS }
+        if self.fields.len() > LABELS.len() {
+            &LABELS_VAR
+        } else {
+            &LABELS
+        }
     }
 
     fn fields(&self) -> &[Field] {
@@ -388,7 +431,11 @@ mod tests {
         set(&mut form, DATABASE, "app.db");
         let built = record(&form);
         assert_eq!(built.secret, Secret::None);
-        assert_eq!(built.path.as_deref(), Some("app.db"), "the file, not a database name");
+        assert_eq!(
+            built.path.as_deref(),
+            Some("app.db"),
+            "the file, not a database name"
+        );
         assert_eq!(built.tls, None);
     }
 
@@ -402,7 +449,12 @@ mod tests {
         assert_eq!(form.submit().unwrap_err(), "Variable is required");
 
         set(&mut form, VAR, "PGPASSWORD");
-        assert_eq!(record(&form).secret, Secret::Env { var: "PGPASSWORD".into() });
+        assert_eq!(
+            record(&form).secret,
+            Secret::Env {
+                var: "PGPASSWORD".into()
+            }
+        );
 
         // Choosing another store takes the field away again.
         choose(&mut form, STORE, "KEYCHAIN");
@@ -433,7 +485,10 @@ mod tests {
 
         // And opening it again shows both.
         let form = ConnForm::editing(&built);
-        assert_eq!(form.selected(SSL_MODE), SSL_MODES.iter().position(|m| *m == "verify-full").unwrap());
+        assert_eq!(
+            form.selected(SSL_MODE),
+            SSL_MODES.iter().position(|m| *m == "verify-full").unwrap()
+        );
         assert_eq!(form.text(WALLET), "/etc/oracle/wallet");
     }
 
@@ -512,7 +567,9 @@ mod tests {
     #[test]
     fn editing_an_environment_connection_shows_its_variable() {
         let mut saved = record(&filled());
-        saved.secret = Secret::Env { var: "PGPASSWORD".into() };
+        saved.secret = Secret::Env {
+            var: "PGPASSWORD".into(),
+        };
 
         let form = ConnForm::editing(&saved);
         assert_eq!(form.labels(), LABELS_VAR);
@@ -529,13 +586,19 @@ mod tests {
         let mut form = filled();
         for port in ["abc", "0", "70000"] {
             set(&mut form, PORT, port);
-            assert_eq!(form.submit().unwrap_err(), "Port must be a number from 1 to 65535");
+            assert_eq!(
+                form.submit().unwrap_err(),
+                "Port must be a number from 1 to 65535"
+            );
         }
     }
 
     #[test]
     fn ssl_mode_labels_line_up_with_core() {
-        let core: Vec<String> = qry_core::SslMode::ALL.iter().map(ToString::to_string).collect();
+        let core: Vec<String> = qry_core::SslMode::ALL
+            .iter()
+            .map(ToString::to_string)
+            .collect();
         assert_eq!(core, SSL_MODES);
     }
 

@@ -24,14 +24,20 @@ impl Exporter {
         data.push(result.columns.iter().cloned().map(Some).collect());
         data.extend(result.rows.iter().cloned());
 
-        let mut exporter = Self { data, ..Self::default() };
+        let mut exporter = Self {
+            data,
+            ..Self::default()
+        };
         exporter.set_path(config.path.clone());
         exporter.set_separator(config.separator.clone());
         exporter
     }
 
     pub fn set_data(&mut self, data: Vec<Vec<String>>) {
-        self.data = data.into_iter().map(|row| row.into_iter().map(Some).collect()).collect();
+        self.data = data
+            .into_iter()
+            .map(|row| row.into_iter().map(Some).collect())
+            .collect();
     }
     pub fn set_path(&mut self, path: String) {
         self.path = path;
@@ -85,7 +91,10 @@ impl Exporter {
             writeln!(out, "[]")?;
             return Ok(out.flush()?);
         };
-        let names: Vec<&str> = header.iter().map(|name| name.as_deref().unwrap_or_default()).collect();
+        let names: Vec<&str> = header
+            .iter()
+            .map(|name| name.as_deref().unwrap_or_default())
+            .collect();
 
         writeln!(out, "[")?;
         for (i, row) in rows.iter().enumerate() {
@@ -112,8 +121,10 @@ impl Exporter {
         let file = File::create(&self.path)?;
         let mut out = BufWriter::new(file);
         for row in &self.data {
-            let line: Vec<String> =
-                row.iter().map(|field| escape(field.as_deref().unwrap_or_default())).collect();
+            let line: Vec<String> = row
+                .iter()
+                .map(|field| escape(field.as_deref().unwrap_or_default()))
+                .collect();
             writeln!(out, "{}", line.join(&self.separator))?;
         }
         out.flush()?;
@@ -142,8 +153,8 @@ fn json_string(value: &str) -> String {
 
 /// Quotes a field that would otherwise break the row, doubling any quote.
 fn quote_csv(field: &str, separator: &str) -> String {
-    let breaks_row = field.contains(['"', '\n', '\r'])
-        || (!separator.is_empty() && field.contains(separator));
+    let breaks_row =
+        field.contains(['"', '\n', '\r']) || (!separator.is_empty() && field.contains(separator));
     if breaks_row {
         format!("\"{}\"", field.replace('"', "\"\""))
     } else {
@@ -196,14 +207,20 @@ mod tests {
     }
 
     fn config(path: &str, separator: &str, etype: ExportType) -> ExportConfig {
-        ExportConfig { path: path.into(), separator: separator.into(), etype }
+        ExportConfig {
+            path: path.into(),
+            separator: separator.into(),
+            etype,
+        }
     }
 
     #[test]
     fn csv_has_a_header_quotes_what_it_must_and_writes_null_as_empty() {
         let file = TempFile::new("csv");
         let config = config(&file.path(), ",", ExportType::Csv);
-        let rows = Exporter::from_result(&result(), &config).write(config.etype).unwrap();
+        let rows = Exporter::from_result(&result(), &config)
+            .write(config.etype)
+            .unwrap();
 
         assert_eq!(rows, 3);
         assert_eq!(
@@ -218,7 +235,9 @@ mod tests {
         let mut result = result();
         result.rows[0][1] = Some("two\nlines".into());
         let config = config(&file.path(), "\t", ExportType::Text);
-        Exporter::from_result(&result, &config).write(config.etype).unwrap();
+        Exporter::from_result(&result, &config)
+            .write(config.etype)
+            .unwrap();
 
         let written = fs::read_to_string(&file.0).unwrap();
         assert_eq!(written.lines().count(), 4);
@@ -231,7 +250,9 @@ mod tests {
         let mut result = result();
         result.rows[0][1] = Some("tab\there \"quoted\" and \\ back".into());
         let config = config(&file.path(), "", ExportType::Json);
-        let rows = Exporter::from_result(&result, &config).write(config.etype).unwrap();
+        let rows = Exporter::from_result(&result, &config)
+            .write(config.etype)
+            .unwrap();
 
         assert_eq!(rows, 3);
         assert_eq!(
@@ -250,7 +271,9 @@ mod tests {
     fn excel_writes_a_workbook() {
         let file = TempFile::new("xlsx");
         let config = config(&file.path(), "", ExportType::Excel);
-        let rows = Exporter::from_result(&result(), &config).write(config.etype).unwrap();
+        let rows = Exporter::from_result(&result(), &config)
+            .write(config.etype)
+            .unwrap();
 
         assert_eq!(rows, 3);
         // An .xlsx is a zip archive, so it starts with the zip magic bytes.

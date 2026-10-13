@@ -5,15 +5,15 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
 use crate::app::Mode;
+use crate::components::connexportform::ConnExportForm;
 use crate::components::connform::ConnForm;
 use crate::components::conntree::ConnTree;
 use crate::components::editor::Editor;
 use crate::components::exportform::ExportForm;
 use crate::components::form::Form;
-use crate::components::connexportform::ConnExportForm;
+use crate::components::help::Help;
 use crate::components::importform::ImportForm;
 use crate::components::passwordform::PasswordForm;
-use crate::components::help::Help;
 use crate::components::results::Results;
 use crate::components::statuspanel::Statuspanel;
 use crate::keymap::{FormCommand, HelpCommand};
@@ -273,7 +273,9 @@ impl Component for Home {
                 }
             }
             // The worker's answer, but only to the modal that asked for it.
-            Action::Connected(_) if self.awaiting == Some(Awaiting::Connect) => self.close_modal()?,
+            Action::Connected(_) if self.awaiting == Some(Awaiting::Connect) => {
+                self.close_modal()?
+            }
             Action::Exported(_) if self.awaiting == Some(Awaiting::Export) => self.close_modal()?,
             Action::ConnectFailed(message) if self.awaiting == Some(Awaiting::Connect) => {
                 self.fail_modal(message);
@@ -385,7 +387,10 @@ mod tests {
 
         open(&mut home, Mode::ExpoModal);
         let text = shown(&mut home, 80, 50);
-        assert!(text.contains("Export") && !text.contains("New Connection"), "{text}");
+        assert!(
+            text.contains("Export") && !text.contains("New Connection"),
+            "{text}"
+        );
 
         open(&mut home, Mode::Home);
         assert!(home.modal.is_none());
@@ -427,7 +432,10 @@ mod tests {
         assert!(rx.try_recv().is_err(), "the mode must not change yet");
         assert!(shown(&mut home, 80, 50).contains("Exporting"));
 
-        home.update(Action::ExportFailed("could not write no/such/dir/rows.csv".into())).unwrap();
+        home.update(Action::ExportFailed(
+            "could not write no/such/dir/rows.csv".into(),
+        ))
+        .unwrap();
         let text = shown(&mut home, 80, 50);
         assert!(text.contains("could not write"), "{text}");
         assert!(text.contains("no/such/dir/rows.csv"), "{text}");
@@ -455,9 +463,13 @@ mod tests {
         assert_eq!(path, "~/nope.json");
         assert!(shown(&mut home, 80, 50).contains("Importing"));
 
-        home.update(Action::ImportFailed("cannot read nope.json".into())).unwrap();
+        home.update(Action::ImportFailed("cannot read nope.json".into()))
+            .unwrap();
         let text = shown(&mut home, 80, 50);
-        assert!(text.contains("cannot read nope.json") && text.contains("~/nope.json"), "{text}");
+        assert!(
+            text.contains("cannot read nope.json") && text.contains("~/nope.json"),
+            "{text}"
+        );
 
         // A second try that works closes it.
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
@@ -488,15 +500,22 @@ mod tests {
         type_str_home(&mut home, "/root/b.json");
 
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
-        assert_eq!(rx.try_recv().unwrap(), Action::ExportConnections("/root/b.json".into()));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            Action::ExportConnections("/root/b.json".into())
+        );
         assert!(shown(&mut home, 80, 50).contains("Exporting"));
 
-        home.update(Action::ConnectionsExportFailed("cannot write /root/b.json".into())).unwrap();
+        home.update(Action::ConnectionsExportFailed(
+            "cannot write /root/b.json".into(),
+        ))
+        .unwrap();
         assert!(shown(&mut home, 80, 50).contains("cannot write /root/b.json"));
 
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
         assert!(matches!(rx.try_recv(), Ok(Action::ExportConnections(_))));
-        home.update(Action::ConnectionsExported("/tmp/b.json".into())).unwrap();
+        home.update(Action::ConnectionsExported("/tmp/b.json".into()))
+            .unwrap();
         assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
     }
 
@@ -530,8 +549,14 @@ mod tests {
         home.update(Action::ConnectFailed("nope".into())).unwrap();
 
         let text = shown(&mut home, 80, 50);
-        assert!(home.modal.is_some(), "the export modal was closed by a connection");
-        assert!(text.contains("Exporting") && !text.contains("nope"), "{text}");
+        assert!(
+            home.modal.is_some(),
+            "the export modal was closed by a connection"
+        );
+        assert!(
+            text.contains("Exporting") && !text.contains("nope"),
+            "{text}"
+        );
     }
 
     #[test]
@@ -572,10 +597,16 @@ mod tests {
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
         assert!(rx.try_recv().is_err());
 
-        home.update(Action::ConnectFailed("password authentication failed".into())).unwrap();
+        home.update(Action::ConnectFailed(
+            "password authentication failed".into(),
+        ))
+        .unwrap();
         let text = shown(&mut home, 80, 50);
         assert!(text.contains("password authentication failed"), "{text}");
-        assert!(text.contains("db.local") && text.contains("alice"), "{text}");
+        assert!(
+            text.contains("db.local") && text.contains("alice"),
+            "{text}"
+        );
         assert!(!text.contains("Connecting"), "{text}");
 
         // Correcting and submitting again sends a second attempt.
@@ -595,7 +626,8 @@ mod tests {
         home.handle_key_event(key(KeyCode::Enter)).unwrap();
         assert!(matches!(rx.try_recv(), Ok(Action::Connect(..))));
 
-        home.update(Action::Connected("alice@db.local:5432/app".into())).unwrap();
+        home.update(Action::Connected("alice@db.local:5432/app".into()))
+            .unwrap();
         assert!(home.modal.is_none());
         assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::Home));
         assert!(!shown(&mut home, 80, 50).contains("New Connection"));
@@ -622,14 +654,23 @@ mod tests {
         let mut home = home();
         home.register_action_handler(tx).unwrap();
 
-        home.update(Action::NeedPassword { id: "c7f3a1e2".into(), name: "prod".into() })
-            .unwrap();
+        home.update(Action::NeedPassword {
+            id: "c7f3a1e2".into(),
+            name: "prod".into(),
+        })
+        .unwrap();
         // It asks `App` to switch modes, so Esc closes the prompt.
-        assert_eq!(rx.try_recv().unwrap(), Action::ChangeMode(Mode::PasswordModal));
+        assert_eq!(
+            rx.try_recv().unwrap(),
+            Action::ChangeMode(Mode::PasswordModal)
+        );
 
         open(&mut home, Mode::PasswordModal);
         let text = shown(&mut home, 80, 30);
-        assert!(text.contains("Password") && text.contains("for prod"), "{text}");
+        assert!(
+            text.contains("Password") && text.contains("for prod"),
+            "{text}"
+        );
 
         // Submitting waits for the worker, as a connection does.
         crate::secrets::stash(crate::secrets::Password::new("x"));
@@ -666,7 +707,8 @@ mod tests {
     fn update_is_forwarded_to_children() {
         let mut home = home();
         assert!(home.statuspanel.is_empty());
-        home.update(Action::Status(StatusCode::Error("e".into()))).unwrap();
+        home.update(Action::Status(StatusCode::Error("e".into())))
+            .unwrap();
         assert!(!home.statuspanel.is_empty());
     }
 
@@ -700,7 +742,8 @@ mod tests {
         home.sync_focus();
         type_str_home(&mut home, "select 1");
         assert_eq!(
-            home.handle_key_event(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE)).unwrap(),
+            home.handle_key_event(KeyEvent::new(KeyCode::F(8), KeyModifiers::NONE))
+                .unwrap(),
             Some(Action::Execute("select 1".into()))
         );
     }

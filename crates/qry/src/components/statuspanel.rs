@@ -1,12 +1,9 @@
-use ratatui::{
-    prelude::*,
-    widgets::Paragraph,
-};
+use ratatui::{prelude::*, widgets::Paragraph};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::{action::Action, config::Config};
 use crate::action::StatusCode;
+use crate::{action::Action, config::Config};
 
 #[derive(Default)]
 pub struct Statuspanel {
@@ -46,19 +43,12 @@ impl Component for Statuspanel {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
         match self.statuscode {
-            StatusCode::Error(ref err) => {
-                frame.render_widget(
-                    Paragraph::new(format!("Error: {}", err))
-                        .red()
-                        .centered()
-                , area)
-            }
+            StatusCode::Error(ref err) => frame.render_widget(
+                Paragraph::new(format!("Error: {}", err)).red().centered(),
+                area,
+            ),
             StatusCode::Success(ref msg) => {
-                frame.render_widget(
-                    Paragraph::new(msg.as_str())
-                        .green()
-                        .centered()
-                    , area)
+                frame.render_widget(Paragraph::new(msg.as_str()).green().centered(), area)
             }
             _ => {}
         }

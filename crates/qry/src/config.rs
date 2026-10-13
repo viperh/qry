@@ -45,8 +45,8 @@ pub static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
 
 impl Config {
     pub fn new() -> color_eyre::Result<Self, config::ConfigError> {
-        let default_config: Config = json5::from_str(CONFIG)
-            .map_err(|e| config::ConfigError::Foreign(Box::new(e)))?;
+        let default_config: Config =
+            json5::from_str(CONFIG).map_err(|e| config::ConfigError::Foreign(Box::new(e)))?;
         let data_dir = get_data_dir();
         let config_dir = get_config_dir();
         let mut builder = config::Config::builder()

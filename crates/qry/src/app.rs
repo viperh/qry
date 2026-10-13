@@ -7,7 +7,6 @@ use tracing::{debug, info};
 
 use strum::EnumIter;
 
-
 use crate::{
     action::{Action, StatusCode},
     components::{Component, home::Home},
@@ -208,7 +207,10 @@ impl App {
                 }
                 Action::ListTables => self.send_db(DbCommand::ListTables)?,
                 Action::Import { ref path, format } => self.import(path.clone(), format),
-                Action::WriteConnections { ref path, ref connections } => {
+                Action::WriteConnections {
+                    ref path,
+                    ref connections,
+                } => {
                     self.export_connections(path.clone(), connections.clone());
                 }
                 _ => {}
@@ -270,7 +272,11 @@ impl App {
                 Ok(written) => {
                     let written = written.display().to_string();
                     let count = list.len();
-                    let noun = if count == 1 { "connection" } else { "connections" };
+                    let noun = if count == 1 {
+                        "connection"
+                    } else {
+                        "connections"
+                    };
                     (
                         Action::ConnectionsExported(written.clone()),
                         StatusCode::Success(format!("Exported {count} {noun} to {written}")),
@@ -278,7 +284,10 @@ impl App {
                 }
                 Err(e) => {
                     let message = format!("{e:#}");
-                    (Action::ConnectionsExportFailed(message.clone()), StatusCode::Error(message))
+                    (
+                        Action::ConnectionsExportFailed(message.clone()),
+                        StatusCode::Error(message),
+                    )
                 }
             };
             let _ = tx.send(Action::Status(status));

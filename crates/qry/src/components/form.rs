@@ -37,11 +37,17 @@ impl Field {
 
     /// A text field that shows `hint`, greyed, while it is empty.
     pub fn text_with_placeholder(hint: &'static str) -> Self {
-        Field::Text(TextInput { placeholder: Some(hint), ..TextInput::default() })
+        Field::Text(TextInput {
+            placeholder: Some(hint),
+            ..TextInput::default()
+        })
     }
 
     pub fn masked() -> Self {
-        Field::Text(TextInput { masked: true, ..TextInput::default() })
+        Field::Text(TextInput {
+            masked: true,
+            ..TextInput::default()
+        })
     }
 
     pub fn choice(options: &'static [&'static str], selected: usize) -> Self {
@@ -215,7 +221,11 @@ pub trait Form {
                     .areas(*row);
 
             // The label sits on the box's middle row, level with the text.
-            let label_area = Rect { y: label_area.y + 1, height: 1, ..label_area };
+            let label_area = Rect {
+                y: label_area.y + 1,
+                height: 1,
+                ..label_area
+            };
             let label = if focused {
                 Line::from(format!("› {}", labels[i])).cyan().bold()
             } else {
@@ -253,18 +263,25 @@ pub(crate) mod tests {
     }
 
     pub fn type_str(form: &mut impl Form, text: &str) {
-        text.chars().for_each(|c| press(form, key(KeyCode::Char(c))));
+        text.chars()
+            .for_each(|c| press(form, key(KeyCode::Char(c))));
     }
 
     pub fn render(form: &impl Form, width: u16, height: u16) -> Buffer {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-        terminal.draw(|frame| form.render(frame, frame.area())).unwrap();
+        terminal
+            .draw(|frame| form.render(frame, frame.area()))
+            .unwrap();
         terminal.backend().buffer().clone()
     }
 
     pub fn lines(buffer: &Buffer) -> Vec<String> {
         (0..buffer.area.height)
-            .map(|y| (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect())
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect()
+            })
             .collect()
     }
 
@@ -286,15 +303,33 @@ pub(crate) mod tests {
     }
 
     impl Form for TestForm {
-        fn title(&self) -> &'static str { "Test" }
-        fn hint(&self) -> &'static str { "Enter ok" }
-        fn labels(&self) -> &'static [&'static str] { &["Name", "Colour"] }
-        fn fields(&self) -> &[Field] { &self.fields }
-        fn fields_mut(&mut self) -> &mut [Field] { &mut self.fields }
-        fn focus(&self) -> usize { self.focus }
-        fn set_focus(&mut self, focus: usize) { self.focus = focus }
-        fn error(&self) -> Option<&str> { self.error.as_deref() }
-        fn set_error(&mut self, error: Option<String>) { self.error = error }
+        fn title(&self) -> &'static str {
+            "Test"
+        }
+        fn hint(&self) -> &'static str {
+            "Enter ok"
+        }
+        fn labels(&self) -> &'static [&'static str] {
+            &["Name", "Colour"]
+        }
+        fn fields(&self) -> &[Field] {
+            &self.fields
+        }
+        fn fields_mut(&mut self) -> &mut [Field] {
+            &mut self.fields
+        }
+        fn focus(&self) -> usize {
+            self.focus
+        }
+        fn set_focus(&mut self, focus: usize) {
+            self.focus = focus
+        }
+        fn error(&self) -> Option<&str> {
+            self.error.as_deref()
+        }
+        fn set_error(&mut self, error: Option<String>) {
+            self.error = error
+        }
         fn submit(&self) -> Result<Action, String> {
             if self.text(0).is_empty() {
                 return Err("Name is required".into());
@@ -321,7 +356,10 @@ pub(crate) mod tests {
         press(&mut form, key(KeyCode::Char(' ')));
         assert_eq!(form.text(0), "éll ");
         // Shortcuts are not typed.
-        press(&mut form, KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        press(
+            &mut form,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
         assert_eq!(form.text(0), "éll ");
     }
 

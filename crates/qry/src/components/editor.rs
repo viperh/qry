@@ -1,17 +1,11 @@
 use crossterm::event::KeyEvent;
-use ratatui::{
-    prelude::*,
-    widgets::Block,
-};
+use ratatui::{prelude::*, widgets::Block};
 use ratatui_textarea::{CursorMove, Scrolling, TextArea};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
 use super::textinput::typed_char;
 use crate::{action::Action, config::Config, keymap::EditorCommand};
-
-
-
 
 #[derive(Default)]
 pub struct Editor {
@@ -21,9 +15,7 @@ pub struct Editor {
     focus: bool,
 
     textarea: TextArea<'static>,
-
 }
-
 
 impl Editor {
     pub fn query(&self) -> String {
@@ -44,7 +36,8 @@ impl Editor {
             Style::new()
         });
         self.textarea.set_cursor_line_style(Style::new());
-        self.textarea.set_line_number_style(Style::new().dark_gray());
+        self.textarea
+            .set_line_number_style(Style::new().dark_gray());
     }
 
     fn apply(&mut self, command: EditorCommand) {
@@ -155,7 +148,9 @@ mod tests {
     }
 
     fn press(editor: &mut Editor, code: KeyCode, modifiers: KeyModifiers) -> Option<Action> {
-        editor.handle_key_event(KeyEvent::new(code, modifiers)).unwrap()
+        editor
+            .handle_key_event(KeyEvent::new(code, modifiers))
+            .unwrap()
     }
 
     fn type_str(editor: &mut Editor, text: &str) {

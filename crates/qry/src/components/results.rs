@@ -57,7 +57,10 @@ impl Component for Results {
     }
 
     fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<Option<Action>> {
-        let Some((rows, cols)) = self.result.as_ref().map(|r| (r.rows.len(), r.columns.len()))
+        let Some((rows, cols)) = self
+            .result
+            .as_ref()
+            .map(|r| (r.rows.len(), r.columns.len()))
         else {
             return Ok(None);
         };
@@ -92,7 +95,13 @@ impl Component for Results {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        let block = Block::bordered().title(" Results ").border_style(if self.focus { Style::new().green() } else { Style::new() });
+        let block = Block::bordered()
+            .title(" Results ")
+            .border_style(if self.focus {
+                Style::new().green()
+            } else {
+                Style::new()
+            });
 
         let Some(result) = self.result.clone() else {
             frame.render_widget(block, area);
@@ -100,7 +109,10 @@ impl Component for Results {
         };
         // A statement such as CREATE or INSERT returns no columns.
         if result.columns.is_empty() {
-            frame.render_widget(Paragraph::new("Statement executed").centered().block(block), area);
+            frame.render_widget(
+                Paragraph::new("Statement executed").centered().block(block),
+                area,
+            );
             return Ok(());
         }
 
@@ -114,16 +126,23 @@ impl Component for Results {
 
         let header = Row::new(visible.iter().map(|&(c, _)| {
             let name = Cell::from(result.columns[c].as_str());
-            if c == self.col { name.underlined() } else { name }
+            if c == self.col {
+                name.underlined()
+            } else {
+                name
+            }
         }))
         .bold();
         let end = (self.row_offset + self.page_rows).min(total_rows);
-        let rows = result.rows[self.row_offset..end].iter().map(|row| {
-            Row::new(visible.iter().map(|&(c, _)| match row.get(c).and_then(Option::as_deref) {
-                Some(value) => Cell::from(value),
-                None => Cell::from("NULL").dark_gray(),
-            }))
-        });
+        let rows =
+            result.rows[self.row_offset..end].iter().map(|row| {
+                Row::new(visible.iter().map(
+                    |&(c, _)| match row.get(c).and_then(Option::as_deref) {
+                        Some(value) => Cell::from(value),
+                        None => Cell::from("NULL").dark_gray(),
+                    },
+                ))
+            });
         let table = Table::new(rows, visible.iter().map(|&(_, w)| Constraint::Length(w)))
             .header(header)
             .column_spacing(COLUMN_SPACING)
@@ -135,7 +154,10 @@ impl Component for Results {
 
         let mut state = TableState::default();
         if total_rows > 0 {
-            state.select_cell(Some((self.row - self.row_offset, self.col - self.col_offset)));
+            state.select_cell(Some((
+                self.row - self.row_offset,
+                self.col - self.col_offset,
+            )));
         }
 
         let position = if total_rows == 0 {
@@ -154,7 +176,9 @@ impl Component for Results {
         // Scrollbars sit on the border, and only appear when there is more to see.
         if total_rows > self.page_rows {
             frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight).begin_symbol(None).end_symbol(None),
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None),
                 area.inner(Margin::new(0, 1)),
                 &mut ScrollbarState::new(total_rows)
                     .viewport_content_length(self.page_rows)
@@ -163,7 +187,9 @@ impl Component for Results {
         }
         if total_width(&self.widths) > usize::from(inner.width) {
             frame.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::HorizontalBottom).begin_symbol(None).end_symbol(None),
+                Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
+                    .begin_symbol(None)
+                    .end_symbol(None),
                 area.inner(Margin::new(1, 0)),
                 &mut ScrollbarState::new(self.widths.len())
                     .viewport_content_length(visible.len())
@@ -188,16 +214,25 @@ fn column_widths(result: &QueryResult) -> Vec<u16> {
             let widest = result
                 .rows
                 .iter()
-                .map(|row| row.get(c).and_then(Option::as_deref).map_or(width("NULL"), width))
+                .map(|row| {
+                    row.get(c)
+                        .and_then(Option::as_deref)
+                        .map_or(width("NULL"), width)
+                })
                 .fold(width(name), usize::max);
-            u16::try_from(widest).unwrap_or(u16::MAX).clamp(1, MAX_COLUMN_WIDTH)
+            u16::try_from(widest)
+                .unwrap_or(u16::MAX)
+                .clamp(1, MAX_COLUMN_WIDTH)
         })
         .collect()
 }
 
 /// Width of all columns side by side, including the gaps between them.
 fn total_width(widths: &[u16]) -> usize {
-    widths.iter().map(|&w| usize::from(w + COLUMN_SPACING)).sum::<usize>()
+    widths
+        .iter()
+        .map(|&w| usize::from(w + COLUMN_SPACING))
+        .sum::<usize>()
         - usize::from(COLUMN_SPACING)
 }
 
@@ -230,7 +265,11 @@ fn visible_columns(widths: &[u16], offset: usize, available: u16) -> Vec<(usize,
     let mut visible = Vec::new();
     let mut used: u16 = 0;
     for (c, &width) in widths.iter().enumerate().skip(offset) {
-        let gap = if visible.is_empty() { 0 } else { COLUMN_SPACING };
+        let gap = if visible.is_empty() {
+            0
+        } else {
+            COLUMN_SPACING
+        };
         let room = available.saturating_sub(used + gap);
         if room == 0 {
             break;
@@ -258,7 +297,11 @@ mod tests {
 
     fn lines(buffer: &Buffer) -> Vec<String> {
         (0..buffer.area.height)
-            .map(|y| (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect())
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect()
+            })
             .collect()
     }
 
@@ -270,8 +313,14 @@ mod tests {
         for _ in 0..times {
             // Terminals report capital letters with Shift held.
             let shift = matches!(code, KeyCode::Char(c) if c.is_ascii_uppercase());
-            let modifiers = if shift { KeyModifiers::SHIFT } else { KeyModifiers::NONE };
-            results.handle_key_event(KeyEvent::new(code, modifiers)).unwrap();
+            let modifiers = if shift {
+                KeyModifiers::SHIFT
+            } else {
+                KeyModifiers::NONE
+            };
+            results
+                .handle_key_event(KeyEvent::new(code, modifiers))
+                .unwrap();
         }
     }
 
@@ -306,9 +355,18 @@ mod tests {
             .unwrap();
 
         let lines = render(&mut results);
-        assert!(lines[1].contains("id") && lines[1].contains("name"), "{lines:#?}");
-        assert!(lines[2].contains('1') && lines[2].contains("alice"), "{lines:#?}");
-        assert!(lines[3].contains('2') && lines[3].contains("NULL"), "{lines:#?}");
+        assert!(
+            lines[1].contains("id") && lines[1].contains("name"),
+            "{lines:#?}"
+        );
+        assert!(
+            lines[2].contains('1') && lines[2].contains("alice"),
+            "{lines:#?}"
+        );
+        assert!(
+            lines[3].contains('2') && lines[3].contains("NULL"),
+            "{lines:#?}"
+        );
     }
 
     #[test]
@@ -322,7 +380,11 @@ mod tests {
             })))
             .unwrap();
 
-        assert!(render(&mut results).iter().any(|line| line.contains("Statement executed")));
+        assert!(
+            render(&mut results)
+                .iter()
+                .any(|line| line.contains("Statement executed"))
+        );
     }
 
     #[test]
@@ -360,7 +422,15 @@ mod tests {
         press(&mut results, KeyCode::Down, 3);
         press(&mut results, KeyCode::Right, 2);
         results.show(grid(2, 2).result.unwrap());
-        assert_eq!((results.row, results.col, results.row_offset, results.col_offset), (0, 0, 0, 0));
+        assert_eq!(
+            (
+                results.row,
+                results.col,
+                results.row_offset,
+                results.col_offset
+            ),
+            (0, 0, 0, 0)
+        );
     }
 
     #[test]
@@ -385,7 +455,10 @@ mod tests {
 
     #[test]
     fn visible_columns_fill_the_width_and_cut_the_last_one() {
-        assert_eq!(visible_columns(&[10, 10, 10], 0, 25), [(0, 10), (1, 10), (2, 3)]);
+        assert_eq!(
+            visible_columns(&[10, 10, 10], 0, 25),
+            [(0, 10), (1, 10), (2, 3)]
+        );
         assert_eq!(visible_columns(&[10, 10, 10], 1, 25), [(1, 10), (2, 10)]);
         assert_eq!(visible_columns(&[50], 0, 20), [(0, 20)]);
     }

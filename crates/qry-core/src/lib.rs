@@ -1,13 +1,13 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub mod shared;
-pub mod postgres;
-pub mod sqlite;
+pub mod exporter;
+pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
-pub mod mariadb;
-pub mod exporter;
+pub mod postgres;
+pub mod shared;
+pub mod sqlite;
 
 pub use exporter::Exporter;
 pub use shared::{Database, QueryResult, SslMode};
@@ -24,7 +24,7 @@ pub enum DatabaseType {
     Postgres,
     Mysql,
     Oracle,
-    MariaDb
+    MariaDb,
 }
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ExportType {
@@ -32,13 +32,17 @@ pub enum ExportType {
     Csv,
     Excel,
     Text,
-    Json
+    Json,
 }
 
 impl ExportType {
     /// In the order the export form offers them.
-    pub const ALL: [ExportType; 4] =
-        [ExportType::Csv, ExportType::Excel, ExportType::Text, ExportType::Json];
+    pub const ALL: [ExportType; 4] = [
+        ExportType::Csv,
+        ExportType::Excel,
+        ExportType::Text,
+        ExportType::Json,
+    ];
 
     /// Whether the rows are separated by a character the user chooses.
     /// Excel writes cells and JSON writes objects, so neither uses one.
@@ -86,7 +90,7 @@ impl std::fmt::Display for ExportType {
 pub struct ExportConfig {
     pub path: String,
     pub separator: String,
-    pub etype: ExportType
+    pub etype: ExportType,
 }
 
 impl ExportConfig {
@@ -109,28 +113,32 @@ pub enum ConnectionConfig {
     Oracle(OracleConfig),
 }
 
-
 impl std::fmt::Debug for ConnectionConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Sqlite(c) => write!(f, "Sqlite({})", c.path.display()),
-            Self::Postgres(c) => write!(f, "Postgres({}@{}:{}/{})", c.user, c.host, c.port, c.database),
+            Self::Postgres(c) => write!(
+                f,
+                "Postgres({}@{}:{}/{})",
+                c.user, c.host, c.port, c.database
+            ),
             Self::Mysql(c) => write!(f, "Mysql({}@{}:{}/{})", c.user, c.host, c.port, c.database),
-            Self::MariaDb(c) => write!(f, "MariaDb({}@{}:{}/{})", c.user, c.host, c.port, c.database),
+            Self::MariaDb(c) => write!(
+                f,
+                "MariaDb({}@{}:{}/{})",
+                c.user, c.host, c.port, c.database
+            ),
             Self::Oracle(c) => write!(f, "Oracle({}@{}:{}/{})", c.user, c.host, c.port, c.service),
         }
     }
 }
 
-
 #[derive(Default)]
 pub struct Driver {
     db: Option<Box<dyn Database>>,
-
 }
 
 impl Driver {
-
     pub fn new() -> Self {
         Self::default()
     }
@@ -163,8 +171,6 @@ impl Driver {
         };
         db.tables().await
     }
-
-
 }
 
 #[cfg(test)]
@@ -215,7 +221,10 @@ mod tests {
     async fn tls_only_ssl_modes_are_refused_before_connecting() {
         for mode in [SslMode::Require, SslMode::VerifyCa, SslMode::VerifyFull] {
             let err = Driver::new().connect(postgres(mode)).await.unwrap_err();
-            assert!(err.to_string().contains("does not support"), "{mode}: {err}");
+            assert!(
+                err.to_string().contains("does not support"),
+                "{mode}: {err}"
+            );
         }
     }
 
@@ -231,7 +240,10 @@ mod tests {
         assert_eq!(ExportType::Csv.with_extension("rows."), "rows.csv");
         // A different extension is kept, and the right one added after it.
         assert_eq!(ExportType::Csv.with_extension("rows.txt"), "rows.txt.csv");
-        assert_eq!(ExportType::Excel.with_extension(r"C:\data\rows"), r"C:\data\rows.xlsx");
+        assert_eq!(
+            ExportType::Excel.with_extension(r"C:\data\rows"),
+            r"C:\data\rows.xlsx"
+        );
         assert_eq!(ExportType::Json.with_extension("rows.json"), "rows.json");
     }
 
@@ -256,10 +268,22 @@ mod tests {
         driver.connect(in_memory()).await.unwrap();
         assert!(driver.tables().await.unwrap().is_empty());
 
-        driver.query("CREATE TABLE people (name TEXT)").await.unwrap();
-        driver.query("CREATE TABLE addresses (line TEXT)").await.unwrap();
-        driver.query("CREATE VIEW recent AS SELECT * FROM people").await.unwrap();
-        assert_eq!(driver.tables().await.unwrap(), ["addresses", "people", "recent"]);
+        driver
+            .query("CREATE TABLE people (name TEXT)")
+            .await
+            .unwrap();
+        driver
+            .query("CREATE TABLE addresses (line TEXT)")
+            .await
+            .unwrap();
+        driver
+            .query("CREATE VIEW recent AS SELECT * FROM people")
+            .await
+            .unwrap();
+        assert_eq!(
+            driver.tables().await.unwrap(),
+            ["addresses", "people", "recent"]
+        );
     }
 
     #[tokio::test]

@@ -111,7 +111,9 @@ pub fn redact(message: &str) -> String {
     while let Some(start) = rest.find("://") {
         let (before, after) = rest.split_at(start + 3);
         out.push_str(before);
-        let end = after.find(|c: char| c.is_whitespace()).unwrap_or(after.len());
+        let end = after
+            .find(|c: char| c.is_whitespace())
+            .unwrap_or(after.len());
         let (authority, tail) = after.split_at(end);
         match (authority.find(':'), authority.find('@')) {
             (Some(colon), Some(at)) if colon < at => {
@@ -161,7 +163,10 @@ mod tests {
     fn the_stash_hands_a_password_over_once() {
         let _guard = test_lock();
         stash(Password::new("hunter2"));
-        assert_eq!(take_stash().map(|p| p.as_str().to_string()), Some("hunter2".into()));
+        assert_eq!(
+            take_stash().map(|p| p.as_str().to_string()),
+            Some("hunter2".into())
+        );
         assert_eq!(take_stash(), None, "taken twice");
     }
 
@@ -172,7 +177,10 @@ mod tests {
             std::env::set_var("QRY_TEST_PASSWORD", "hunter2");
             std::env::set_var("QRY_TEST_EMPTY", "");
         }
-        assert_eq!(from_env("QRY_TEST_PASSWORD").map(|p| p.as_str().to_string()), Some("hunter2".into()));
+        assert_eq!(
+            from_env("QRY_TEST_PASSWORD").map(|p| p.as_str().to_string()),
+            Some("hunter2".into())
+        );
         assert_eq!(from_env("QRY_TEST_EMPTY"), None);
         assert_eq!(from_env("QRY_TEST_UNSET"), None);
     }

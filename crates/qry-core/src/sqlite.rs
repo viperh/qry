@@ -1,18 +1,18 @@
-use std::path::PathBuf;
-use tokio_rusqlite::{Connection, OpenFlags};
-use tokio_rusqlite::types::ValueRef;
-use serde::{Serialize, Deserialize};
+use crate::shared::Database;
+use crate::{DatabaseType, shared};
 use anyhow::Result;
 use async_trait::async_trait;
 use hex::encode;
-use shared::{QueryResult};
-use crate::{shared, DatabaseType};
-use crate::shared::Database;
+use serde::{Deserialize, Serialize};
+use shared::QueryResult;
+use std::path::PathBuf;
+use tokio_rusqlite::types::ValueRef;
+use tokio_rusqlite::{Connection, OpenFlags};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SqliteConfig {
     pub path: PathBuf,
-    pub read_only: bool
+    pub read_only: bool,
 }
 
 impl SqliteConfig {
@@ -38,16 +38,12 @@ impl Sqlite {
         };
 
         let conn = Connection::open_with_flags(&config.path, flags).await?;
-        Ok(Self {
-            conn,
-            config
-        }
-        )
+        Ok(Self { conn, config })
     }
 }
 
 #[async_trait]
-impl Database for Sqlite{
+impl Database for Sqlite {
     fn kind(&self) -> DatabaseType {
         DatabaseType::Sqlite
     }

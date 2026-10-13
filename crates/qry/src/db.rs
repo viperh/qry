@@ -68,19 +68,21 @@ impl Worker {
             DbCommand::Query(sql) => {
                 let started = Instant::now();
                 match self.driver.query(&sql).await {
-                Ok(result) => {
-                    let took = took(started.elapsed());
-                    let summary = match result.rows.len() {
-                        // A CREATE or an INSERT returns no columns to fetch.
-                        _ if result.columns.is_empty() => format!("Statement executed in {took}"),
-                        1 => format!("Fetched 1 row in {took}"),
-                        n => format!("Fetched {n} rows in {took}"),
-                    };
-                    let result = Arc::new(result);
-                    self.last = Some(result.clone());
-                    vec![Action::QueryDone(result), success(summary)]
-                }
-                Err(e) => vec![error(format!("{e:#}"))],
+                    Ok(result) => {
+                        let took = took(started.elapsed());
+                        let summary = match result.rows.len() {
+                            // A CREATE or an INSERT returns no columns to fetch.
+                            _ if result.columns.is_empty() => {
+                                format!("Statement executed in {took}")
+                            }
+                            1 => format!("Fetched 1 row in {took}"),
+                            n => format!("Fetched {n} rows in {took}"),
+                        };
+                        let result = Arc::new(result);
+                        self.last = Some(result.clone());
+                        vec![Action::QueryDone(result), success(summary)]
+                    }
+                    Err(e) => vec![error(format!("{e:#}"))],
                 }
             }
             DbCommand::Export(config) => self.export(config).await,
@@ -151,7 +153,10 @@ impl Worker {
         } else {
             format!("{} ({label})", record.name)
         };
-        let mut actions = vec![Action::Connected(label), success(format!("Connected to {shown}"))];
+        let mut actions = vec![
+            Action::Connected(label),
+            success(format!("Connected to {shown}")),
+        ];
 
         // Only a freshly typed password is worth storing, and only once it is
         // known to work.
@@ -187,8 +192,14 @@ impl Worker {
             ],
             // As with a connection, the modal gets the short message and the
             // status bar the whole chain.
-            Ok(Err(e)) => vec![Action::ExportFailed(e.to_string()), error(format!("Export failed: {e:#}"))],
-            Err(e) => vec![Action::ExportFailed(e.to_string()), error(format!("Export failed: {e}"))],
+            Ok(Err(e)) => vec![
+                Action::ExportFailed(e.to_string()),
+                error(format!("Export failed: {e:#}")),
+            ],
+            Err(e) => vec![
+                Action::ExportFailed(e.to_string()),
+                error(format!("Export failed: {e}")),
+            ],
         }
     }
 }
@@ -244,8 +255,12 @@ mod tests {
     async fn named_connection_shows_its_name() {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
         let db = spawn(action_tx);
-        db.send(DbCommand::Connect(Box::new(sqlite("scratch", ":memory:")))).unwrap();
-        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
+        db.send(DbCommand::Connect(Box::new(sqlite("scratch", ":memory:"))))
+            .unwrap();
+        assert_eq!(
+            action_rx.recv().await,
+            Some(Action::Connected(":memory:".into()))
+        );
         assert_eq!(
             action_rx.recv().await,
             Some(success("Connected to scratch (:memory:)".into()))
@@ -265,10 +280,15 @@ mod tests {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
         let db = spawn(action_tx);
         let mut record = sqlite("env", ":memory:");
-        record.secret = Secret::Env { var: "QRY_TEST_DB_PASSWORD".into() };
+        record.secret = Secret::Env {
+            var: "QRY_TEST_DB_PASSWORD".into(),
+        };
         db.send(DbCommand::Connect(Box::new(record))).unwrap();
 
-        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
+        assert_eq!(
+            action_rx.recv().await,
+            Some(Action::Connected(":memory:".into()))
+        );
     }
 
     #[tokio::test]
@@ -290,14 +310,24 @@ mod tests {
         // connection but carries no password.
         assert_eq!(
             action_rx.recv().await,
-            Some(Action::NeedPassword { id, name: "prompt".into() })
+            Some(Action::NeedPassword {
+                id,
+                name: "prompt".into()
+            })
         );
 
         // The prompt leaves the password in the stash, not in the action.
         secrets::stash(Password::new("hunter2"));
         db.send(DbCommand::PasswordEntered).unwrap();
-        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
-        assert_eq!(secrets::take_stash(), None, "the stash is emptied by the worker");
+        assert_eq!(
+            action_rx.recv().await,
+            Some(Action::Connected(":memory:".into()))
+        );
+        assert_eq!(
+            secrets::take_stash(),
+            None,
+            "the stash is emptied by the worker"
+        );
     }
 
     #[tokio::test]
@@ -326,8 +356,14 @@ mod tests {
         db.send(in_memory()).unwrap();
         db.send(DbCommand::Query("SELECT 1 AS one".into())).unwrap();
 
-        assert_eq!(action_rx.recv().await, Some(Action::Connected(":memory:".into())));
-        assert_eq!(action_rx.recv().await, Some(success("Connected to :memory:".into())));
+        assert_eq!(
+            action_rx.recv().await,
+            Some(Action::Connected(":memory:".into()))
+        );
+        assert_eq!(
+            action_rx.recv().await,
+            Some(success("Connected to :memory:".into()))
+        );
         let Some(Action::QueryDone(result)) = action_rx.recv().await else {
             panic!("expected QueryDone");
         };
@@ -336,7 +372,10 @@ mod tests {
             panic!("expected a status message");
         };
         assert!(message.starts_with("Fetched 1 row in "), "{message}");
-        assert!(message.ends_with("ms") || message.ends_with('s'), "{message}");
+        assert!(
+            message.ends_with("ms") || message.ends_with('s'),
+            "{message}"
+        );
     }
 
     #[tokio::test]
@@ -379,7 +418,9 @@ mod tests {
         .unwrap();
         assert_eq!(
             action_rx.recv().await,
-            Some(Action::ExportFailed("Nothing to export yet: run a query first".into()))
+            Some(Action::ExportFailed(
+                "Nothing to export yet: run a query first".into()
+            ))
         );
         assert_eq!(
             action_rx.recv().await,

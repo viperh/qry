@@ -195,7 +195,12 @@ mod tests {
 
     #[test]
     fn each_separator_choice_has_its_character() {
-        for (option, expected) in [("COMMA", ","), ("PIPE", "|"), ("TAB", "\t"), ("SEMICOLON", ";")] {
+        for (option, expected) in [
+            ("COMMA", ","),
+            ("PIPE", "|"),
+            ("TAB", "\t"),
+            ("SEMICOLON", ";"),
+        ] {
             let mut form = ExportForm::default();
             type_str(&mut form, "rows.csv");
             pick(&mut form, SEPARATOR, &SEPARATORS, option);
@@ -203,7 +208,11 @@ mod tests {
                 panic!("expected an export");
             };
             assert_eq!(config.separator, expected, "{option}");
-            assert_eq!(form.fields.len(), LABELS_SEPARATOR.len(), "{option} added a field");
+            assert_eq!(
+                form.fields.len(),
+                LABELS_SEPARATOR.len(),
+                "{option} added a field"
+            );
         }
     }
 
@@ -252,7 +261,12 @@ mod tests {
 
     #[test]
     fn a_path_without_the_right_extension_gets_one() {
-        let expected = [("CSV", "rows.csv"), ("Excel", "rows.xlsx"), ("Text", "rows.txt"), ("JSON", "rows.json")];
+        let expected = [
+            ("CSV", "rows.csv"),
+            ("Excel", "rows.xlsx"),
+            ("Text", "rows.txt"),
+            ("JSON", "rows.json"),
+        ];
         for (option, path) in expected {
             let mut form = ExportForm::default();
             type_str(&mut form, "rows");
@@ -317,12 +331,21 @@ mod tests {
     fn the_popup_shows_every_field() {
         let mut form = ExportForm::default();
         let shown = lines(&render(&form, 80, 24)).join("\n");
-        assert!(shown.contains("› Path") && shown.contains("Type"), "{shown}");
-        assert!(shown.contains("Separator") && shown.contains("COMMA"), "{shown}");
+        assert!(
+            shown.contains("› Path") && shown.contains("Type"),
+            "{shown}"
+        );
+        assert!(
+            shown.contains("Separator") && shown.contains("COMMA"),
+            "{shown}"
+        );
         assert!(!shown.contains("Custom"), "{shown}");
 
         pick(&mut form, SEPARATOR, &SEPARATORS, "OTHER");
         let shown = lines(&render(&form, 80, 24)).join("\n");
-        assert!(shown.contains("OTHER") && shown.contains("Custom"), "{shown}");
+        assert!(
+            shown.contains("OTHER") && shown.contains("Custom"),
+            "{shown}"
+        );
     }
 }
