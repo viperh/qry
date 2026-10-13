@@ -173,19 +173,19 @@ Shared helpers move into the new files they belong to:
 
 ## Acceptance criteria
 
-- [ ] `rust-toolchain.toml` and `rustfmt.toml` exist with the contents above. `cargo fmt --all --check` passes on stable.
-- [ ] The root `Cargo.toml` has `[workspace.lints.rust]` and `[workspace.lints.clippy]` as above, and both `crates/qry/Cargo.toml` and `crates/qry-core/Cargo.toml` contain `[lints] workspace = true`.
-- [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` passes with the new lints. Every `#[allow]` added in non-test code carries a `reason = "…"`.
-- [ ] `grep -rn "unsafe" crates/*/src` finds nothing, or only one allow-listed module with a justification comment.
-- [ ] Every external dependency is declared once in `[workspace.dependencies]`. `grep -E '^[a-z_-]+ = "' crates/*/Cargo.toml` returns no versioned dependency lines, only `workspace = true` forms.
-- [ ] Exactly one `rust-version` exists, in `[workspace.package]`, and `cargo +<that version> check --workspace --all-features --locked` succeeds.
-- [ ] `deny.toml` exists and `cargo deny check advisories bans licenses sources --all-features` passes locally.
-- [ ] Adding `ratatui` as a dependency of `qry-core` makes `cargo deny check bans` fail. Verify this once by hand and describe it in the PR.
-- [ ] `.github/dependabot.yml` exists for `cargo` and `github-actions`, weekly and grouped.
-- [ ] `.gitignore` contains the entries listed above.
-- [ ] No file under `crates/` contains an inline `mod tests {`. Every former inline test module is now a sibling `*_tests.rs` or `tests.rs` file.
-- [ ] `cargo test --workspace --all-features --locked` runs the same number of tests as before the move (state both counts in the PR description), and all of them pass.
-- [ ] The formatting change is its own commit, and its hash is listed in `.git-blame-ignore-revs`.
+- [x] `rust-toolchain.toml` and `rustfmt.toml` exist with the contents above. `cargo fmt --all --check` passes on stable.
+- [x] The root `Cargo.toml` has `[workspace.lints.rust]` and `[workspace.lints.clippy]` as above, and both `crates/qry/Cargo.toml` and `crates/qry-core/Cargo.toml` contain `[lints] workspace = true`.
+- [x] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` passes with the new lints. Every `#[allow]` added in non-test code carries a `reason = "…"`.
+- [x] `grep -rn "unsafe" crates/*/src` finds nothing, or only one allow-listed module with a justification comment.
+- [x] Every external dependency is declared once in `[workspace.dependencies]`. `grep -E '^[a-z_-]+ = "' crates/*/Cargo.toml` returns no versioned dependency lines, only `workspace = true` forms.
+- [x] Exactly one `rust-version` exists, in `[workspace.package]`, and `cargo +<that version> check --workspace --all-features --locked` succeeds.
+- [x] `deny.toml` exists and `cargo deny check advisories bans licenses sources --all-features` passes locally.
+- [x] Adding `ratatui` as a dependency of `qry-core` makes `cargo deny check bans` fail. Verify this once by hand and describe it in the PR.
+- [x] `.github/dependabot.yml` exists for `cargo` and `github-actions`, weekly and grouped.
+- [x] `.gitignore` contains the entries listed above.
+- [x] No file under `crates/` contains an inline `mod tests {`. Every former inline test module is now a sibling `*_tests.rs` or `tests.rs` file.
+- [x] `cargo test --workspace --all-features --locked` runs the same number of tests as before the move (state both counts in the PR description), and all of them pass.
+- [x] The formatting change is its own commit, and its hash is listed in `.git-blame-ignore-revs`.
 
 ## Tests
 
@@ -207,3 +207,26 @@ One structural test is added now and extended in T003:
   - **`every_crate_declares_the_workspace_rust_version`** asserts every package's `rust_version` is `Some` and that all of them are equal.
   - **`every_crate_is_mit_licensed`** asserts `license == Some("MIT")` for every member.
   - **`no_inline_test_modules`** walks `crates/*/src/**/*.rs` and fails if any file contains the line `mod tests {`, listing the offending files.
+
+## Implementation notes
+
+- **MSRV is 1.96, not 1.89.** The locked build dependencies `vergen-gix` and `vergen` 10.0.3 declare `rust-version = "1.96.0"` (every `vergen-gix` 10.x needs at least 1.95), so 1.89 cannot build. `cargo check --workspace --all-features --locked` passes with a standalone Rust 1.96.0 toolchain. This machine has no rustup, so it was run with that toolchain on `PATH` rather than as `cargo +1.96`.
+- **Two formatting commits, both in `.git-blame-ignore-revs`:** `a4b18c3 style: cargo fmt the workspace` (stable rustfmt) and `84dd8c2 style: group and merge imports with nightly rustfmt`. Stable rustfmt ignores `imports_granularity` and `group_imports`, so a nightly rustfmt was run once to apply them. Stable and nightly `cargo fmt --all --check` now both pass.
+- **cargo-deny flag order:** cargo-deny 0.20 rejects `cargo deny check … --all-features`. The working form is `cargo deny --all-features check advisories bans licenses sources`, which passes. Fixes needed to get there:
+  - `webpki-roots` (via `oracledb`) gets a `CDLA-Permissive-2.0` license exception.
+  - The yanked `yoke-derive` 0.8.3 was bumped to 0.8.4 in `Cargo.lock`.
+  - `oracledb`, `rust_xlsxwriter` and the keyring backends needed nothing else.
+  - The five `unused-wrapper` warnings are expected: `clap_complete`, `clap_mangen` and the other listed wrappers are not in the tree yet.
+- **OpenSSL / native-tls are banned.** `cargo tree --target all --all-features -i` finds neither on any target: Postgres connects with `NoTls`, and `mysql_async` uses its default features. rustls is already in the tree through `oracledb`. `deny.toml` explains the reasoning.
+- **Layering ban checked by hand.** With `ratatui = { workspace = true }` added to `qry-core`, `cargo deny check bans` fails with `error[banned]: crate 'ratatui = 0.30.2' is explicitly banned`. The change was then reverted.
+- **`unsafe`.** `tui.rs` and `errors.rs` have no `unsafe`; `errors.rs` only uses the `libc::EXIT_FAILURE` constant. The only `unsafe` was `std::env::set_var` in two tests. It now lives in a single `#[cfg(test)]` helper, `secrets::set_test_var`, with `#[allow(unsafe_code, reason)]` and a justification comment. `unsafe_code` is `deny` rather than `forbid` so that this one allow works.
+- **Sibling test files use `#[path]`.** For a non-root file such as `components/form.rs`, a plain `mod form_tests;` would resolve to `components/form/form_tests.rs`. Each module therefore declares `#[cfg(test)] #[path = "form_tests.rs"] mod form_tests;`, as sverb does. `lib.rs` uses a plain `mod lib_tests;`. The form helpers are `pub(crate)` in `form::form_tests`, and `components.rs` re-exports them as `crate::components::form_tests`.
+- **Test count:** 173 before the move (146 qry + 27 qry-core), and 173 after. The 4 new structural tests in `crates/qry/tests/workspace_lints.rs` bring the total to 177.
+- **Lint fixes beyond renaming:**
+  - `unreachable_pub` turned about 150 `pub` items in the `qry` binary into `pub(crate)`.
+  - `missing_debug_implementations` led to hand-written `Debug` impls that redact the password for the database configs, connections and `Driver`.
+  - Non-test unwraps became handled errors: non-UTF-8 config/data directories, `Tui`'s `Drop`, and the event loop's init send. The two that cannot fail (`conntree` table rows, the single-char key parse) and the test-only `Config::embedded` carry `#[allow(…, reason)]`.
+  - The file-wide `#![allow(dead_code)]` in `tui.rs` was narrowed to the three unused builder methods.
+- **`.idea/`:** only the shared `dictionaries/` and `inspectionProfiles/` stay tracked. `modules.xml`, `qry.iml`, `vcs.xml` and `.idea/.gitignore` were untracked and are now ignored.
+- The workspace has no cargo features, so the `--no-default-features` clippy run is the same as the default one. It passes.
+- CI is not touched here (T003). CI being green on GitHub can't be checked locally.
