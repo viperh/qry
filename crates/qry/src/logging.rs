@@ -10,7 +10,7 @@ pub(crate) static LOG_ENV: LazyLock<String> =
 pub(crate) static LOG_FILE: LazyLock<String> =
     LazyLock::new(|| format!("{}.log", env!("CARGO_PKG_NAME")));
 
-pub(crate) fn init() -> color_eyre::Result<()> {
+pub fn init() -> color_eyre::Result<()> {
     let directory = config::get_data_dir();
     std::fs::create_dir_all(directory.clone())?;
     let log_path = directory.join(LOG_FILE.clone());

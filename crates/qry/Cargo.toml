@@ -15,6 +15,11 @@ build = "build.rs"
 [lints]
 workspace = true
 
+[features]
+# Compiles `qry::testing` (the app harness) for other crates' tests. Never
+# enabled in a release build.
+test-util = []
+
 [dependencies]
 qry-core = { workspace = true }
 

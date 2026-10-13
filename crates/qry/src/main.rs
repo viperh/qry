@@ -1,34 +1,15 @@
 //! Entry point.
 //!
-//! The binary owns everything terminal-related; domain logic lives in the
-//! `qry-core` crate so it stays testable without a TTY.
+//! The binary owns nothing but startup: everything else is in the `qry`
+//! library, and domain logic lives in the `qry-core` crate so it stays
+//! testable without a TTY.
 
 use clap::Parser;
-use cli::Cli;
-
-use crate::app::App;
-
-mod action;
-mod app;
-mod cli;
-mod components;
-mod config;
-mod connections;
-mod db;
-mod errors;
-mod import;
-mod keymap;
-mod logging;
-mod secrets;
-mod tui;
+use qry::cli::Cli;
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
-    crate::errors::init()?;
-    crate::logging::init()?;
-
-    let args = Cli::parse();
-    let mut app = App::new(args.tick_rate, args.frame_rate)?;
-    app.run().await?;
-    Ok(())
+    qry::errors::init()?;
+    qry::logging::init()?;
+    qry::run(Cli::parse()).await
 }

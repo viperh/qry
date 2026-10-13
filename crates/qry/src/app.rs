@@ -14,7 +14,7 @@ use crate::{
     tui::{Event, Tui},
 };
 
-pub(crate) struct App {
+pub struct App {
     db: mpsc::UnboundedSender<DbCommand>,
     config: Config,
     tick_rate: f64,
@@ -26,6 +26,20 @@ pub(crate) struct App {
     last_tick_key_events: Vec<KeyEvent>,
     action_tx: mpsc::UnboundedSender<Action>,
     action_rx: mpsc::UnboundedReceiver<Action>,
+}
+
+/// Shows the mode and the run flags; the components and channels have no
+/// useful `Debug` of their own.
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("mode", &self.mode)
+            .field("tick_rate", &self.tick_rate)
+            .field("frame_rate", &self.frame_rate)
+            .field("should_quit", &self.should_quit)
+            .field("should_suspend", &self.should_suspend)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Input modes. Keybindings and styles in `.config/config.json` are keyed by
@@ -42,7 +56,7 @@ pub(crate) enum Mode {
 }
 
 impl App {
-    pub(crate) fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
+    pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             db: crate::db::spawn(action_tx.clone()),
@@ -59,7 +73,7 @@ impl App {
         })
     }
 
-    pub(crate) async fn run(&mut self) -> color_eyre::Result<()> {
+    pub async fn run(&mut self) -> color_eyre::Result<()> {
         let mut tui = Tui::new()?
             // .mouse(true) // uncomment this line to enable mouse support
             .tick_rate(self.tick_rate)
