@@ -4,6 +4,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
+use crate::{action::Action, theme::Accent};
 
 /// The fields every export has.
 const LABELS_PLAIN: [&str; 2] = ["Path", "Type"];
@@ -65,8 +66,20 @@ impl Form for ExportForm {
         "Export"
     }
 
-    fn hint(&self) -> &'static str {
-        "Enter export · Esc cancel"
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        &[
+            (Action::Submit, "export"),
+            (Action::Cancel, "cancel"),
+            (Action::NextField, "next"),
+        ]
+    }
+
+    fn width(&self) -> u16 {
+        64
+    }
+
+    fn accent(&self) -> Accent {
+        Accent::Act
     }
 
     fn labels(&self) -> &'static [&'static str] {

@@ -8,7 +8,7 @@
 use crate::{
     action::Action,
     app::{
-        dialogs::{DialogState, confirmform::ConfirmForm},
+        dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
         state::{SessionId, SessionStatus, State, StatusCode, scratch_record},
     },
@@ -81,7 +81,7 @@ pub(super) fn reconnect(
 fn close_active(state: &mut State, fx: &mut Vec<Effect>) {
     let session = state.sessions.active();
     if session.running > 0 {
-        let form = ConfirmForm::close_session(session.id, &session.title);
+        let form = Confirm::close_session(session.id, &session.title);
         state.open_dialog(DialogState::Confirm(form));
         state.awaiting = None;
         return;

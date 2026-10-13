@@ -307,7 +307,11 @@ fn deleting_a_connection_saves_and_forgets_its_password() {
     let id = kept.id.clone();
     tree.loaded(vec![kept]);
 
+    // It asks first.
     tree.press(KeyCode::Delete);
+    assert!(tree.take().is_empty());
+    assert!(matches!(tree.state.dialog(), Some(DialogState::Confirm(_))));
+    tree.press(KeyCode::Char('y'));
     assert_eq!(
         tree.take(),
         [
@@ -315,6 +319,7 @@ fn deleting_a_connection_saves_and_forgets_its_password() {
             Effect::SaveConnections(Vec::new())
         ]
     );
+    assert!(tree.state.dialog().is_none());
     assert!(tree.lines(30, 8).contains("No connections yet"));
 }
 
@@ -570,6 +575,7 @@ fn deleting_a_connection_being_opened_drops_its_late_answer() {
     // connection and change nothing.
     tree.press(KeyCode::End);
     tree.press(KeyCode::Delete);
+    tree.press(KeyCode::Char('y'));
     tree.connected("two.db");
     tree.tables(&["t"]);
     assert_eq!(tree.state.tree.connections.len(), 1);

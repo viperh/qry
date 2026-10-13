@@ -30,7 +30,7 @@ use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 
 pub use crate::{app::Effect, theme::ThemeEnv};
 use crate::{
-    app::{App, DbAnswer, FileAnswer, SessionId, State, UiEvent},
+    app::{App, DbAnswer, FileAnswer, SessionId, State, Timer, UiEvent},
     config::Config,
     connections::StoredConnection,
     db::{self, DbCommand},
@@ -295,7 +295,8 @@ impl AppHarness {
         self
     }
 
-    /// Returns and clears the effects recorded so far.
+    /// Returns and clears the effects recorded so far. A waiting dialog's
+    /// spinner timers are delivered on the virtual clock but not recorded.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
     }
@@ -332,6 +333,11 @@ impl AppHarness {
                             due: self.now.saturating_add(after),
                             events: vec![UiEvent::Timer(*timer)],
                         });
+                        // A spinner's frames are pacing, not something a
+                        // test asks for: delivered, but not recorded.
+                        if matches!(timer, Timer::Spinner(_)) {
+                            continue;
+                        }
                     }
                     Effect::Db(id, DbCommand::ListTables) => {
                         let answer = (self.database.as_ref())

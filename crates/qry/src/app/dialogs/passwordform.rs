@@ -2,6 +2,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
+use crate::action::Action;
 use crate::{app::state::SessionId, secrets::Password};
 
 const LABELS: [&str; 1] = ["Password"];
@@ -51,8 +52,12 @@ impl Form for PasswordForm {
         "Password"
     }
 
-    fn hint(&self) -> &'static str {
-        "Enter connect · Esc cancel"
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        &[(Action::Submit, "connect"), (Action::Cancel, "cancel")]
+    }
+
+    fn width(&self) -> u16 {
+        50
     }
 
     fn labels(&self) -> &'static [&'static str] {

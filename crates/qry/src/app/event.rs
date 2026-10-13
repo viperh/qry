@@ -38,6 +38,9 @@ pub enum Timer {
     /// The wait for the rest of a multi-key binding, numbered as
     /// `State::key_timer` counts them.
     KeySequence(u64),
+    /// The next frame of a waiting dialog's spinner, numbered as
+    /// `State::spinner_timer` counts them.
+    Spinner(u64),
 }
 
 /// The outcome of an effect that reads or writes a file.

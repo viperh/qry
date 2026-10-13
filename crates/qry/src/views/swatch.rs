@@ -152,6 +152,7 @@ fn samples(t: &Theme) -> Vec<Line<'static>> {
         one("field_border_focus", t.field_border_focused()),
         one("button", t.button()),
         one("button_primary", t.button_primary()),
+        one("button_danger", t.button_danger()),
         one("palette_border", t.palette_border()),
         one("palette_selected", t.palette_item_selected()),
         one("palette_match", t.palette_match()),

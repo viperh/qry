@@ -2,7 +2,7 @@
 //! They are plain data in [`State`](super::state::State); the reducer opens,
 //! submits and closes them, and [`crate::views::form`] draws them.
 
-pub(crate) mod confirmform;
+pub(crate) mod confirm;
 pub(crate) mod connexportform;
 pub(crate) mod connform;
 pub(crate) mod exportform;
@@ -14,8 +14,13 @@ pub(crate) mod textinput;
 use qry_core::ExportConfig;
 
 use self::{
-    confirmform::ConfirmForm, connexportform::ConnExportForm, connform::ConnForm,
-    exportform::ExportForm, form::Form, importform::ImportForm, passwordform::PasswordForm,
+    confirm::{Confirm, OnConfirm},
+    connexportform::ConnExportForm,
+    connform::ConnForm,
+    exportform::ExportForm,
+    form::Form,
+    importform::ImportForm,
+    passwordform::PasswordForm,
 };
 use super::state::SessionId;
 use crate::{connections::StoredConnection, import::Format, secrets::Password};
@@ -28,7 +33,7 @@ pub(crate) enum DialogState {
     Password(PasswordForm),
     Import(ImportForm),
     ConnExport(ConnExportForm),
-    Confirm(ConfirmForm),
+    Confirm(Confirm),
 }
 
 impl DialogState {
@@ -78,8 +83,10 @@ pub(crate) enum Submission {
     Import { path: String, format: Format },
     /// Write a backup of the saved connections to this file.
     ExportConnections(String),
-    /// Close this session, though a query is running there.
-    CloseSession(SessionId),
+    /// A confirm dialog's confirm button.
+    Confirmed(OnConfirm),
+    /// A confirm dialog's Cancel button.
+    Dismissed,
 }
 
 /// The form helpers (`key`, `press`, `type_str`, `render`), shared by every

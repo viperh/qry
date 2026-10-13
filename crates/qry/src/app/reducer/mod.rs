@@ -31,6 +31,7 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Resize(w, h) => state.size = (w, h),
         UiEvent::Tick(_) => {}
         UiEvent::Timer(Timer::KeySequence(n)) => keys::timed_out(state, n, &mut fx),
+        UiEvent::Timer(Timer::Spinner(n)) => dialogs::spin(state, n, &mut fx),
         // A closed session's worker may still answer; nobody is listening.
         UiEvent::Db(id, answer) if state.sessions.get(id).is_some() => {
             db::answer(state, id, answer, &mut fx);

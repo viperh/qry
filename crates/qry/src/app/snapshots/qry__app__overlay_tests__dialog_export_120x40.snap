@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/overlay_tests.rs
+expression: "h.render(120, 40)"
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+ ▸ ● scratch                  │ 1                                                                                       
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS                                                                                 
+                            ┌ Export ──────────────────────────────────────────────────────┐                            
+                            │ › Path                                                       │                            
+                            │   Type       ‹ CSV ›                                         │                            
+                            │   Separator  ‹ COMMA ›                                       │                            
+                            │                                                              │                            
+                            │ Enter export · Esc cancel · Tab next                         │                            
+                            └──────────────────────────────────────────────────────────────┘                            
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ scratch · sqlite · :memory: · auto-commit                                                                              
+ Enter submit  Tab next field  Esc cancel                                                                       F1 help

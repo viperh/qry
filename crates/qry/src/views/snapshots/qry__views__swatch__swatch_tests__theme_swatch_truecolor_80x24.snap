@@ -10,13 +10,13 @@ border              sort_indicator      hint                field_border
 border_strong       overflow_hint       hint_key            field_border_focus  
 focused_border      gutter              info ok warn error  button              
 spinner             gutter_selected     sql_keyword         button_primary      
-value_ok            column_divider      sql_operator        palette_border      
-value_error         frozen_divider      sql_string          palette_selected    
-app_name            row(0)              sql_number          palette_match       
-tab                 row(1)              sql_comment         backdrop            
-tab_active          row_selected        sql_identifier      query fetch exp sch 
-tab_running         cursor_cell         sql_punct           jobs ▸ ✓ ✗ – …      
-NORMAL EDIT COMMAND null_value          sql_quoted_ident                        
+value_ok            column_divider      sql_operator        button_danger       
+value_error         frozen_divider      sql_string          palette_border      
+app_name            row(0)              sql_number          palette_selected    
+tab                 row(1)              sql_comment         palette_match       
+tab_active          row_selected        sql_identifier      backdrop            
+tab_running         cursor_cell         sql_punct           query fetch exp sch 
+NORMAL EDIT COMMAND null_value          sql_quoted_ident    jobs ▸ ✓ ✗ – …      
 pane_title          match_highlight     sql_error                               
 pane_title_focused  inspector_label     editor_cursor_line                      
 divider             inspector_focused   editor_cursor                           
@@ -104,56 +104,48 @@ session ● ◌ ✗       status_jobs         dialog_title
 34,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,8 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
 52,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-60,8 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
-74,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,8 Rgb(14, 17, 22) Rgb(242, 139, 107) BOLD
+73,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,9 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
 11,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 20,9 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
 34,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,9 Rgb(159, 211, 138) Rgb(14, 17, 22) NONE
 50,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-60,9 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
-76,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,9 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+74,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,10 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
 8,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,10 Rgb(199, 166, 255) Rgb(14, 17, 22) NONE
 50,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-60,10 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
-73,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,10 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+76,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,11 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
 3,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 20,11 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
 26,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,11 Rgb(138, 148, 163) Rgb(14, 17, 22) ITALIC
 51,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-60,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
-68,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,11 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+73,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,12 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED
 10,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 20,12 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
 32,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-60,12 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
-65,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-66,12 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
-71,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-72,12 Rgb(242, 176, 74) Rgb(14, 17, 22) NONE
-75,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-76,12 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
-79,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,12 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+68,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,13 Rgb(79, 193, 201) Rgb(19, 24, 32) NONE
 11,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 20,13 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
 31,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-65,13 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
-66,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-67,13 Rgb(159, 211, 138) Rgb(14, 17, 22) NONE
-68,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-69,13 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
-70,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-71,13 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-72,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-73,13 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-74,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+60,13 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+65,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+66,13 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+71,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+72,13 Rgb(242, 176, 74) Rgb(14, 17, 22) NONE
+75,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+76,13 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+79,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,14 Rgb(14, 17, 22) Rgb(79, 193, 201) BOLD
 6,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 7,14 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
@@ -164,6 +156,16 @@ session ● ◌ ✗       status_jobs         dialog_title
 30,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,14 Rgb(169, 180, 194) Rgb(14, 17, 22) NONE
 56,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+65,14 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+66,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+67,14 Rgb(159, 211, 138) Rgb(14, 17, 22) NONE
+68,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+69,14 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+70,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,14 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+72,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+73,14 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+74,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,15 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
 10,15 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 20,15 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE

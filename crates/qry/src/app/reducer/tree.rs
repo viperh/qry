@@ -5,6 +5,7 @@ use super::{dialogs, sessions};
 use crate::{
     action::Action,
     app::{
+        dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
         state::{Awaiting, Node, Row, SessionId, SessionStatus, State, StatusCode},
     },
@@ -181,18 +182,14 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
                 dialogs::edit_connection(state, &record);
             }
         }
+        // Only the confirm's Delete forgets it; see `delete`.
         Action::DeleteConnection => {
             if let Some(i) = selected {
                 let record = &tree.connections[i].record;
-                // Its password goes with it, so nothing is orphaned.
-                let forget = matches!(record.secret, Secret::Keyring)
-                    .then(|| Effect::ForgetSecret(record.id.clone()));
-                let saved = !record.ephemeral;
-                forget_node(state, i);
-                fx.extend(forget);
-                if saved {
-                    save(state, fx);
-                }
+                let keychain = matches!(record.secret, Secret::Keyring);
+                let confirm = Confirm::delete_connection(&record.id, record.title(), keychain);
+                state.open_dialog(DialogState::Confirm(confirm));
+                state.awaiting = None;
             }
         }
         // Reads the tables of the open connection again.
@@ -208,6 +205,23 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
             }
         }
         _ => {}
+    }
+}
+
+/// Forgets the stored connection `id`, as its delete confirm asked: its
+/// password goes with it, so nothing is orphaned, and the file is written.
+pub(super) fn delete(state: &mut State, id: &str, fx: &mut Vec<Effect>) {
+    let Some(i) = state.tree.position(id) else {
+        return;
+    };
+    let record = &state.tree.connections[i].record;
+    let forget =
+        matches!(record.secret, Secret::Keyring).then(|| Effect::ForgetSecret(record.id.clone()));
+    let saved = !record.ephemeral;
+    forget_node(state, i);
+    fx.extend(forget);
+    if saved {
+        save(state, fx);
     }
 }
 

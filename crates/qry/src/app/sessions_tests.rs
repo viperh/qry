@@ -261,7 +261,11 @@ fn close_with_running_job_asks_first() {
     assert!(s.effects().is_empty());
     assert_eq!(s.h.sessions().len(), 2);
 
+    // Enter starts on Cancel, as closing cannot be undone.
     s.keys("ctrl-w enter");
+    assert!(s.effects().is_empty());
+    assert_eq!(s.h.sessions().len(), 2);
+    s.keys("ctrl-w right enter");
     assert_eq!(s.effects(), [Effect::CloseSession(prod)]);
     assert!(s.h.state().dialog().is_none());
     assert_eq!(s.active(), SessionId::FIRST);

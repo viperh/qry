@@ -2,6 +2,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
+use crate::{action::Action, theme::Accent};
 
 const LABELS: [&str; 1] = ["File"];
 const FILE: usize = 0;
@@ -31,8 +32,16 @@ impl Form for ConnExportForm {
         "Export Connections"
     }
 
-    fn hint(&self) -> &'static str {
-        "Enter export · Esc cancel"
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        &[(Action::Submit, "export"), (Action::Cancel, "cancel")]
+    }
+
+    fn width(&self) -> u16 {
+        64
+    }
+
+    fn accent(&self) -> Accent {
+        Accent::Act
     }
 
     fn subtitle(&self) -> Option<String> {

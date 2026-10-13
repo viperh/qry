@@ -171,19 +171,19 @@ Destructive tree actions (`TreeCommand::Delete`) now open a coral `Confirm`. Onl
 
 ## Acceptance criteria
 
-- [ ] All five existing modals and `Confirm` render through `dialog_frame`. No modal draws a per-field `Block`, and `form.rs` contains no `Block::bordered()` apart from the one inside `dialog_frame`.
-- [ ] When an overlay is open, every cell outside it carries the backdrop style. A buffer check confirms this for the corners of the screen.
-- [ ] With no overlay open, no cell is dimmed.
+- [x] All five existing modals and `Confirm` render through `dialog_frame`. No modal draws a per-field `Block`, and `form.rs` contains no `Block::bordered()` apart from the one inside `dialog_frame`.
+- [x] When an overlay is open, every cell outside it carries the backdrop style. A buffer check confirms this for the corners of the screen.
+- [x] With no overlay open, no cell is dimmed.
 - [ ] Draw order is base, backdrop, overlay, toast. A toast emitted while a dialog is open is visible above the backdrop.
-- [ ] Each dialog's border and title use its documented accent. The delete-connection confirm is coral and defaults to Cancel.
-- [ ] Only the focused field shows `› ` and the block cursor. Choice fields show `‹ value ›`, checkboxes show `[x]`/`[ ]`, and masked text shows `•` only.
-- [ ] The footer keys come from the `Dialog` key context, so a remap shows up in the footer.
-- [ ] While a submit waits, the footer shows the spinner and pending text, and the spinner frame advances once per 100 ms of virtual time.
-- [ ] A worker failure shows a coral inline error and keeps every typed value.
-- [ ] Existing behaviour tests from `home.rs` still pass after being moved into the reducer tests: submit waits, failure keeps values, a late answer for another modal is ignored, and a password prompt is opened by `NeedPassword`.
-- [ ] Short terminals: at 80x24 the New Connection dialog scrolls so the focused field is always visible.
-- [ ] Deleting a connection from the tree requires confirmation. `Esc`, `n` and Cancel leave the connection in place, while `y` or Delete removes it and forgets its keychain secret.
-- [ ] No raw colours are used (`no_raw_colors` passes).
+- [x] Each dialog's border and title use its documented accent. The delete-connection confirm is coral and defaults to Cancel.
+- [x] Only the focused field shows `› ` and the block cursor. Choice fields show `‹ value ›`, checkboxes show `[x]`/`[ ]`, and masked text shows `•` only.
+- [x] The footer keys come from the `Dialog` key context, so a remap shows up in the footer.
+- [x] While a submit waits, the footer shows the spinner and pending text, and the spinner frame advances once per 100 ms of virtual time.
+- [x] A worker failure shows a coral inline error and keeps every typed value.
+- [x] Existing behaviour tests from `home.rs` still pass after being moved into the reducer tests: submit waits, failure keeps values, a late answer for another modal is ignored, and a password prompt is opened by `NeedPassword`.
+- [x] Short terminals: at 80x24 the New Connection dialog scrolls so the focused field is always visible.
+- [x] Deleting a connection from the tree requires confirmation. `Esc`, `n` and Cancel leave the connection in place, while `y` or Delete removes it and forgets its keychain secret.
+- [x] No raw colours are used (`no_raw_colors` passes).
 
 ## Tests
 
@@ -217,3 +217,16 @@ insta snapshots, plain and styled:
 - `dialog_new_connection_120x40`, `dialog_new_connection_80x24_scrolled`, `dialog_new_connection_pending_120x40`, `dialog_new_connection_error_120x40`.
 - `dialog_export_120x40`, `dialog_import_120x40`, `dialog_password_80x24`.
 - `confirm_delete_80x24`.
+
+## Implementation notes
+
+- **One box stays unticked, for the toast.** The draw order is the main screen, then the backdrop (only while an overlay is open), then the overlays (`views::draw_overlays`). There are no toasts yet, so "a toast emitted while a dialog is open is visible" and `toast_draws_above_dialog` wait for T205, which draws its toast after `draw_overlays`. For the same reason the full error text goes only to the dialog footer and the status line for now, not to a toast.
+- **Where things live.** The spec's `ui/overlay/` is `views/overlay.rs` (`dialog_frame`, `apply_backdrop`, `SPINNER`). `centered_rect` stayed in `views/layout.rs` (T202), with the spec's argument order `(area, width, height)` swapped to match its other helpers. `views/form.rs` draws every form and `views/confirm.rs` the confirm dialog. `Accent { Info, Act, Danger, Command }` lives in `theme.rs` with `Theme::accent()`, so dialog state can name it; `Theme::button_danger()` (dark on coral) was added and the swatch snapshots re-accepted.
+- **`Form` trait.** `hint()` became `footer() -> &[(Action, label)]` (keys looked up in the `Dialog` context with `display_chord`; an unbound action is left out). New `accent()` (Info by default) and `width()` (64 by default): Connection 72, Import 72, Export 64 (amber), Export Connections 64 (amber), Password 50. The popup is `width.min(area - 4)` wide and `fields + 4` tall (fields, a blank row, the footer, the border). `is_typing()` and `act()` tolerate a form with no fields. `Field::Checkbox { checked, caption }` (`[x] caption`, toggled by Space or ←/→) and `Form::checked()` exist for T308; nothing builds one yet, hence an `allow(dead_code)` naming T308.
+- **Rows.** `› ` (amber) on the focused row and two spaces elsewhere, then the label padded to the longest label + 2 (capped at 18), in `dim` or `inspector_label_focused`. Text is `field`; the focused input has a block cursor in `cursor_cell` on the character under it (or a space at the end). A long value scrolls with a leading dim `…`. Placeholders are `field_placeholder`. Choices are `‹ value ›` with amber arrows when focused. The subtitle sits right-aligned in the top border. Short terminals keep T101's behaviour: the rows scroll so the focused one shows. At 80x24 the whole New Connection form fits (12 fields + 4 rows), so `dialog_new_connection_80x24_scrolled` shows it focused on its last field rather than scrolled.
+- **Spinner.** `Timer::Spinner(n)` and `State::{spinner, spinner_timer}`. A submit that waits restarts it at frame 0 and schedules a 100 ms timer; each one that fires while the dialog still waits moves a frame and schedules the next, and a stale one changes nothing. `AppHarness` delivers spinner timers on its virtual clock but does not record them as effects, so tests that match a submit's effects are not cluttered by pacing. `advance(250)` gives frame 2.
+- **Confirm.** `app/dialogs/confirm.rs` replaces T103's `ConfirmForm`: `Confirm { title, message, confirm_label, destructive, on_confirm: OnConfirm, … }` with `OnConfirm::{CloseSession(SessionId), DeleteConnection(id)}` (an id, not an `Action`, because the action needs to know which). It implements `Form` with no fields (so `DialogState::form()` keeps working) and is drawn by `views::confirm`: the message word-wrapped, then `Cancel` and the confirm button, the selected one in brackets and `button_primary` (`button_danger` when destructive). ←/→/Tab move, Enter chooses, Esc cancels, and `y`/`n` are taken in `reducer::keys::unbound` for the `Dialog` context. Destructive confirms start on Cancel and are coral. `Submission::Confirmed(OnConfirm)` and `Submission::Dismissed` replace `Submission::CloseSession`. Closing a session with a running query now uses it, so Enter alone keeps the session (`right enter` or `y` closes).
+- **Delete asks first.** Tree `Delete` opens `Confirm::delete_connection` (the message mentions the stored password only for keychain records). Only its confirm runs `tree::delete`, which forgets the keychain secret and saves.
+- **Tests.** `views/overlay_tests.rs` (`centered_rect_is_centred_and_clamped`, `dialog_frame_returns_inner_rect_one_cell_in`, `backdrop_dims_every_cell_outside_the_overlay`, `spinner_frames_are_braille`), `app/dialogs/confirm_tests.rs` (`destructive_confirm_defaults_to_cancel`, `moving_between_buttons_picks_what_enter_does`, `message_wraps_within_width`), `form_tests.rs` (the four kept tests updated for one-row fields plus `footer_keys_follow_the_dialog_keymap`, `only_the_focused_field_has_marker_and_cursor`, `long_text_scrolls_to_keep_cursor_visible_with_leading_ellipsis`, `choice_and_checkbox_render_and_cycle`), and `app/overlay_tests.rs` (`an_open_overlay_dims_the_screen_and_none_dims_nothing`, `each_dialog_uses_its_accent`, `pending_spinner_advances_every_100ms`, `a_failure_shows_a_coral_error_and_keeps_every_value`, `delete_from_tree_asks_first` (Esc, n and Enter-on-Cancel), `confirmed_delete_removes_and_forgets_secret`, `masked_field_never_shows_plaintext`, and `dialog_snapshots` with every listed snapshot). The `home.rs` behaviour tests listed already lived in `app/reducer_tests.rs` (T101) and still pass. The tree tests confirm their deletes with `y`.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (314 `qry` unit tests, 31 in `qry-core`) and the CI docs command.
+

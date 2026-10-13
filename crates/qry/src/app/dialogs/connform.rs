@@ -2,6 +2,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
+use crate::action::Action;
 use crate::{
     connections::{Driver, Secret, StoredConnection},
     secrets::Password,
@@ -214,8 +215,16 @@ impl Form for ConnForm {
         }
     }
 
-    fn hint(&self) -> &'static str {
-        "Enter connect · Esc cancel"
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        &[
+            (Action::Submit, "connect"),
+            (Action::Cancel, "cancel"),
+            (Action::NextField, "next"),
+        ]
+    }
+
+    fn width(&self) -> u16 {
+        72
     }
 
     fn labels(&self) -> &'static [&'static str] {

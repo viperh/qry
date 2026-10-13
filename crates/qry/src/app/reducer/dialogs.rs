@@ -7,15 +7,19 @@
 //! records which answer that is, so a late one meant for a modal that has
 //! since closed, or for a different one, changes nothing.
 
+use std::time::Duration;
+
 use super::{connect, sessions, tree};
 use crate::{
     action::Action,
     app::{
         dialogs::{
-            DialogState, Submission, connexportform::ConnExportForm, connform::ConnForm,
-            exportform::ExportForm, importform::ImportForm, passwordform::PasswordForm,
+            DialogState, Submission, confirm::OnConfirm, connexportform::ConnExportForm,
+            connform::ConnForm, exportform::ExportForm, importform::ImportForm,
+            passwordform::PasswordForm,
         },
         effects::Effect,
+        event::Timer,
         state::{Awaiting, PasswordRequest, SessionId, State},
     },
     connections::StoredConnection,
@@ -112,10 +116,13 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         Submission::Connect { .. } | Submission::PasswordEntered { .. } => Some("Connecting…"),
         Submission::Export(_) | Submission::ExportConnections(_) => Some("Exporting…"),
         Submission::Import { .. } => Some("Importing…"),
-        Submission::CloseSession(_) => None,
+        Submission::Confirmed(_) | Submission::Dismissed => None,
     };
     dialog.form_mut().set_error(None);
     dialog.form_mut().set_pending(pending);
+    if pending.is_some() {
+        start_spinner(state, fx);
+    }
 
     let awaiting = match submission {
         Submission::Connect { record, password } => {
@@ -154,14 +161,72 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             tree::export_connections(state, path, fx);
             return;
         }
-        // Nothing to wait for: it closes now.
-        Submission::CloseSession(session) => {
+        // Nothing to wait for: a confirm closes now.
+        Submission::Confirmed(OnConfirm::CloseSession(session)) => {
             close(state);
             sessions::close(state, session, fx);
             return;
         }
+        Submission::Confirmed(OnConfirm::DeleteConnection(id)) => {
+            close(state);
+            tree::delete(state, &id, fx);
+            return;
+        }
+        Submission::Dismissed => {
+            close(state);
+            return;
+        }
     };
     state.awaiting = Some(awaiting);
+}
+
+/// How often the pending spinner moves on.
+pub(crate) const SPINNER_EVERY: Duration = Duration::from_millis(100);
+
+/// Starts the pending footer's spinner from its first frame.
+fn start_spinner(state: &mut State, fx: &mut Vec<Effect>) {
+    state.spinner = 0;
+    state.spinner_timer += 1;
+    fx.push(Effect::ScheduleTimer {
+        timer: Timer::Spinner(state.spinner_timer),
+        after: SPINNER_EVERY,
+    });
+}
+
+/// The spinner's timer ran out: the next frame, and the next timer, for as
+/// long as the open modal still waits. An older timer changes nothing.
+pub(super) fn spin(state: &mut State, timer: u64, fx: &mut Vec<Effect>) {
+    let waiting = state
+        .dialog()
+        .is_some_and(|dialog| dialog.form().pending().is_some());
+    if timer != state.spinner_timer || !waiting {
+        return;
+    }
+    state.spinner += 1;
+    fx.push(Effect::ScheduleTimer {
+        timer: Timer::Spinner(timer),
+        after: SPINNER_EVERY,
+    });
+}
+
+/// `y` and `n` answer a confirm dialog: `y` does what it asks, `n` cancels.
+/// Returns whether the key was one of them.
+pub(super) fn confirm_shortcut(state: &mut State, c: char, fx: &mut Vec<Effect>) -> bool {
+    let Some(DialogState::Confirm(confirm)) = state.dialog_mut() else {
+        return false;
+    };
+    match c.to_ascii_lowercase() {
+        'y' => {
+            confirm.select(true);
+            submit(state, fx);
+            true
+        }
+        'n' => {
+            close(state);
+            true
+        }
+        _ => false,
+    }
 }
 
 /// The answer the modal waited for came: it is done, so close it.

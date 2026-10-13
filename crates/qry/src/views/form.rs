@@ -1,100 +1,154 @@
-//! The modal forms, drawn as a popup over the panes.
+//! The modal forms, drawn in a dialog frame over the dimmed screen.
+//!
+//! One row per field: a `› ` marker on the focused one, a label column, and
+//! the value. Below them a footer: the keys, the spinner while a submit
+//! waits, or the error.
 
-use ratatui::{
-    layout::Flex,
-    prelude::*,
-    widgets::{Block, Clear, Paragraph},
+use ratatui::prelude::*;
+
+use super::{
+    layout::centered_rect,
+    overlay::{SPINNER, dialog_frame},
 };
-
 use crate::{
     app::dialogs::{
         form::{Field, Form},
         textinput::{SecretInput, TextInput},
     },
+    keymap::{KeyContext, Keymap, display_chord},
     theme::Theme,
 };
 
-/// Each field is a bordered box, with a blank row between boxes.
-const FIELD_HEIGHT: u16 = 3;
-const FIELD_GAP: u16 = 1;
-const LABEL_WIDTH: u16 = 14;
-pub(crate) const MODAL_WIDTH: u16 = 60;
+/// The widest a label column gets.
+const MAX_LABEL: u16 = 18;
 
-/// Height of the popup with every field shown.
+/// The popup's size with every field shown: the fields, a blank row, the
+/// footer and the border.
 pub(crate) fn height(form: &dyn Form) -> u16 {
-    let fields = form.labels().len() as u16;
-    fields * (FIELD_HEIGHT + FIELD_GAP) - FIELD_GAP + 4
+    u16::try_from(form.labels().len()).unwrap_or(u16::MAX) + 4
 }
 
-/// Draws the popup centred on `area`, shrinking to fit a short terminal.
-pub(crate) fn draw(form: &dyn Form, theme: &Theme, frame: &mut Frame, area: Rect) {
-    let height = height(form).min(area.height);
-    let [popup] = Layout::horizontal([Constraint::Length(MODAL_WIDTH)])
-        .flex(Flex::Center)
-        .areas(area);
-    let [popup] = Layout::vertical([Constraint::Length(height)])
-        .flex(Flex::Center)
-        .areas(popup);
+/// The popup's width in an `area` this wide: what the form asks for, with
+/// two columns to spare on each side.
+pub(crate) fn width(form: &dyn Form, area: u16) -> u16 {
+    form.width().min(area.saturating_sub(4)).max(area.min(10))
+}
 
-    frame.render_widget(Clear, popup);
-    let footer = match (form.pending(), form.error()) {
-        (Some(pending), _) => Line::styled(format!(" {pending} "), theme.spinner()),
-        (None, Some(error)) => Line::styled(format!(" {error} "), theme.value_error()),
-        (None, None) => Line::styled(format!(" {} ", form.hint()), theme.hint()),
-    };
-    let mut block = Block::bordered()
-        .style(theme.dialog())
-        .border_style(theme.dialog_border(theme.teal))
-        .title(Line::styled(form.title(), theme.dialog_title(theme.teal)))
-        .title_bottom(footer);
+/// Draws the popup centred on `area`, shrinking to fit a small terminal.
+/// `spinner` is the pending footer's frame.
+pub(crate) fn draw(
+    form: &dyn Form,
+    keymap: &Keymap,
+    spinner: usize,
+    theme: &Theme,
+    frame: &mut Frame,
+    area: Rect,
+) {
+    let rect = centered_rect(area, width(form, area.width), height(form));
+    let inner = dialog_frame(frame, theme, rect, form.title(), form.accent());
     if let Some(subtitle) = form.subtitle() {
-        block = block.title(Line::styled(format!(" {subtitle} "), theme.muted()).right_aligned());
+        let text = format!(" {subtitle} ");
+        let w = u16::try_from(Span::raw(&text).width()).unwrap_or(u16::MAX);
+        if w + 4 < rect.width {
+            let at = Rect::new(rect.right() - w - 2, rect.y, w, 1);
+            frame.render_widget(Span::styled(text, theme.muted()), at);
+        }
     }
-    let inner = block.inner(popup).inner(Margin::new(2, 1));
-    frame.render_widget(block, popup);
-    draw_fields(form, theme, frame, inner);
+    let inner = inner.inner(Margin::new(1, 0));
+    if inner.height == 0 {
+        return;
+    }
+    let footer_row = Rect::new(inner.x, inner.bottom() - 1, inner.width, 1);
+    let fields = Rect {
+        height: inner.height.saturating_sub(2),
+        ..inner
+    };
+    draw_fields(form, theme, frame, fields);
+    frame.render_widget(
+        footer(form, keymap, spinner, theme, inner.width),
+        footer_row,
+    );
+}
+
+/// The footer: the spinner and what it waits for, the error, or the keys.
+fn footer(
+    form: &dyn Form,
+    keymap: &Keymap,
+    spinner: usize,
+    theme: &Theme,
+    width: u16,
+) -> Line<'static> {
+    if let Some(pending) = form.pending() {
+        return Line::from(vec![
+            Span::styled(SPINNER[spinner % SPINNER.len()], theme.spinner()),
+            Span::styled(format!(" {pending}"), theme.spinner()),
+        ]);
+    }
+    if let Some(error) = form.error() {
+        let room = usize::from(width);
+        let text = if error.chars().count() > room {
+            let mut cut: String = error.chars().take(room.saturating_sub(1)).collect();
+            cut.push('…');
+            cut
+        } else {
+            error.to_string()
+        };
+        return Line::styled(text, theme.value_error());
+    }
+    let mut spans = Vec::new();
+    for (action, label) in form.footer() {
+        let chords = keymap.chords_for(KeyContext::Dialog, action);
+        if chords.is_empty() {
+            continue;
+        }
+        if !spans.is_empty() {
+            spans.push(Span::styled(" · ", theme.hint()));
+        }
+        spans.push(Span::styled(display_chord(&chords), theme.hint_key()));
+        spans.push(Span::styled(format!(" {label}"), theme.hint()));
+    }
+    Line::from(spans)
 }
 
 /// Draws as many fields as fit, scrolled so the focused one is visible.
 fn draw_fields(form: &dyn Form, theme: &Theme, frame: &mut Frame, area: Rect) {
     let labels = form.labels();
-    let fits =
-        usize::from((area.height + FIELD_GAP) / (FIELD_HEIGHT + FIELD_GAP)).clamp(1, labels.len());
+    if labels.is_empty() || area.height == 0 {
+        return;
+    }
+    let label_width = labels
+        .iter()
+        .map(|l| u16::try_from(l.chars().count()).unwrap_or(u16::MAX))
+        .max()
+        .unwrap_or(0)
+        .saturating_add(2)
+        .min(MAX_LABEL);
+    let fits = usize::from(area.height).min(labels.len());
     let first = (form.focus() + 1).saturating_sub(fits);
-    let rows = Layout::vertical(vec![Constraint::Length(FIELD_HEIGHT); fits])
-        .spacing(FIELD_GAP)
-        .split(area);
-
-    for (row, i) in rows.iter().zip(first..) {
-        if row.height < FIELD_HEIGHT {
-            continue;
-        }
+    for (row, i) in (0..fits).zip(first..) {
+        let y = area.y + u16::try_from(row).unwrap_or(0);
         let focused = i == form.focus();
-        let [label_area, box_area] =
-            Layout::horizontal([Constraint::Length(LABEL_WIDTH), Constraint::Fill(1)]).areas(*row);
-
-        // The label sits on the box's middle row, level with the text.
-        let label_area = Rect {
-            y: label_area.y + 1,
-            height: 1,
-            ..label_area
-        };
-        let label = if focused {
-            Line::styled(format!("› {}", labels[i]), theme.field_focused())
+        let (marker, label_style) = if focused {
+            (
+                Span::styled("› ", theme.field_focused()),
+                theme.inspector_label_focused(),
+            )
         } else {
-            Line::styled(format!("  {}", labels[i]), theme.field())
+            (Span::raw("  "), theme.dim())
         };
-        frame.render_widget(label, label_area);
-
-        let block = Block::bordered().border_style(if focused {
-            theme.field_border_focused()
-        } else {
-            theme.field_border()
-        });
-        let input_area = block.inner(box_area).inner(Margin::new(1, 0));
-        frame.render_widget(block, box_area);
-
-        draw_field(&form.fields()[i], focused, theme, frame, input_area);
+        let label = Span::styled(
+            format!("{:<width$}", labels[i], width = usize::from(label_width)),
+            label_style,
+        );
+        let head = Rect::new(area.x, y, (label_width + 2).min(area.width), 1);
+        frame.render_widget(Line::from(vec![marker, label]), head);
+        let value = Rect::new(
+            head.right(),
+            y,
+            area.right().saturating_sub(head.right()),
+            1,
+        );
+        draw_field(&form.fields()[i], focused, theme, frame, value);
     }
 }
 
@@ -103,56 +157,114 @@ fn draw_field(field: &Field, focused: bool, theme: &Theme, frame: &mut Frame, ar
         Field::Text(input) => draw_text(input, focused, theme, frame, area),
         Field::Secret(input) => draw_secret(input, focused, theme, frame, area),
         Field::Choice { options, selected } => {
-            let option = options[*selected];
-            let line = if focused {
-                Line::styled(format!("‹ {option} ›"), theme.field_focused())
+            let arrows = if focused {
+                theme.hint_key()
             } else {
-                Line::styled(format!("  {option}"), theme.field())
+                theme.dim()
             };
+            let line = Line::from(vec![
+                Span::styled("‹ ", arrows),
+                Span::styled(options[*selected], theme.field()),
+                Span::styled(" ›", arrows),
+            ]);
+            frame.render_widget(line, area);
+        }
+        Field::Checkbox { checked, caption } => {
+            let mark = if *checked { "[x]" } else { "[ ]" };
+            let style = if focused {
+                theme.field_focused()
+            } else {
+                theme.field()
+            };
+            let line = Line::from(vec![
+                Span::styled(mark, style),
+                Span::styled(format!(" {caption}"), theme.field()),
+            ]);
             frame.render_widget(line, area);
         }
     }
 }
 
-/// Draws the input, scrolled so the cursor stays visible.
+/// Draws a text input, scrolled so the cursor stays visible.
 fn draw_text(input: &TextInput, focused: bool, theme: &Theme, frame: &mut Frame, area: Rect) {
-    let width = usize::from(area.width).max(1);
-    let offset = (input.cursor + 1).saturating_sub(width);
-    let visible: String = input.value.chars().skip(offset).take(width).collect();
-    let cursor = focused.then_some(input.cursor - offset);
-    draw_line(frame, area, (visible, input.placeholder), cursor, theme);
+    let chars: Vec<char> = input.value.chars().collect();
+    draw_line(
+        &chars,
+        input.cursor,
+        input.placeholder,
+        focused,
+        theme,
+        frame,
+        area,
+    );
 }
 
 /// Draws a dot per character, scrolled like a text input.
 fn draw_secret(input: &SecretInput, focused: bool, theme: &Theme, frame: &mut Frame, area: Rect) {
-    let width = usize::from(area.width).max(1);
-    let offset = (input.cursor + 1).saturating_sub(width);
-    let visible = "•".repeat(input.len().saturating_sub(offset).min(width));
-    let cursor = focused.then_some(input.cursor - offset);
-    draw_line(frame, area, (visible, input.placeholder), cursor, theme);
+    let dots = vec!['•'; input.len()];
+    draw_line(
+        &dots,
+        input.cursor,
+        input.placeholder,
+        focused,
+        theme,
+        frame,
+        area,
+    );
 }
 
-/// Draws the visible text of an input, or its placeholder when there is
-/// none, and places the terminal cursor at `cursor` cells in, if given. The
-/// terminal cursor is only placed on the focused input.
+/// Draws `chars` with a block cursor at `cursor` in the focused input. A
+/// value too long for `area` scrolls to keep the cursor in view, with `…`
+/// in front once its start is cut off. An empty one shows its placeholder.
 fn draw_line(
+    chars: &[char],
+    cursor: usize,
+    placeholder: Option<&'static str>,
+    focused: bool,
+    theme: &Theme,
     frame: &mut Frame,
     area: Rect,
-    (visible, placeholder): (String, Option<&'static str>),
-    cursor: Option<usize>,
-    theme: &Theme,
 ) {
-    match (visible.is_empty(), placeholder) {
-        (true, Some(placeholder)) => {
-            frame.render_widget(
-                Paragraph::new(placeholder).style(theme.field_placeholder()),
-                area,
-            );
+    let width = usize::from(area.width);
+    if width == 0 {
+        return;
+    }
+    let cursor_cell = |c: char| Span::styled(c.to_string(), theme.cursor_cell());
+    if chars.is_empty() {
+        let mut spans = Vec::new();
+        if focused {
+            spans.push(cursor_cell(' '));
         }
-        _ => frame.render_widget(Paragraph::new(visible).style(theme.field()), area),
+        if let Some(placeholder) = placeholder {
+            spans.push(Span::styled(placeholder, theme.field_placeholder()));
+        }
+        frame.render_widget(Line::from(spans), area);
+        return;
     }
-    if let Some(cursor) = cursor {
-        let x = area.x + u16::try_from(cursor).unwrap_or(0);
-        frame.set_cursor_position((x, area.y));
+    // The first character shown: 0 while the cursor fits, else far enough
+    // that it does, with one cell for the `…`.
+    let offset = if cursor < width {
+        0
+    } else {
+        cursor + 2 - width
+    };
+    let lead = offset > 0;
+    let room = width - usize::from(lead);
+    let mut spans = Vec::new();
+    if lead {
+        spans.push(Span::styled("…", theme.dim()));
     }
+    let visible: String = chars.iter().skip(offset).take(room).collect();
+    if focused {
+        let at = cursor - offset;
+        let before: String = visible.chars().take(at).collect();
+        let under = visible.chars().nth(at).unwrap_or(' ');
+        let after: String = visible.chars().skip(at + 1).collect();
+        spans.push(Span::styled(before, theme.field()));
+        spans.push(cursor_cell(under));
+        spans.push(Span::styled(after, theme.field()));
+    } else {
+        spans.push(Span::styled(visible, theme.field()));
+    }
+    frame.render_widget(Line::from(spans), area);
 }

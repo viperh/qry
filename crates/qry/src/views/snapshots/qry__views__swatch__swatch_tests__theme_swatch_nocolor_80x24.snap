@@ -10,13 +10,13 @@ border              sort_indicator      hint                field_border
 border_strong       overflow_hint       hint_key            field_border_focus  
 focused_border      gutter              info ok warn error  button              
 spinner             gutter_selected     sql_keyword         button_primary      
-value_ok            column_divider      sql_operator        palette_border      
-value_error         frozen_divider      sql_string          palette_selected    
-app_name            row(0)              sql_number          palette_match       
-tab                 row(1)              sql_comment         backdrop            
-tab_active          row_selected        sql_identifier      query fetch exp sch 
-tab_running         cursor_cell         sql_punct           jobs ▸ ✓ ✗ – …      
-NORMAL EDIT COMMAND null_value          sql_quoted_ident                        
+value_ok            column_divider      sql_operator        button_danger       
+value_error         frozen_divider      sql_string          palette_border      
+app_name            row(0)              sql_number          palette_selected    
+tab                 row(1)              sql_comment         palette_match       
+tab_active          row_selected        sql_identifier      backdrop            
+tab_running         cursor_cell         sql_punct           query fetch exp sch 
+NORMAL EDIT COMMAND null_value          sql_quoted_ident    jobs ▸ ✓ ✗ – …      
 pane_title          match_highlight     sql_error                               
 pane_title_focused  inspector_label     editor_cursor_line                      
 divider             inspector_focused   editor_cursor                           
@@ -87,36 +87,32 @@ session ● ◌ ✗       status_jobs         dialog_title
 60,7 Reset Reset BOLD | REVERSED
 74,7 Reset Reset NONE
 0,8 Reset Reset NONE
+60,8 Reset Reset BOLD | REVERSED
+73,8 Reset Reset NONE
 0,9 Reset Reset BOLD
 11,9 Reset Reset NONE
 20,9 Reset Reset BOLD
 34,9 Reset Reset NONE
-60,9 Reset Reset REVERSED
-76,9 Reset Reset NONE
 0,10 Reset Reset BOLD
 8,10 Reset Reset NONE
-60,10 Reset Reset BOLD
-73,10 Reset Reset NONE
+60,10 Reset Reset REVERSED
+76,10 Reset Reset NONE
 0,11 Reset Reset DIM
 3,11 Reset Reset NONE
 40,11 Reset Reset DIM | ITALIC
 51,11 Reset Reset NONE
-60,11 Reset Reset DIM
-68,11 Reset Reset NONE
+60,11 Reset Reset BOLD
+73,11 Reset Reset NONE
 0,12 Reset Reset BOLD | UNDERLINED
 10,12 Reset Reset NONE
 20,12 Reset Reset BOLD
 32,12 Reset Reset NONE
+60,12 Reset Reset DIM
+68,12 Reset Reset NONE
 0,13 Reset Reset ITALIC
 11,13 Reset Reset NONE
 20,13 Reset Reset BOLD | REVERSED
 31,13 Reset Reset NONE
-69,13 Reset Reset BOLD
-70,13 Reset Reset NONE
-71,13 Reset Reset DIM
-72,13 Reset Reset NONE
-73,13 Reset Reset DIM
-74,13 Reset Reset NONE
 0,14 Reset Reset BOLD | REVERSED
 6,14 Reset Reset NONE
 7,14 Reset Reset BOLD | REVERSED
@@ -125,6 +121,12 @@ session ● ◌ ✗       status_jobs         dialog_title
 19,14 Reset Reset NONE
 20,14 Reset Reset DIM | ITALIC
 30,14 Reset Reset NONE
+69,14 Reset Reset BOLD
+70,14 Reset Reset NONE
+71,14 Reset Reset DIM
+72,14 Reset Reset NONE
+73,14 Reset Reset DIM
+74,14 Reset Reset NONE
 0,15 Reset Reset DIM
 10,15 Reset Reset NONE
 20,15 Reset Reset UNDERLINED

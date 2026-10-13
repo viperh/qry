@@ -400,6 +400,10 @@ pub struct State {
     /// sequence waiting starts a new one, and an older one that fires is
     /// ignored.
     pub(crate) key_timer: u64,
+    /// The frame of a waiting dialog's spinner, and which `Timer::Spinner`
+    /// is the live one.
+    pub(crate) spinner: usize,
+    pub(crate) spinner_timer: u64,
     pub(crate) ids: IdGen,
     /// Something changed since the runtime last drew.
     pub(crate) dirty: bool,
@@ -421,6 +425,8 @@ impl Default for State {
             status: StatusCode::default(),
             pending_keys: Vec::new(),
             key_timer: 0,
+            spinner: 0,
+            spinner_timer: 0,
             ids: IdGen::default(),
             dirty: true,
         }

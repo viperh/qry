@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/overlay_tests.rs
+expression: "h.render(120, 40)"
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+ ▸ ● scratch                  │ 1                                                                                       
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS                                                                                 
+                        ┌ Import Connections ───────────────── passwords are asked on connect ─┐                        
+                        │ › File     ~/data-sources.json                                       │                        
+                        │   Format  ‹ DETECT ›                                                 │                        
+                        │                                                                      │                        
+                        │ Enter import · Esc cancel · Tab next                                 │                        
+                        └──────────────────────────────────────────────────────────────────────┘                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ scratch · sqlite · :memory: · auto-commit                                                                              
+ Enter submit  Tab next field  Esc cancel                                                                       F1 help

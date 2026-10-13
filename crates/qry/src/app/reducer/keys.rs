@@ -71,7 +71,7 @@ pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
         }
         Lookup::None => {
             state.pending_keys.clear();
-            unbound(state, contexts[0], key);
+            unbound(state, contexts[0], key, fx);
         }
     }
 }
@@ -107,12 +107,16 @@ fn typing_into_dialog(state: &State, key: KeyEvent) -> bool {
             .is_some_and(|dialog| dialog.form().is_typing())
 }
 
-/// A key bound to nothing: the editor types it. (A dialog's text field
-/// took its characters before the lookup.)
-fn unbound(state: &mut State, context: KeyContext, key: KeyEvent) {
-    if context == KeyContext::Editor
-        && let Some(c) = typed_char(key)
-    {
-        state.editor_mut().textarea.insert_char(c);
+/// A key bound to nothing: the editor types it, and a confirm dialog takes
+/// `y` and `n`. (A dialog's text field took its characters before the
+/// lookup.)
+fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<Effect>) {
+    let Some(c) = typed_char(key) else {
+        return;
+    };
+    match context {
+        KeyContext::Editor => state.editor_mut().textarea.insert_char(c),
+        KeyContext::Dialog => _ = super::dialogs::confirm_shortcut(state, c, fx),
+        _ => {}
     }
 }

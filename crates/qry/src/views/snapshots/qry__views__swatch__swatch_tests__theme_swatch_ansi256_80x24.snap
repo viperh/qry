@@ -10,13 +10,13 @@ border              sort_indicator      hint                field_border
 border_strong       overflow_hint       hint_key            field_border_focus  
 focused_border      gutter              info ok warn error  button              
 spinner             gutter_selected     sql_keyword         button_primary      
-value_ok            column_divider      sql_operator        palette_border      
-value_error         frozen_divider      sql_string          palette_selected    
-app_name            row(0)              sql_number          palette_match       
-tab                 row(1)              sql_comment         backdrop            
-tab_active          row_selected        sql_identifier      query fetch exp sch 
-tab_running         cursor_cell         sql_punct           jobs ▸ ✓ ✗ – …      
-NORMAL EDIT COMMAND null_value          sql_quoted_ident                        
+value_ok            column_divider      sql_operator        button_danger       
+value_error         frozen_divider      sql_string          palette_border      
+app_name            row(0)              sql_number          palette_selected    
+tab                 row(1)              sql_comment         palette_match       
+tab_active          row_selected        sql_identifier      backdrop            
+tab_running         cursor_cell         sql_punct           query fetch exp sch 
+NORMAL EDIT COMMAND null_value          sql_quoted_ident    jobs ▸ ✓ ✗ – …      
 pane_title          match_highlight     sql_error                               
 pane_title_focused  inspector_label     editor_cursor_line                      
 divider             inspector_focused   editor_cursor                           
@@ -104,54 +104,46 @@ session ● ◌ ✗       status_jobs         dialog_title
 34,8 Indexed(253) Indexed(233) NONE
 40,8 Indexed(74) Indexed(233) NONE
 52,8 Indexed(253) Indexed(233) NONE
-60,8 Indexed(183) Indexed(234) NONE
-74,8 Indexed(253) Indexed(233) NONE
+60,8 Indexed(233) Indexed(209) BOLD
+73,8 Indexed(253) Indexed(233) NONE
 0,9 Indexed(209) Indexed(233) NONE
 11,9 Indexed(253) Indexed(233) NONE
 20,9 Indexed(238) Indexed(233) NONE
 34,9 Indexed(253) Indexed(233) NONE
 40,9 Indexed(150) Indexed(233) NONE
 50,9 Indexed(253) Indexed(233) NONE
-60,9 Indexed(183) Indexed(236) NONE
-76,9 Indexed(253) Indexed(233) NONE
+60,9 Indexed(183) Indexed(234) NONE
+74,9 Indexed(253) Indexed(233) NONE
 0,10 Indexed(215) Indexed(233) BOLD
 8,10 Indexed(253) Indexed(233) NONE
 40,10 Indexed(183) Indexed(233) NONE
 50,10 Indexed(253) Indexed(233) NONE
-60,10 Indexed(215) Indexed(233) BOLD
-73,10 Indexed(253) Indexed(233) NONE
+60,10 Indexed(183) Indexed(236) NONE
+76,10 Indexed(253) Indexed(233) NONE
 0,11 Indexed(246) Indexed(234) NONE
 3,11 Indexed(253) Indexed(233) NONE
 40,11 Indexed(246) Indexed(233) ITALIC
 51,11 Indexed(253) Indexed(233) NONE
-60,11 Indexed(246) Indexed(233) DIM
-68,11 Indexed(253) Indexed(233) NONE
+60,11 Indexed(215) Indexed(233) BOLD
+73,11 Indexed(253) Indexed(233) NONE
 0,12 Indexed(253) Indexed(233) UNDERLINED
 10,12 Indexed(253) Indexed(233) NONE
 20,12 Indexed(253) Indexed(235) NONE
 32,12 Indexed(253) Indexed(233) NONE
-60,12 Indexed(74) Indexed(233) NONE
-65,12 Indexed(253) Indexed(233) NONE
-66,12 Indexed(74) Indexed(233) NONE
-71,12 Indexed(253) Indexed(233) NONE
-72,12 Indexed(215) Indexed(233) NONE
-75,12 Indexed(253) Indexed(233) NONE
-76,12 Indexed(74) Indexed(233) NONE
-79,12 Indexed(253) Indexed(233) NONE
+60,12 Indexed(246) Indexed(233) DIM
+68,12 Indexed(253) Indexed(233) NONE
 0,13 Indexed(74) Indexed(234) NONE
 11,13 Indexed(253) Indexed(233) NONE
 20,13 Indexed(233) Indexed(215) BOLD
 31,13 Indexed(253) Indexed(233) NONE
-65,13 Indexed(74) Indexed(233) NONE
-66,13 Indexed(253) Indexed(233) NONE
-67,13 Indexed(150) Indexed(233) NONE
-68,13 Indexed(253) Indexed(233) NONE
-69,13 Indexed(209) Indexed(233) NONE
-70,13 Indexed(253) Indexed(233) NONE
-71,13 Indexed(246) Indexed(233) NONE
-72,13 Indexed(253) Indexed(233) NONE
-73,13 Indexed(246) Indexed(233) NONE
-74,13 Indexed(253) Indexed(233) NONE
+60,13 Indexed(74) Indexed(233) NONE
+65,13 Indexed(253) Indexed(233) NONE
+66,13 Indexed(74) Indexed(233) NONE
+71,13 Indexed(253) Indexed(233) NONE
+72,13 Indexed(215) Indexed(233) NONE
+75,13 Indexed(253) Indexed(233) NONE
+76,13 Indexed(74) Indexed(233) NONE
+79,13 Indexed(253) Indexed(233) NONE
 0,14 Indexed(233) Indexed(74) BOLD
 6,14 Indexed(253) Indexed(233) NONE
 7,14 Indexed(233) Indexed(215) BOLD
@@ -162,6 +154,16 @@ session ● ◌ ✗       status_jobs         dialog_title
 30,14 Indexed(253) Indexed(233) NONE
 40,14 Indexed(249) Indexed(233) NONE
 56,14 Indexed(253) Indexed(233) NONE
+65,14 Indexed(74) Indexed(233) NONE
+66,14 Indexed(253) Indexed(233) NONE
+67,14 Indexed(150) Indexed(233) NONE
+68,14 Indexed(253) Indexed(233) NONE
+69,14 Indexed(209) Indexed(233) NONE
+70,14 Indexed(253) Indexed(233) NONE
+71,14 Indexed(246) Indexed(233) NONE
+72,14 Indexed(253) Indexed(233) NONE
+73,14 Indexed(246) Indexed(233) NONE
+74,14 Indexed(253) Indexed(233) NONE
 0,15 Indexed(246) Indexed(234) NONE
 10,15 Indexed(253) Indexed(233) NONE
 20,15 Indexed(215) Indexed(235) NONE

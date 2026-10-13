@@ -115,7 +115,7 @@ fn every_size_renders_without_panic() {
 
 #[test]
 fn main_screen_has_no_boxes() {
-    let overlays = ["form.rs", "help.rs"];
+    let overlays = ["form.rs", "help.rs", "overlay.rs", "confirm.rs"];
     for (path, text) in crate::testing::sources(&["views"]) {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         if overlays.contains(&name.as_str()) || name.ends_with("_tests.rs") {

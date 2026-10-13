@@ -75,6 +75,17 @@ pub struct ThemeEnv {
     pub colorterm: Option<String>,
 }
 
+/// What a dialog is for, which picks its border and title colour: teal for
+/// information and data, amber to act or confirm, coral for what cannot be
+/// undone, purple for commands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Accent {
+    Info,
+    Act,
+    Danger,
+    Command,
+}
+
 /// The mode pill in the top bar (T202).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pill {
@@ -770,6 +781,16 @@ impl Theme {
         )
     }
 
+    /// The colour of a dialog's accent.
+    pub fn accent(&self, accent: Accent) -> Color {
+        match accent {
+            Accent::Info => self.teal,
+            Accent::Act => self.amber,
+            Accent::Danger => self.coral,
+            Accent::Command => self.purple,
+        }
+    }
+
     /// 1-cell dialog border in the dialog's accent colour.
     pub fn dialog_border(&self, accent: Color) -> Style {
         self.pick(
@@ -846,6 +867,17 @@ impl Theme {
             Style::new()
                 .fg(self.bg)
                 .bg(self.teal)
+                .add_modifier(Modifier::BOLD),
+            Modifier::REVERSED | Modifier::BOLD,
+        )
+    }
+
+    /// The primary button of a destructive confirm: dark bold text on coral.
+    pub fn button_danger(&self) -> Style {
+        self.pick(
+            Style::new()
+                .fg(self.bg)
+                .bg(self.coral)
                 .add_modifier(Modifier::BOLD),
             Modifier::REVERSED | Modifier::BOLD,
         )

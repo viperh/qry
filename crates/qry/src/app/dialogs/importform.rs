@@ -2,6 +2,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
+use crate::action::Action;
 use crate::import::Format;
 
 const LABELS: [&str; 2] = ["File", "Format"];
@@ -40,8 +41,16 @@ impl Form for ImportForm {
         "Import Connections"
     }
 
-    fn hint(&self) -> &'static str {
-        "Enter import · Esc cancel"
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        &[
+            (Action::Submit, "import"),
+            (Action::Cancel, "cancel"),
+            (Action::NextField, "next"),
+        ]
+    }
+
+    fn width(&self) -> u16 {
+        72
     }
 
     fn subtitle(&self) -> Option<String> {

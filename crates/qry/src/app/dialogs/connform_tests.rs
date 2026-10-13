@@ -21,7 +21,9 @@ fn set(form: &mut ConnForm, field: usize, value: &str) {
             input.value = Password::new(value);
             input.cursor = input.len();
         }
-        Field::Choice { .. } => panic!("{} is not a text field", LABELS[field]),
+        Field::Choice { .. } | Field::Checkbox { .. } => {
+            panic!("{} is not a text field", LABELS[field])
+        }
     }
 }
 

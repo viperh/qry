@@ -10,7 +10,7 @@ use super::{
     Submission,
     textinput::{SecretInput, TextInput, typed_char},
 };
-use crate::{action::Action, secrets::Password};
+use crate::{action::Action, secrets::Password, theme::Accent};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Field {
@@ -21,6 +21,13 @@ pub(crate) enum Field {
     Choice {
         options: &'static [&'static str],
         selected: usize,
+    },
+    /// On or off, toggled with Space (or ← / →), shown as `[x]` / `[ ]`
+    /// before its caption.
+    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
+    Checkbox {
+        checked: bool,
+        caption: &'static str,
     },
 }
 
@@ -45,6 +52,11 @@ impl Field {
         Field::Choice { options, selected }
     }
 
+    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
+    pub(crate) fn checkbox(checked: bool, caption: &'static str) -> Self {
+        Field::Checkbox { checked, caption }
+    }
+
     /// Whether typing a character inserts it here.
     fn is_typed(&self) -> bool {
         matches!(self, Field::Text(_) | Field::Secret(_))
@@ -54,7 +66,7 @@ impl Field {
         match self {
             Field::Text(input) => input.insert(c),
             Field::Secret(input) => input.insert(c),
-            Field::Choice { .. } => {}
+            Field::Choice { .. } | Field::Checkbox { .. } => {}
         }
     }
 
@@ -85,14 +97,36 @@ impl Field {
                 Action::Left => *selected = (*selected + options.len() - 1) % options.len(),
                 _ => {}
             },
+            Field::Checkbox { checked, .. } => {
+                if matches!(action, Action::NextChoice | Action::Left | Action::Right) {
+                    *checked = !*checked;
+                }
+            }
         }
     }
 }
 
+/// The keys a form's footer offers by default.
+const FOOTER: &[(Action, &str)] = &[(Action::Submit, "ok"), (Action::Cancel, "cancel")];
+
 pub(crate) trait Form {
     fn title(&self) -> &'static str;
-    /// Shown in the popup's bottom border while there is no error.
-    fn hint(&self) -> &'static str;
+    /// The footer's `key label` pairs while there is no error and nothing
+    /// pending. The keys come from the `Dialog` keymap, so an action bound
+    /// to nothing is left out.
+    fn footer(&self) -> &'static [(Action, &'static str)] {
+        FOOTER
+    }
+
+    /// The colour of its border and title.
+    fn accent(&self) -> Accent {
+        Accent::Info
+    }
+
+    /// How wide it would like to be; a narrow terminal makes it smaller.
+    fn width(&self) -> u16 {
+        64
+    }
     /// One label per field, in the same order as [`Form::fields`].
     fn labels(&self) -> &'static [&'static str];
     fn fields(&self) -> &[Field];
@@ -126,7 +160,7 @@ pub(crate) trait Form {
     fn text(&self, field: usize) -> &str {
         match &self.fields()[field] {
             Field::Text(input) => &input.value,
-            Field::Secret(_) | Field::Choice { .. } => "",
+            Field::Secret(_) | Field::Choice { .. } | Field::Checkbox { .. } => "",
         }
     }
 
@@ -134,21 +168,27 @@ pub(crate) trait Form {
     fn secret(&self, field: usize) -> Option<&Password> {
         match &self.fields()[field] {
             Field::Secret(input) => Some(&input.value),
-            Field::Text(_) | Field::Choice { .. } => None,
+            Field::Text(_) | Field::Choice { .. } | Field::Checkbox { .. } => None,
         }
     }
 
     fn selected(&self, field: usize) -> usize {
         match &self.fields()[field] {
             Field::Choice { selected, .. } => *selected,
-            Field::Text(_) | Field::Secret(_) => 0,
+            Field::Text(_) | Field::Secret(_) | Field::Checkbox { .. } => 0,
         }
+    }
+
+    /// Whether a checkbox is ticked; `false` for any other field.
+    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
+    fn checked(&self, field: usize) -> bool {
+        matches!(self.fields()[field], Field::Checkbox { checked: true, .. })
     }
 
     /// Whether the focused field types characters, so a plain character key
     /// goes to it before any binding.
     fn is_typing(&self) -> bool {
-        self.fields()[self.focus()].is_typed()
+        self.fields().get(self.focus()).is_some_and(Field::is_typed)
     }
 
     /// `action` is what the `Dialog` keymap binds `key` to. In a text field,
@@ -157,7 +197,7 @@ pub(crate) trait Form {
     fn handle_key(&mut self, key: KeyEvent, action: Option<Action>) {
         let focus = self.focus();
         if let Some(c) = typed_char(key)
-            && self.fields()[focus].is_typed()
+            && self.is_typing()
         {
             self.set_error(None);
             self.fields_mut()[focus].insert(c);
@@ -171,6 +211,9 @@ pub(crate) trait Form {
     fn act(&mut self, action: Action) {
         let focus = self.focus();
         let count = self.labels().len();
+        if count == 0 {
+            return;
+        }
         match action {
             Action::NextField => self.set_focus((focus + 1) % count),
             Action::PrevField => self.set_focus((focus + count - 1) % count),

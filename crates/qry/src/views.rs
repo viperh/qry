@@ -2,11 +2,13 @@
 //! own nothing. Where something scrolls, the view keeps the state's scroll
 //! position in step with what fits as it draws; otherwise it changes nothing.
 
+pub(crate) mod confirm;
 pub(crate) mod editor;
 pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
 pub(crate) mod layout;
+pub(crate) mod overlay;
 pub(crate) mod pane_title;
 pub(crate) mod results;
 pub(crate) mod status_line;
@@ -18,7 +20,10 @@ pub(crate) mod tree;
 use ratatui::{prelude::*, widgets::Block};
 
 use crate::{
-    app::state::{Focus, Overlay, State},
+    app::{
+        dialogs::DialogState,
+        state::{Focus, Overlay, State},
+    },
     theme::Theme,
 };
 
@@ -82,9 +87,28 @@ pub fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
         hints::draw(state, theme, frame, hints);
     }
 
-    for overlay in &state.overlays {
-        match overlay {
-            Overlay::Dialog(dialog) => form::draw(dialog.form(), theme, frame, area),
+    draw_overlays(state, theme, frame, area);
+}
+
+/// The open overlays over a dimmed screen, the last one on top.
+fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
+    if state.overlays.is_empty() {
+        return;
+    }
+    overlay::apply_backdrop(frame.buffer_mut(), area, theme);
+    for open in &state.overlays {
+        match open {
+            Overlay::Dialog(DialogState::Confirm(confirm)) => {
+                confirm::draw(confirm, theme, frame, area)
+            }
+            Overlay::Dialog(dialog) => form::draw(
+                dialog.form(),
+                &state.config.keymap,
+                state.spinner,
+                theme,
+                frame,
+                area,
+            ),
             Overlay::Help(help) => help::draw(help, theme, frame, area),
         }
     }
