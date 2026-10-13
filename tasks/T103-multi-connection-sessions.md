@@ -75,14 +75,14 @@ impl SessionManager {
 
 ## Acceptance criteria
 
-- [ ] Two connections can be open at once; queries in session 2 do not affect session 1's driver, buffer or results.
-- [ ] Every `DbAnswer` is tagged with a `SessionId`; answers for closed sessions are ignored without panicking.
-- [ ] Each session keeps its own editor text, cursor, undo history and results across switches.
-- [ ] Scratch opens at startup as session 1, is never written to `connections.json`, and is reopened when the last session closes.
-- [ ] Enter on a connection with an open session switches to it; `shift-Enter` opens another.
-- [ ] Closing a session with a running job asks for confirmation; confirming drops the worker and the job is reported cancelled.
-- [ ] Two simultaneous password prompts each reach the right connection; a canary test proves no cross-delivery.
-- [ ] Tree indicators reflect session status.
+- [x] Two connections can be open at once; queries in session 2 do not affect session 1's driver, buffer or results.
+- [x] Every `DbAnswer` is tagged with a `SessionId`; answers for closed sessions are ignored without panicking.
+- [x] Each session keeps its own editor text, cursor, undo history and results across switches.
+- [x] Scratch opens at startup as session 1, is never written to `connections.json`, and is reopened when the last session closes.
+- [x] Enter on a connection with an open session switches to it; `shift-Enter` opens another.
+- [x] Closing a session with a running job asks for confirmation; confirming drops the worker and the job is reported cancelled.
+- [x] Two simultaneous password prompts each reach the right connection; a canary test proves no cross-delivery.
+- [x] Tree indicators reflect session status.
 - [ ] Manual check: open scratch plus a real Postgres, switch with `ctrl-1`/`ctrl-2`, run different queries in each, close one.
 
 ## Tests
@@ -109,3 +109,17 @@ impl SessionManager {
 
 Snapshots (render only; T202 owns the final look):
 - `top_bar_three_sessions_120x40` and `top_bar_overflow_80x24`: tabs with the active one marked, and overflow `…`.
+
+## Implementation notes
+
+- **The manual check is still open.** No Postgres was reachable where this was built. A pty smoke run of the real binary covered scratch only: run `select 42` (`Fetched 1 row`), close the only session with `ctrl-w` from the tree, and see a fresh scratch open as session 2 (`OpenSession(SessionId(2), …)` in the debug log). Exit status was 0.
+- **State.** `app/state.rs` has `SessionId` (`FIRST` is now `SessionId(1)`), `SessionState { id, connection_id, title, status, editor, results, running, expand_when_connected }` and `Sessions { order, active, by_id, next }`. `Sessions::default()` already holds the scratch session as 1, so the editor has a target before `Started`. `Started` only starts its worker. `SessionStatus` stays in `theme.rs`, which drew it first, and `app::state` re-exports it. `jobs` (T305) and `schema` (T301) are not fields yet. `running` counts queries sent and not yet answered, and feeds the tab spinner (`◐`) and the close confirmation until T305 brings jobs. `State::editor()/editor_mut()/results()/results_mut()` reach the active session's. `TreeState` lost `active`, `attempting` and `expand_when_connected`, and gained `position(id)`.
+- **Reducer (`reducer/sessions.rs`).** `open` adds a session, makes it active and emits `OpenSession`. `open_or_switch` (tree Enter) switches to the session already on that connection (the active one if it is on it, else the first in tab order) and reconnects it if it had failed. `reconnect` sends `Db(id, Connect)`. `close` emits `CloseSession`; it reports `Closed <title>: its running query was cancelled` when something was running, drops that session's queued password prompts and open prompt, and opens a fresh scratch when none are left. `ctrl-1`…`9` switch by tab position, `ctrl-PgDn`/`ctrl-PgUp` wrap, and an out-of-range digit does nothing. Submitting the New Connection modal goes through `connect`: the session already on that connection id reconnects with the edited record, or a new one opens. Its id is what the modal waits for.
+- **Answers.** `UiEvent::Db(id, _)` for an id not in `Sessions` is dropped in the reducer. The runtime already drops and debug-logs answers for closed sessions. `Awaiting::Connect(SessionId)` and `Awaiting::Export(SessionId)` carry the session, so another session's answer cannot close or fail the modal. `Connected` sets `Open { label }`. `ConnectFailed` sets `Failed`, and for a connection added this run and never saved it also forgets the node and closes the session (the modal stays open with its fields). `WorkerStopped` sets `Failed("database worker has stopped")`, clears `running` and fails a modal waiting on that session; it no longer writes the status bar.
+- **Passwords.** `PasswordForm` carries the asking session, and `Submission::PasswordEntered { session, connection, password }` sends `PasswordEntered` back to that session. A `NeedPassword` from another session while a prompt is open waits in `State::password_queue`. Closing a dialog opens the next prompt in the queue.
+- **New action and keys.** `Action::OpenNewSession` (Tree `shift-Enter`, "Open another session on it"). Global `ctrl-w` is `CloseSession`; the editor's own `ctrl-w` (DeleteWordBack) shadows it. `print_config_default` was re-accepted. Terminals without the kitty keyboard protocol send plain Enter for shift-Enter. There the second session is reachable once the palette (T206) lists `OpenNewSession`.
+- **Confirm dialog.** `dialogs/confirmform.rs` (`DialogState::Confirm`, `Submission::CloseSession(id)`) is a one-choice form: Enter closes, Esc keeps. `views::form` cannot draw a form with no fields, so it has one choice field. T203 can restyle it.
+- **Views.** A one-row top bar (`views/topbar.rs`) draws the tabs ` N title ` with `tab_active` / `tab_running` / `tab`. When they overflow, tabs before the active one give way to a leading `…`, and a trailing `…` marks more to the right (tachy `top_bar.rs` behaviour; T202 owns the final look). The status panel became a one-row status line. It shows the active session (`status_session` label when open, `connecting to <title>…` dim, `<title>: <error>` as a warning) and then the last message. The tree draws `●`/`◌`/`✗` from `theme.session_dot` after the expand marker. A connection with no session gets blank space there, and the active session's connection is bold. Every home/dialog snapshot moved down a row for the top bar and was re-accepted.
+- **Harness.** `AppHarness` keeps one virtual worker clock per session, answers each `OpenSession`/`Db` effect for the session that sent it, and drops pending answers of a closed session. `db()` answers for the active session, and `db_for(id, …)`, `active_session()` and `sessions()` are new. `app/sessions_tests.rs` has the listed tests plus `queries_run_in_the_active_session_only`, `next_and_previous_session_wrap_around`, `ctrl_w_in_the_editor_deletes_a_word_instead`, `two_password_prompts_each_reach_their_own_session` (the canary), `closing_a_session_drops_its_waiting_password_prompt`, `a_failed_saved_connection_reconnects_on_enter` and `the_status_line_shows_the_active_sessions_label`. Its `FakeSessions` wraps `AppHarness`, so no second fake runtime exists. The two top-bar snapshots live in `app/snapshots/`. `reducer_tests::ctrl_digit_switches_session` now switches for real, and `tree_tests` drives connects through the reducer's `connect` and `db::answer`.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (267 `qry` unit tests, 31 in `qry-core`), and the CI docs command with `RUSTDOCFLAGS=-D warnings`. Nightly rustfmt was not available, so import grouping was not re-run.
+

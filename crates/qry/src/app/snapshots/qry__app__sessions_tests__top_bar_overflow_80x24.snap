@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/sessions_tests.rs
+expression: "s.h.render(80, 24)"
+---
+… 5 warehouse-replica-eu-west  6 billing-replica-eu-west                        
+┌ Connection Tree ─┐┌Query─────────────────────────────────────────────────────┐
+│▸ ● scratch       ││ 1                                                        │
+│▸   prod          ││                                                          │
+│▸   analytics     ││                                                          │
+│▸ ● orders-replica││                                                          │
+│▸ ● inventory-repl││                                                          │
+│▸ ● reporting-repl││                                                          │
+│▸ ● warehouse-repl││                                                          │
+│▸ ● billing-replic│└──────────────────────────────────────────────────────────┘
+│                  │┌ Results ─────────────────────────────────────────────────┐
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+│                  ││                                                          │
+└──────────────────┘└──────────────────────────────────────────────────────────┘
+ billing.db

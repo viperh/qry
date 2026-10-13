@@ -84,7 +84,7 @@ pub enum Pill {
 }
 
 /// Where an open connection stands, for its dot in the tree and the status
-/// line. The shape is T103's; that task moves it into the app state.
+/// line. The app state re-exports it as `app::state::SessionStatus`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionStatus {
     Connecting,

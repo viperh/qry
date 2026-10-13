@@ -678,8 +678,6 @@ fn space_types_in_a_text_field_and_picks_in_a_choice() {
 
 #[test]
 fn ctrl_digit_switches_session() {
-    // Sessions come with T103; until then the chord resolves to the action
-    // and changes nothing else.
     let keymap = &Config::embedded().keymap;
     let contexts = [
         crate::keymap::KeyContext::Tree,
@@ -689,13 +687,14 @@ fn ctrl_digit_switches_session() {
         keymap.resolve(&contexts, &crate::testing::parse_keys("ctrl-3")),
         crate::keymap::Lookup::Match(crate::action::Action::SwitchSession(3))
     );
+
+    // Two more sessions, on the scratch connection: ctrl-3 is the last.
     let mut h = harness();
-    let before = h.state().clone();
+    h.send(UiEvent::Started);
+    h.keys("shift-enter shift-enter ctrl-1");
+    assert_eq!(h.active_session(), SessionId::FIRST);
     h.keys("ctrl-3");
-    assert!(h.take_effects().is_empty());
-    let mut after = h.state().clone();
-    after.dirty = before.dirty;
-    assert_eq!(after, before);
+    assert_eq!(h.active_session(), h.sessions()[2]);
 }
 
 #[test]

@@ -21,7 +21,7 @@ use std::sync::Arc;
 pub use self::{
     effects::Effect,
     event::{DbAnswer, FileAnswer, Timer, UiEvent},
-    state::{SessionId, State, StatusCode},
+    state::{SessionId, SessionStatus, State, StatusCode},
 };
 use crate::{config::Config, theme::Theme};
 
@@ -82,6 +82,10 @@ impl App {
 #[cfg(test)]
 #[path = "reducer_tests.rs"]
 mod reducer_tests;
+
+#[cfg(test)]
+#[path = "sessions_tests.rs"]
+mod sessions_tests;
 
 #[cfg(test)]
 #[path = "purity_tests.rs"]
