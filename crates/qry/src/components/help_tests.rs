@@ -2,24 +2,14 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use ratatui::{Terminal, backend::TestBackend};
-
 use super::*;
+use crate::testing::{buffer_to_string, render_with};
 
+/// The help drawn over a `width`x`height` terminal, as text.
 fn text(help: &mut Help, width: u16, height: u16) -> String {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| help.draw(frame, frame.area()).unwrap())
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect::<String>()
-                + "\n"
-        })
-        .collect()
+    buffer_to_string(&render_with(width, height, |frame| {
+        help.draw(frame, frame.area()).unwrap();
+    }))
 }
 
 #[test]

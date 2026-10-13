@@ -3,11 +3,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crossterm::event::KeyCode;
-use ratatui::{Terminal, backend::TestBackend};
+use ratatui::buffer::Buffer;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
 use super::*;
-use crate::components::form_tests::key;
+use crate::{
+    components::form_tests::key,
+    testing::{buffer_lines, render_with},
+};
 
 /// A saved SQLite connection, as the form would build it.
 fn record(name: &str, path: &str) -> StoredConnection {
@@ -39,19 +42,16 @@ fn press(tree: &mut ConnTree, code: KeyCode) {
     tree.handle_key_event(key(code)).unwrap();
 }
 
+/// Draws `tree` into a `width`x`height` terminal.
+fn drawn(tree: &mut ConnTree, width: u16, height: u16) -> Buffer {
+    render_with(width, height, |frame| {
+        tree.draw(frame, frame.area()).unwrap();
+    })
+}
+
+/// The rows of `tree` drawn at `width`x`height`.
 fn lines(tree: &mut ConnTree, width: u16, height: u16) -> Vec<String> {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| tree.draw(frame, frame.area()).unwrap())
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect()
-        })
-        .collect()
+    buffer_lines(&drawn(tree, width, height))
 }
 
 fn imported(connections: Vec<StoredConnection>) -> Action {
@@ -253,11 +253,7 @@ fn a_keychain_that_refused_downgrades_the_record_and_saves() {
 
 /// The cells of one rendered row, for checking its colours.
 fn row_style(tree: &mut ConnTree, width: u16, height: u16, y: u16) -> (Color, Color) {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| tree.draw(frame, frame.area()).unwrap())
-        .unwrap();
-    let cell = &terminal.backend().buffer()[(1, y)];
+    let cell = &drawn(tree, width, height)[(1, y)];
     (cell.fg, cell.bg)
 }
 

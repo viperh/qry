@@ -5,7 +5,10 @@
 use crossterm::event::KeyCode;
 
 use super::*;
-use crate::components::form_tests::{key, lines, press, render, type_str};
+use crate::{
+    components::form_tests::{key, press, render, type_str},
+    testing::buffer_lines,
+};
 
 fn set(form: &mut ConnForm, field: usize, value: &str) {
     let Field::Text(input) = &mut form.fields[field] else {
@@ -195,7 +198,7 @@ fn editing_opens_the_form_filled_in_and_keeps_the_id() {
     assert_eq!(form.text(SCHEMA), "reporting");
     assert_eq!(form.text(PASSWORD), "", "the password is never shown back");
 
-    let shown = lines(&render(&form, 80, 60)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 60)).join("\n");
     assert!(shown.contains("(unchanged)"), "{shown}");
 
     // Saving it again is the same connection, not a second one.
@@ -277,7 +280,7 @@ fn typing_reaches_the_focused_field_and_the_password_is_masked() {
     assert_eq!(form.text(NAME), "prod");
     assert_eq!(form.text(HOST), "db.local");
 
-    let shown = lines(&render(&form, 80, 60)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 60)).join("\n");
     for label in LABELS {
         assert!(shown.contains(label), "missing {label}: {shown}");
     }

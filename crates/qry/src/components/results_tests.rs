@@ -3,30 +3,21 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+use ratatui::buffer::Buffer;
 
 use super::*;
+use crate::testing::{buffer_lines, render_with, styled};
 
-fn render_buffer(results: &mut Results, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| results.draw(frame, frame.area()).unwrap())
-        .unwrap();
-    terminal.backend().buffer().clone()
+/// Draws `results` into a `width`x`height` terminal.
+fn drawn(results: &mut Results, width: u16, height: u16) -> Buffer {
+    render_with(width, height, |frame| {
+        results.draw(frame, frame.area()).unwrap();
+    })
 }
 
-fn lines(buffer: &Buffer) -> Vec<String> {
-    (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect()
-        })
-        .collect()
-}
-
+/// The rows of `results` drawn at 40x6.
 fn render(results: &mut Results) -> Vec<String> {
-    lines(&render_buffer(results, 40, 6))
+    buffer_lines(&drawn(results, 40, 6))
 }
 
 fn press(results: &mut Results, code: KeyCode, times: usize) {
@@ -44,18 +35,15 @@ fn press(results: &mut Results, code: KeyCode, times: usize) {
     }
 }
 
-/// `rows` rows of `cols` columns named c0, c1, … holding "r{row}c{col}".
+/// A results pane showing `qry_core::testing::grid(rows, cols)`: columns
+/// c0, c1, … holding "r{row}c{col}".
 fn grid(rows: usize, cols: usize) -> Results {
     let mut results = Results::default();
     results.register_config_handler(Config::embedded()).unwrap();
     results
-        .update(Action::QueryDone(Arc::new(QueryResult {
-            columns: (0..cols).map(|c| format!("c{c}")).collect(),
-            rows: (0..rows)
-                .map(|r| (0..cols).map(|c| Some(format!("r{r}c{c}"))).collect())
-                .collect(),
-            affected: None,
-        })))
+        .update(Action::QueryDone(Arc::new(qry_core::testing::grid(
+            rows, cols,
+        ))))
         .unwrap();
     results
 }
@@ -189,14 +177,24 @@ fn the_selected_cell_is_highlighted() {
     results.set_focus(true);
     press(&mut results, KeyCode::Down, 1);
     press(&mut results, KeyCode::Right, 1);
-    let buffer = render_buffer(&mut results, 40, 8);
+    let buffer = drawn(&mut results, 40, 8);
 
     // Border, then header, then rows: "r1c1" is on line 3, starting after "r1c0 ".
     let x = 1 + 4 + 1;
     assert_eq!(buffer[(x, 3)].symbol(), "r");
-    assert_eq!(buffer[(x, 3)].bg, Color::Green);
-    assert_ne!(buffer[(1, 3)].bg, Color::Green);
-    assert!(lines(&buffer)[0].contains("row 2/3 · col 2/2"));
+    assert_ne!(buffer[(x, 3)].bg, buffer[(1, 3)].bg, "the cell stands out");
+    assert!(buffer_lines(&buffer)[0].contains("row 2/3 · col 2/2"));
+}
+
+/// The colours of the grid, the header and the selected cell. T201 changes
+/// the colours, and re-accepts this snapshot.
+#[test]
+fn results_grid_snapshot() {
+    let mut results = grid(30, 8);
+    results.set_focus(true);
+    press(&mut results, KeyCode::Down, 2);
+    press(&mut results, KeyCode::Right, 1);
+    insta::assert_snapshot!("results_grid_80x24", styled(&drawn(&mut results, 80, 24)));
 }
 
 #[test]
@@ -204,7 +202,7 @@ fn scrolls_down_past_the_bottom_and_keeps_the_header() {
     // 8 lines tall: 2 border + 1 header = 5 visible data rows.
     let mut results = grid(20, 2);
     press(&mut results, KeyCode::Down, 7);
-    let lines = lines(&render_buffer(&mut results, 40, 8));
+    let lines = buffer_lines(&drawn(&mut results, 40, 8));
 
     assert!(lines[1].contains("c0"), "{lines:#?}");
     assert!(lines[2].contains("r3c0"), "{lines:#?}");
@@ -217,7 +215,7 @@ fn scrolls_right_past_the_edge() {
     // Each column is 4 wide ("r0c9" style values); 20 columns never fit in 30.
     let mut results = grid(2, 20);
     press(&mut results, KeyCode::End, 1);
-    let lines = lines(&render_buffer(&mut results, 30, 6));
+    let lines = buffer_lines(&drawn(&mut results, 30, 6));
 
     assert!(lines[1].contains("c19"), "{lines:#?}");
     assert!(lines[2].contains("r0c19"), "{lines:#?}");

@@ -3,10 +3,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+use ratatui::buffer::Buffer;
 
 use super::*;
-use crate::config::Config;
+use crate::{
+    config::Config,
+    testing::{buffer_lines, render_with},
+};
 
 pub(crate) fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -22,22 +25,9 @@ pub(crate) fn type_str(form: &mut impl Form, text: &str) {
         .for_each(|c| press(form, key(KeyCode::Char(c))));
 }
 
+/// Draws `form` as a popup over a `width`x`height` terminal.
 pub(crate) fn render(form: &impl Form, width: u16, height: u16) -> Buffer {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    terminal
-        .draw(|frame| form.render(frame, frame.area()))
-        .unwrap();
-    terminal.backend().buffer().clone()
-}
-
-pub(crate) fn lines(buffer: &Buffer) -> Vec<String> {
-    (0..buffer.area.height)
-        .map(|y| {
-            (0..buffer.area.width)
-                .map(|x| buffer[(x, y)].symbol())
-                .collect()
-        })
-        .collect()
+    render_with(width, height, |frame| form.render(frame, frame.area()))
 }
 
 /// A two-field form, so the trait can be tested without either real one.
@@ -150,14 +140,14 @@ fn editing_clears_the_error() {
 #[test]
 fn the_popup_shows_labels_the_hint_and_errors() {
     let mut form = TestForm::default();
-    let shown = lines(&render(&form, 80, 24)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
     assert!(shown.contains("Test"), "{shown}");
     assert!(shown.contains("› Name"), "{shown}");
     assert!(shown.contains("Colour"), "{shown}");
     assert!(shown.contains("Enter ok"), "{shown}");
 
     form.set_error(Some("Name is required".into()));
-    let shown = lines(&render(&form, 80, 24)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
     assert!(shown.contains("Name is required"), "{shown}");
     assert!(!shown.contains("Enter ok"), "{shown}");
 }
@@ -177,7 +167,7 @@ fn the_popup_is_sized_from_the_field_count() {
 fn a_short_terminal_scrolls_to_the_focused_field() {
     let mut form = TestForm::default();
     form.set_focus(1);
-    let shown = lines(&render(&form, 80, 8)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 8)).join("\n");
     assert!(shown.contains("› Colour"), "{shown}");
     assert!(!shown.contains("Name"), "{shown}");
 }

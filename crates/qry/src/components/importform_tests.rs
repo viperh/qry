@@ -5,7 +5,10 @@
 use crossterm::event::KeyCode;
 
 use super::*;
-use crate::components::form_tests::{key, lines, press, render, type_str};
+use crate::{
+    components::form_tests::{key, press, render, type_str},
+    testing::buffer_lines,
+};
 
 #[test]
 fn format_labels_line_up_with_the_formats() {
@@ -35,7 +38,7 @@ fn the_form_sends_the_file_and_the_chosen_format() {
 
 #[test]
 fn the_popup_says_passwords_are_not_imported() {
-    let shown = lines(&render(&ImportForm::default(), 80, 20)).join("\n");
+    let shown = buffer_lines(&render(&ImportForm::default(), 80, 20)).join("\n");
     assert!(shown.contains("Import Connections"), "{shown}");
     assert!(shown.contains("passwords are asked on connect"), "{shown}");
     assert!(shown.contains("DETECT"), "{shown}");

@@ -5,7 +5,10 @@
 use crossterm::event::KeyCode;
 
 use super::*;
-use crate::components::form_tests::{key, lines, press, render, type_str};
+use crate::{
+    components::form_tests::{key, press, render, type_str},
+    testing::buffer_lines,
+};
 
 /// Moves the focus to `field` from the start of the form.
 fn focus(form: &mut ExportForm, field: usize) {
@@ -140,7 +143,7 @@ fn excel_and_json_have_no_separator_field() {
 
         assert_eq!(form.labels(), LABELS_PLAIN, "{option}");
         assert_eq!(form.fields.len(), 2, "{option}");
-        let shown = lines(&render(&form, 80, 24)).join("\n");
+        let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
         assert!(!shown.contains("Separator"), "{option}: {shown}");
 
         let Ok(Action::Export(config)) = form.submit() else {
@@ -175,7 +178,7 @@ fn a_windows_path_can_be_typed() {
 #[test]
 fn the_popup_shows_every_field() {
     let mut form = ExportForm::default();
-    let shown = lines(&render(&form, 80, 24)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
     assert!(
         shown.contains("› Path") && shown.contains("Type"),
         "{shown}"
@@ -187,7 +190,7 @@ fn the_popup_shows_every_field() {
     assert!(!shown.contains("Custom"), "{shown}");
 
     pick(&mut form, SEPARATOR, &SEPARATORS, "OTHER");
-    let shown = lines(&render(&form, 80, 24)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 24)).join("\n");
     assert!(
         shown.contains("OTHER") && shown.contains("Custom"),
         "{shown}"

@@ -3,7 +3,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
-use crate::components::form_tests::{lines, render, type_str};
+use crate::{
+    components::form_tests::{render, type_str},
+    testing::buffer_lines,
+};
 
 #[test]
 fn the_form_sends_the_file() {
@@ -15,7 +18,7 @@ fn the_form_sends_the_file() {
         Action::ExportConnections("~/backup.json".into())
     );
 
-    let shown = lines(&render(&form, 80, 20)).join("\n");
+    let shown = buffer_lines(&render(&form, 80, 20)).join("\n");
     assert!(shown.contains("Export Connections"), "{shown}");
     assert!(shown.contains("no passwords are written"), "{shown}");
 }
