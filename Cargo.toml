@@ -103,6 +103,8 @@ vergen-gix = { version = "10.0.1", features = ["build", "cargo"] }
 winresource = "0.1.31"
 
 # --- dev ---
+# Loads the workspace for the structural tests in crates/qry/tests/.
+cargo_metadata = "0.23.1"
 pretty_assertions = "1.4.1"
 # A TLS server for the Oracle tests; already in the tree through oracledb.
 rustls = "0.23.45"

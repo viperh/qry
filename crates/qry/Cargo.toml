@@ -53,4 +53,5 @@ vergen-gix = { workspace = true }
 winresource = { workspace = true }
 
 [dev-dependencies]
+cargo_metadata = { workspace = true }
 pretty_assertions = { workspace = true }
