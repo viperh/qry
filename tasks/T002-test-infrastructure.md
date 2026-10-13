@@ -150,15 +150,15 @@ pub fn grid(rows: usize, cols: usize) -> QueryResult;   // "r{i}c{j}" cells, lik
 
 ## Acceptance criteria
 
-- [ ] `crates/qry` has a `lib.rs` exporting the app modules. `main.rs` is under ~30 lines and only parses the CLI, installs the hooks and calls into the library.
-- [ ] `crates/qry/src/testing.rs` exists behind `#[cfg(any(test, feature = "test-util"))]` and provides every item in the API listing above, each with a doc comment.
-- [ ] `crates/qry-core/src/testing.rs` provides `FakeDatabase`, `Reply`, `result()` and `grid()` behind the `test-util` feature.
-- [ ] `cargo build -p qry --release` does not compile `testing.rs`. Check that `cargo tree -e features -p qry` in release has no `test-util`, and that `nm` or `strings` on the binary finds no `AppHarness`.
-- [ ] `QRY_KEYRING=off` swaps the keychain for an in-memory store. With it set, `cargo test --workspace` never prompts or writes to the OS keychain.
-- [ ] The existing tests in `home`, `results`, `form`, `help`, `conntree`, `editor` and the forms use the shared helpers. No test module defines its own `TestBackend` rendering helper (`grep -rn "TestBackend::new" crates/qry/src` only matches `testing.rs`).
-- [ ] At least the snapshots listed under Tests exist and are committed.
-- [ ] No test sleeps in real time (`grep -rn "thread::sleep\|tokio::time::sleep" crates/*/src crates/*/tests` matches nothing outside `start_paused` tests and `FakeDatabase`'s `Delay`, which uses `tokio::time` under a paused clock).
-- [ ] CONTRIBUTING.md has a "Writing tests" section that documents the conventions in section 4 and the `cargo insta review` workflow.
+- [x] `crates/qry` has a `lib.rs` exporting the app modules. `main.rs` is under ~30 lines and only parses the CLI, installs the hooks and calls into the library.
+- [x] `crates/qry/src/testing.rs` exists behind `#[cfg(any(test, feature = "test-util"))]` and provides every item in the API listing above, each with a doc comment.
+- [x] `crates/qry-core/src/testing.rs` provides `FakeDatabase`, `Reply`, `result()` and `grid()` behind the `test-util` feature.
+- [x] `cargo build -p qry --release` does not compile `testing.rs`. Check that `cargo tree -e features -p qry` in release has no `test-util`, and that `nm` or `strings` on the binary finds no `AppHarness`.
+- [x] `QRY_KEYRING=off` swaps the keychain for an in-memory store. With it set, `cargo test --workspace` never prompts or writes to the OS keychain.
+- [x] The existing tests in `home`, `results`, `form`, `help`, `conntree`, `editor` and the forms use the shared helpers. No test module defines its own `TestBackend` rendering helper (`grep -rn "TestBackend::new" crates/qry/src` only matches `testing.rs`).
+- [x] At least the snapshots listed under Tests exist and are committed.
+- [x] No test sleeps in real time (`grep -rn "thread::sleep\|tokio::time::sleep" crates/*/src crates/*/tests` matches nothing outside `start_paused` tests and `FakeDatabase`'s `Delay`, which uses `tokio::time` under a paused clock).
+- [x] CONTRIBUTING.md has a "Writing tests" section that documents the conventions in section 4 and the `cargo insta review` workflow.
 
 ## Tests
 
@@ -199,3 +199,55 @@ CI checks:
 - `cargo test --workspace --all-features --locked` passes with `CI=true`, so missing snapshots fail.
 - `cargo test -p qry --no-default-features --locked` passes.
 - `cargo build -p qry --release --locked` passes without `test-util`.
+
+## Implementation notes
+
+- **Library split.** `crates/qry/src/lib.rs` declares every module as `pub mod` and has `pub async fn run(cli: Cli)`. `main.rs` is 15 lines. A public API cannot mention crate-private types (the `private_interfaces` lint), so these became `pub`: `App`, `Cli`, `errors::init`, `logging::init`, `Action`, `StatusCode`, `Mode`, `Config`, `StoredConnection`, `connections::Driver`, `Secret`, `import::Format`, `Imported` and `Skipped`. `Config`'s fields are `pub(crate)`, so `KeyBindings`, `PaneKeys` and `Styles` stay private. `Config::embedded()` is `pub` under `#[cfg(any(test, feature = "test-util"))]`. Everything else stays `pub(crate)`.
+- **`Effect` is `pub type Effect = Action`** in `qry::testing`. T101 replaces the alias with a real enum. Before T101, these actions are recorded as effects (they still go through `Home::update`, as in `App`): a non-empty `Execute`, `Connect`, `Export`, `SaveConnections`, `Import`, `WriteConnections`, `ForgetSecret` and `ListTables`. `PasswordEntered` is recorded too, because `App` sends it to the worker.
+- **Harness items beyond the listed API:**
+  - `with_tick_rate(f64)` (the default is 4 Hz, like the CLI), `mode()`, `ticks()`, `now()` and `theme_env()`.
+  - `home()` and `home_mut()`, which are `#[cfg(test)] pub(crate)`, for this crate's tests that check private `Home` state.
+  - The free functions `render_with(w, h, |frame| …) -> Buffer` (the one place that builds a `TestBackend`), `buffer_lines(&Buffer) -> Vec<String>` and `fixture(relative) -> PathBuf`.
+  - Re-exports of `Reply`, `grid` and `result` from `qry_core::testing`.
+- **`ThemeEnv`** is a placeholder in `qry::testing` (`no_color: bool`, `colorterm: Option<String>`). The harness stores it and does nothing else with it. T201 should move it next to the theme, start honouring it, and keep `with_theme_env`.
+- **The stand-in worker.** `with_database(FakeDatabase)` answers `Connect`, `Execute` and `ListTables` on the virtual clock:
+  - `Reply::Delay` arrives once `advance` passes it, and `Reply::Hang` blocks the worker for good.
+  - It runs one command at a time, like the real worker.
+  - The answers come from `db::query_answer`, `db::tables_answer` and `db::connected_answer`. These were factored out of `Worker`, so the harness and the worker cannot drift apart.
+  - `Connect` answers with the fake's label (`fake`) and does not resolve secrets.
+  - `advance` delivers ticks at `n * 1000 / rate` ms. An answer due at the same moment as a tick comes first.
+- **Key syntax.** `parse_keys` is built on `config::parse_key_event`, which is now `pub(crate)`:
+  - `shift-tab` becomes `BackTab` + Shift, which is what crossterm reports and what `<shift-backtab>` in the config means.
+  - A lone capital such as `G` becomes `Char('G')` + Shift.
+  - `type_str` gives capitals Shift too.
+- **`FakeDatabase` details:**
+  - `Default` is a SQLite fake, and the label is `fake`.
+  - `next_reply(sql)` is public: it records the call and pops the script. When the script is empty it returns `Reply::Error` naming the statement.
+  - `tables(&[..])` does not use up a reply and is not recorded in `calls()`.
+  - `name()` and `table_names()` exist so the harness can answer without async.
+  - `Driver::with_database` is `#[cfg(any(test, feature = "test-util"))]`.
+- **`QRY_KEYRING=off`** (the `secrets::KEYRING_ENV` constant; the value is case-insensitive) sends `store`, `fetch` and `delete` to a process-wide in-memory map. Under `cfg(test)` the `qry` unit tests always use the map, whatever the variable says. Integration tests and other crates rely on the variable, so CI (T003) must set `QRY_KEYRING=off`.
+- **Snapshots:**
+  - They use insta's default names, such as `crates/qry/src/components/snapshots/qry__components__home__home_tests__home_empty_80x24.snap`. They were first written with `INSTA_UPDATE=always`, because `cargo-insta` is not installed here.
+  - `results_grid_80x24` is a `styled` snapshot (built from `grid(30, 8)`, with r2c1 selected). It records today's `Color::Green` selection, and T201 re-accepts it.
+  - Some colour assertions remain and T201 must update them: `home_tests::tree_is_focused_and_highlighted_at_startup` (Yellow/Cyan pane titles) and `conntree_tests::the_selection_is_green_and_the_rest_grey_with_no_background`.
+- **Tests ported to the harness.** `home_tests` now goes entirely through `AppHarness`, so `ctrl-e`, `ctrl-o`, `ctrl-s`, `tab`, `shift-tab` and `f8` are really routed through the global keymap. Exporting connections now asserts the `WriteConnections` effect. That needs a loaded connection, because the tree refuses to export an empty list. The form tests keep `form_tests::{key, press, type_str, render}`, where `render` is now one call to `testing::render_with`, and they use `testing::buffer_lines`. `editor_tests` never had a rendering helper and is unchanged.
+- **The sleep grep matches one non-test line:** `std::thread::sleep` in `Tui::stop` (`crates/qry/src/tui.rs`), which is production code that waits for the event task to finish. No test sleeps. The only other match is `FakeDatabase`'s `Delay`.
+- **Release check.** `cargo tree -e features,normal -p qry` has no `test-util` (the plain `cargo tree -e features` lists dev-dependencies too, so it does show it). The release binary is stripped (`strip = true`), so `nm` shows nothing. `strings` finds neither `AppHarness` nor `FakeDatabase`, including the harness's panic messages.
+- **Fixtures:**
+  - The import samples moved to `tests/fixtures/dbeaver/data-sources.json` and `tests/fixtures/sqldeveloper/connections.json`, and the "newer qry" backup to `tests/fixtures/qry-backup/from-a-newer-qry.json`.
+  - `tests/fixtures/sql/` does not exist yet, because git does not track empty directories. T004 and T005 add it with their first file.
+  - Scratch files in `import_tests`, `db_tests`, `connections_tests`, and in qry-core's `exporter_tests` and `oracle_tests`, now use `tempfile`.
+- **Dependencies:**
+  - `insta 1.49.0`, `proptest 1.11.0` (resolved to 1.12.0) and `tempfile 3.27.0` are in `[workspace.dependencies]`.
+  - `qry` dev-depends on itself with `test-util`, and on `insta`, `proptest`, `tempfile` and tokio with `test-util`. `qry-core` dev-depends on `tempfile` and tokio with `test-util`.
+  - `cargo deny --all-features check` still passes.
+- **Integration test.** `crates/qry/tests/harness.rs` checks that `qry::testing` and `qry_core::testing` can be reached from outside the crate.
+- **Test count:** 201 in all: 164 `qry` unit tests, 2 in `tests/harness.rs`, 4 in `tests/workspace_lints.rs` and 31 `qry-core` unit tests.
+- **Checks run locally:**
+  - `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked`
+  - `cargo test -p qry --no-default-features --locked`
+  - `cargo build -p qry --release --locked`
+  - `cargo check --workspace --all-targets --all-features --locked` with Rust 1.96
+  - `cargo fmt --all --check` with nightly rustfmt
+  - CI is not touched (T003), so a green CI on GitHub could not be checked.
