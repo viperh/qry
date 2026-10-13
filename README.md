@@ -19,11 +19,16 @@ crates/
     build.rs            vergen — stamps git/build info into the version string
     src/
       main.rs           entry point
-      app.rs            event loop, mode handling, component dispatch
-      action.rs         the Action enum every component speaks
-      components.rs     the Component trait
-      components/
-        home.rs         default screen — copy this shape for new components
+      app/              the pure reducer: State, UiEvent -> App::handle -> Vec<Effect>
+        state.rs        everything the views draw, as plain data
+        event.rs        UiEvent, and the worker's and files' answers
+        effects.rs      Effect: what the runtime should do
+        reducer/        how each event changes the state, one file per concern
+        dialogs/        the modal forms
+      views.rs, views/  free functions drawing the State with a Theme
+      runtime.rs        the event loop: terminal, tasks, files, keychain, effects
+      action.rs         the commands keys are bound to
+      db.rs             the database worker
       cli.rs            clap argument parsing
       config.rs         layered config, keybinding and style parsing
       errors.rs         panic hooks, color-eyre, human-panic

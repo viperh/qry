@@ -82,11 +82,11 @@ impl Worker {
             },
             DbCommand::Query(sql) => {
                 let started = Instant::now();
-                let actions = query_answer(self.driver.query(&sql).await, started.elapsed());
-                if let Some(DbAnswer::QueryDone(result)) = actions.first() {
+                let answers = query_answer(self.driver.query(&sql).await, started.elapsed());
+                if let Some(DbAnswer::QueryDone(result)) = answers.first() {
                     self.last = Some(result.clone());
                 }
-                actions
+                answers
             }
             DbCommand::Export(config) => self.export(config).await,
             DbCommand::ListTables => tables_answer(self.driver.tables().await),
@@ -121,12 +121,12 @@ impl Worker {
     }
 
     fn ask(&mut self, record: StoredConnection) -> Vec<DbAnswer> {
-        let action = DbAnswer::NeedPassword {
+        let answer = DbAnswer::NeedPassword {
             id: record.id.clone(),
             name: record.title().to_string(),
         };
         self.asked = Some(record);
-        vec![action]
+        vec![answer]
     }
 
     /// Opens the connection with the password in hand. `typed` says the user
@@ -148,7 +148,7 @@ impl Worker {
             Err(e) => return failed(&format!("{e:#}")),
         };
 
-        let mut actions = connected_answer(&record, label);
+        let mut answers = connected_answer(&record, label);
 
         // Only a freshly typed password is worth storing, and only once it is
         // known to work.
@@ -156,14 +156,14 @@ impl Worker {
             let id = record.id.clone();
             let stored = tokio::task::spawn_blocking(move || secrets::store(&id, &password)).await;
             if !matches!(stored, Ok(Ok(()))) {
-                actions.push(DbAnswer::SecretNotStored(record.id.clone()));
-                actions.push(error(format!(
+                answers.push(DbAnswer::SecretNotStored(record.id.clone()));
+                answers.push(error(format!(
                     "{} is saved, but the keychain would not take its password: you will be asked each time",
                     record.title()
                 )));
             }
         }
-        actions
+        answers
     }
 
     async fn export(&self, config: ExportConfig) -> Vec<DbAnswer> {

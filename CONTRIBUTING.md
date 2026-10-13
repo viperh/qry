@@ -42,8 +42,9 @@ Commits use conventional-commit prefixes (`feat:`, `fix:`, `perf:`,
 
 ### The test toolkit
 
-- `qry::testing` has `AppHarness`, which drives the main screen with keys and
-  actions the way the app does, without a terminal, plus `buffer_to_string`,
+- `qry::testing` has `AppHarness`, which feeds keys and events to
+  `App::handle` the way the runtime does, without a terminal, and records
+  the effects instead of carrying them out, plus `buffer_to_string`,
   `styled`, `parse_keys`, `render_with` and the `SIZES` every view must
   render at. Its module docs have an example.
 - `qry_core::testing` has `FakeDatabase`, a `Database` that answers from a

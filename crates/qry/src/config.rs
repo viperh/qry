@@ -3,12 +3,13 @@ use std::{collections::HashMap, env, path::PathBuf, sync::LazyLock};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use directories::ProjectDirs;
 use serde::{
-    Deserialize,
+    Deserialize, Serialize,
     de::{Deserializer, IgnoredAny},
 };
+use strum::EnumIter;
 use tracing::error;
 
-use crate::{action::Action, app::Mode, keymap::PaneKeys};
+use crate::{action::Action, keymap::PaneKeys};
 
 /// The default config, baked into the binary at compile time. User config
 /// files found in [`get_config_dir`] are layered on top of it.
@@ -19,7 +20,7 @@ const CONFIG: &str = include_str!("../../../.config/config.json");
 const APP_QUALIFIER: &str = "dev";
 const APP_ORGANIZATION: &str = "viperh";
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub(crate) keybindings: KeyBindings,
@@ -111,7 +112,7 @@ impl Config {
     }
 
     /// Problems with the config that do not stop qry from starting, one line
-    /// each, for `App` to report.
+    /// each, for the runtime to report.
     pub(crate) fn warnings(&self) -> Vec<String> {
         let mut warnings = Vec::new();
         if self.styles.is_some() {
@@ -160,15 +161,30 @@ fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from(APP_QUALIFIER, APP_ORGANIZATION, env!("CARGO_PKG_NAME"))
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) struct KeyBindings(pub HashMap<Mode, HashMap<Vec<KeyEvent>, Action>>);
+/// The sections of the `keybindings` config: one for the main screen and one
+/// per modal. Which one applies follows from what is open (see
+/// [`State::key_section`](crate::app::state::State::key_section)); the
+/// names are the ones the config has always used.
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
+pub enum KeySection {
+    #[default]
+    Home,
+    AddConnModal,
+    ExpoModal,
+    PasswordModal,
+    ImportModal,
+    ConnExportModal,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct KeyBindings(pub HashMap<KeySection, HashMap<Vec<KeyEvent>, Action>>);
 
 impl<'de> Deserialize<'de> for KeyBindings {
     fn deserialize<D>(deserializer: D) -> color_eyre::Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let parsed_map = HashMap::<Mode, HashMap<String, Action>>::deserialize(deserializer)?;
+        let parsed_map = HashMap::<KeySection, HashMap<String, Action>>::deserialize(deserializer)?;
 
         let keybindings = parsed_map
             .into_iter()

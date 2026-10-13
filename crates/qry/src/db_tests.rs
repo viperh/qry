@@ -50,15 +50,15 @@ fn in_memory() -> DbCommand {
 
 #[tokio::test]
 async fn named_connection_shows_its_name() {
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     db.send(DbCommand::Connect(Box::new(sqlite("scratch", ":memory:"))))
         .unwrap();
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Connected(":memory:".into()))
     );
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(success("Connected to scratch (:memory:)".into()))
     );
 }
@@ -72,7 +72,7 @@ async fn a_password_in_the_environment_is_used_without_asking() {
     let _ = secrets::take_stash();
     secrets::set_test_var("QRY_TEST_DB_PASSWORD", "hunter2");
 
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     let mut record = sqlite("env", ":memory:");
     record.secret = Secret::Env {
         var: "QRY_TEST_DB_PASSWORD".into(),
@@ -80,7 +80,7 @@ async fn a_password_in_the_environment_is_used_without_asking() {
     db.send(DbCommand::Connect(Box::new(record))).unwrap();
 
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Connected(":memory:".into()))
     );
 }
@@ -93,7 +93,7 @@ async fn a_password_that_is_not_stored_is_asked_for_then_used() {
     let _guard = secrets::test_lock();
     let _ = secrets::take_stash();
 
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     let mut record = sqlite("prompt", ":memory:");
     record.secret = Secret::Prompt;
     let id = record.id.clone();
@@ -102,18 +102,18 @@ async fn a_password_that_is_not_stored_is_asked_for_then_used() {
     // It asks instead of connecting, and the request names the
     // connection but carries no password.
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::NeedPassword {
             id,
             name: "prompt".into()
         })
     );
 
-    // The prompt leaves the password in the stash, not in the action.
+    // The prompt leaves the password in the stash, not in the command.
     secrets::stash(Password::new("hunter2"));
     db.send(DbCommand::PasswordEntered).unwrap();
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Connected(":memory:".into()))
     );
     assert_eq!(
@@ -125,41 +125,41 @@ async fn a_password_that_is_not_stored_is_asked_for_then_used() {
 
 #[tokio::test]
 async fn a_failed_connection_is_reported_for_the_modal_and_the_status_bar() {
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     // A directory is not a database file.
     let mut record = sqlite("", &std::env::temp_dir().display().to_string());
     record.mode = Some("ro".into());
     db.send(DbCommand::Connect(Box::new(record))).unwrap();
 
-    let Some(DbAnswer::ConnectFailed(message)) = action_rx.recv().await else {
+    let Some(DbAnswer::ConnectFailed(message)) = answers.recv().await else {
         panic!("expected ConnectFailed first, for the modal");
     };
     assert!(!message.is_empty());
     assert!(matches!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Status(StatusCode::Error(_)))
     ));
 }
 
 #[tokio::test]
 async fn query_result_comes_back_as_db_answers() {
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     db.send(in_memory()).unwrap();
     db.send(DbCommand::Query("SELECT 1 AS one".into())).unwrap();
 
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Connected(":memory:".into()))
     );
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(success("Connected to :memory:".into()))
     );
-    let Some(DbAnswer::QueryDone(result)) = action_rx.recv().await else {
+    let Some(DbAnswer::QueryDone(result)) = answers.recv().await else {
         panic!("expected QueryDone");
     };
     assert_eq!(result.columns, ["one"]);
-    let Some(DbAnswer::Status(StatusCode::Success(message))) = action_rx.recv().await else {
+    let Some(DbAnswer::Status(StatusCode::Success(message))) = answers.recv().await else {
         panic!("expected a status message");
     };
     assert!(message.starts_with("Fetched 1 row in "), "{message}");
@@ -171,26 +171,26 @@ async fn query_result_comes_back_as_db_answers() {
 
 #[tokio::test]
 async fn failures_become_error_status() {
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     db.send(DbCommand::Query("SELECT 1".into())).unwrap();
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(error("not connected to a database".into()))
     );
 
     db.send(in_memory()).unwrap();
-    action_rx.recv().await; // Connected
-    action_rx.recv().await; // its status message
+    answers.recv().await; // Connected
+    answers.recv().await; // its status message
     db.send(DbCommand::Query("SELEC nonsense".into())).unwrap();
     assert!(matches!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::Status(StatusCode::Error(_)))
     ));
 }
 
 #[tokio::test]
 async fn export_writes_the_last_result() {
-    let (db, mut action_rx) = spawn_first();
+    let (db, mut answers) = spawn_first();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("rows.csv").display().to_string();
 
@@ -202,13 +202,13 @@ async fn export_writes_the_last_result() {
     }))
     .unwrap();
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(DbAnswer::ExportFailed(
             "Nothing to export yet: run a query first".into()
         ))
     );
     assert_eq!(
-        action_rx.recv().await,
+        answers.recv().await,
         Some(error("Nothing to export yet: run a query first".into()))
     );
 
@@ -227,7 +227,7 @@ async fn export_writes_the_last_result() {
     // Connected, its status, QueryDone, its status, Exported, its status.
     let mut messages = Vec::new();
     while messages.len() < 6 {
-        messages.push(action_rx.recv().await.unwrap());
+        messages.push(answers.recv().await.unwrap());
     }
     assert_eq!(
         messages.last(),
@@ -248,10 +248,10 @@ async fn a_driver_error_comes_back_as_a_status_error() {
         ..Worker::default()
     };
 
-    let actions = worker
+    let answers = worker
         .run(DbCommand::Query("SELECT * FROM nope".into()))
         .await;
-    assert_eq!(actions, [error("relation \"nope\" does not exist".into())]);
+    assert_eq!(answers, [error("relation \"nope\" does not exist".into())]);
     assert!(
         worker.last.is_none(),
         "a failed query leaves nothing to export"
@@ -269,9 +269,9 @@ async fn commands_run_in_order_even_when_the_first_is_slow() {
             Box::new(Reply::Rows(slow.clone())),
         ))
         .reply(Reply::Rows(fast.clone()));
-    let (answers, rx) = mpsc::unbounded_channel();
-    let mut action_rx = Receiver(rx);
-    let worker = spawn_fake(&db, answers);
+    let (tx, rx) = mpsc::unbounded_channel();
+    let mut answers = Receiver(rx);
+    let worker = spawn_fake(&db, tx);
 
     worker.send(DbCommand::Query("SELECT slow".into())).unwrap();
     worker.send(DbCommand::Query("SELECT fast".into())).unwrap();
@@ -280,7 +280,7 @@ async fn commands_run_in_order_even_when_the_first_is_slow() {
     // so this waits on virtual time only.
     let mut done = Vec::new();
     while done.len() < 2 {
-        if let Some(DbAnswer::QueryDone(result)) = action_rx.recv().await {
+        if let Some(DbAnswer::QueryDone(result)) = answers.recv().await {
             done.push((*result).clone());
         }
     }

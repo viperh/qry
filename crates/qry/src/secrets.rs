@@ -2,10 +2,10 @@
 //!
 //! Two rules shape this module. A password is never written to a file qry
 //! controls — the OS keychain, an environment variable or a prompt are the
-//! only sources. And a password never travels inside an
-//! [`Action`](crate::action::Action), so it cannot reach the screen, the log
-//! or a panic message: the prompt leaves it in [`stash`] and the database
-//! worker takes it from there.
+//! only sources. And a password never travels inside an event, and only
+//! redacted inside an effect, so it cannot reach the screen, the log or a
+//! panic message: the runtime leaves what the prompt took in [`stash`] and
+//! the database worker takes it from there.
 
 use std::{collections::HashMap, sync::Mutex};
 
@@ -83,7 +83,8 @@ impl std::fmt::Debug for Password {
 }
 
 /// Where a prompted password waits between the modal and the worker, so that
-/// it never has to ride in an action. One prompt is open at a time.
+/// it never has to ride in a message to the worker. One prompt is open at a
+/// time.
 static STASH: Mutex<Option<Password>> = Mutex::new(None);
 
 pub(crate) fn stash(password: Password) {

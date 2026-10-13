@@ -68,12 +68,12 @@ fn keys_open_the_new_connection_modal() {
     assert!(!h.render(80, 24).contains("New Connection"));
 
     h.keys("ctrl-n");
-    assert_eq!(h.mode(), Mode::AddConnModal);
+    assert_eq!(h.section(), KeySection::AddConnModal);
     assert!(h.render(80, 24).contains("New Connection"));
 
-    // Esc is bound in the modal's own mode, so it closes it again.
+    // Esc is bound in the modal's own section, so it closes it again.
     h.keys("esc");
-    assert_eq!(h.mode(), Mode::Home);
+    assert_eq!(h.section(), KeySection::Home);
     assert!(!h.render(80, 24).contains("New Connection"));
     assert!(h.take_effects().is_empty());
 }
@@ -87,7 +87,7 @@ fn io_actions_become_effects_not_dispatches() {
     h.keys("ctrl-e").type_str(&path).keys("enter");
 
     let effects = h.take_effects();
-    let [Effect::Export(config)] = effects.as_slice() else {
+    let [Effect::Db(_, DbCommand::Export(config))] = effects.as_slice() else {
         panic!("expected one export, got {effects:?}");
     };
     assert_eq!(config.path, path);
@@ -120,10 +120,10 @@ fn ticks_clear_a_half_typed_key_sequence() {
     let mut h = AppHarness::new(Config::embedded());
     // An unbound key is remembered as the start of a sequence…
     h.keys("x");
-    assert_eq!(h.chord.len(), 1);
-    // …until the next tick, as in `App`.
+    assert_eq!(h.state().pending_keys.len(), 1);
+    // …until the next tick.
     h.advance(250);
-    assert!(h.chord.is_empty());
+    assert!(h.state().pending_keys.is_empty());
 }
 
 #[test]
@@ -136,8 +136,11 @@ fn a_fake_database_answers_queries_on_the_virtual_clock() {
         .reply(Reply::Error("no such table: nope".into()));
     let mut h = AppHarness::new(Config::embedded()).with_database(db.clone());
 
-    h.send(Action::Execute("SELECT * FROM t".into()));
-    h.send(Action::Execute("SELECT * FROM nope".into()));
+    // The editor's run key sends what is typed.
+    h.keys("tab").type_str("SELECT * FROM t").keys("f8");
+    h.keys("ctrl-a backspace")
+        .type_str("SELECT * FROM nope")
+        .keys("f8");
     assert_eq!(db.calls(), ["SELECT * FROM t", "SELECT * FROM nope"]);
     assert!(
         !h.render(80, 24).contains("r1c1"),
@@ -154,23 +157,28 @@ fn a_fake_database_answers_queries_on_the_virtual_clock() {
 
 #[test]
 fn every_view_renders_at_every_size() {
-    let modes = [
-        Mode::Home,
-        Mode::AddConnModal,
-        Mode::ExpoModal,
-        Mode::PasswordModal,
-        Mode::ImportModal,
-        Mode::ConnExportModal,
+    // Each view, and how to open it from the main screen.
+    type Open = fn(&mut AppHarness);
+    let views: [(&str, Open); 7] = [
+        ("home", |_| {}),
+        ("new connection", |h| _ = h.keys("ctrl-n")),
+        ("export", |h| _ = h.keys("ctrl-e")),
+        ("password", |h| {
+            h.db(DbAnswer::NeedPassword {
+                id: "c7f3a1e2".into(),
+                name: "prod".into(),
+            });
+        }),
+        ("import", |h| _ = h.keys("ctrl-o")),
+        ("export connections", |h| _ = h.keys("ctrl-s")),
+        ("help", |h| _ = h.keys("ctrl-h")),
     ];
     for &(w, h) in SIZES {
-        for mode in modes {
+        for (view, open) in views {
             let mut harness = AppHarness::new(Config::embedded());
-            harness.send(Action::ChangeMode(mode));
-            assert_screen(&harness.render(w, h), w, h, &format!("{mode:?}"));
+            open(&mut harness);
+            assert_screen(&harness.render(w, h), w, h, view);
         }
-        let mut harness = AppHarness::new(Config::embedded());
-        harness.send(Action::Help);
-        assert_screen(&harness.render(w, h), w, h, "help");
     }
 }
 

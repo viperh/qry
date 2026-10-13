@@ -18,8 +18,6 @@ use qry_core::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::config::get_data_dir;
-
 /// The format this build writes. A file numbered higher is refused rather
 /// than parsed hopefully.
 pub(crate) const VERSION: u64 = 1;
@@ -118,8 +116,15 @@ pub struct StoredConnection {
 impl StoredConnection {
     /// A new record with a fresh id and nothing filled in.
     pub(crate) fn new(name: impl Into<String>, driver: Driver) -> Self {
+        Self::with_id(mint_id(), name, driver)
+    }
+
+    /// A new record with this id and nothing filled in. The reducer mints
+    /// its ids itself (see [`IdGen`](crate::app::state::IdGen)), since it
+    /// cannot read the clock.
+    pub(crate) fn with_id(id: impl Into<String>, name: impl Into<String>, driver: Driver) -> Self {
         Self {
-            id: mint_id(),
+            id: id.into(),
             name: name.into(),
             driver,
             host: None,
@@ -270,12 +275,9 @@ struct ConnectionFile {
     extra: Map<String, Value>,
 }
 
-/// Reads the connections. A missing file is not an error: it means a first
-/// run. A malformed one is, and the bad file is left untouched.
-pub(crate) fn load() -> color_eyre::Result<Vec<StoredConnection>> {
-    load_from(&get_data_dir())
-}
-
+/// Reads the connections in `dir` (the data directory, in the app). A
+/// missing file is not an error: it means a first run. A malformed one is,
+/// and the bad file is left untouched.
 pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let file = dir.join(FILE);
     let text = match fs::read_to_string(&file) {
@@ -305,12 +307,8 @@ pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredCon
     Ok(parsed.connections)
 }
 
-/// Writes the connections whole, and atomically: a crash mid-save leaves the
-/// previous file intact.
-pub(crate) fn save(connections: &[StoredConnection]) -> color_eyre::Result<()> {
-    save_to(&get_data_dir(), connections)
-}
-
+/// Writes the connections whole into `dir`, and atomically: a crash
+/// mid-save leaves the previous file intact.
 pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
     fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     restrict(dir, 0o700)?;
@@ -396,6 +394,13 @@ fn restrict(_path: &Path, _mode: u32) -> color_eyre::Result<()> {
 /// Eight hex characters, unique within a run and unlikely to repeat between
 /// runs. Enough for a keyring account name.
 fn mint_id() -> String {
+    format!("{:08x}", id_seed() as u32)
+}
+
+/// A number that differs between runs and between calls, from the clock,
+/// the process id and a counter. The runtime hands one to the reducer at
+/// startup, for the ids it mints.
+pub(crate) fn id_seed() -> u64 {
     use std::{
         hash::{DefaultHasher, Hash, Hasher},
         sync::atomic::{AtomicU64, Ordering},
@@ -410,7 +415,7 @@ fn mint_id() -> String {
         .hash(&mut hasher);
     std::process::id().hash(&mut hasher);
     COUNTER.fetch_add(1, Ordering::Relaxed).hash(&mut hasher);
-    format!("{:08x}", hasher.finish() as u32)
+    hasher.finish()
 }
 
 #[cfg(test)]

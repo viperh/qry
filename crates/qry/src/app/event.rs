@@ -1,10 +1,53 @@
-//! What the app reacts to from outside: the database worker's answers.
+//! [`UiEvent`]: everything the reducer reacts to.
+//!
+//! Time never comes from the clock inside the reducer: an event that needs
+//! it carries the moment it happened at.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
+use crossterm::event::KeyEvent;
 use qry_core::QueryResult;
 
-use super::state::StatusCode;
+use super::state::{SessionId, StatusCode};
+use crate::{connections::StoredConnection, import::Imported};
+
+/// An event delivered to [`App::handle`](super::App::handle).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UiEvent {
+    /// Delivered once, before anything else: the app opens its scratch
+    /// connection and asks for the saved ones.
+    Started,
+    Key(KeyEvent),
+    Resize(u16, u16),
+    /// The tick-rate timer, at the moment the runtime saw it.
+    Tick(Instant),
+    /// A session's database worker answered.
+    Db(SessionId, DbAnswer),
+    /// A file the runtime read or wrote off the event loop.
+    File(FileAnswer),
+}
+
+/// The outcome of an effect that reads or writes a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FileAnswer {
+    /// The connections read from disk at startup.
+    ConnectionsLoaded(Vec<StoredConnection>),
+    /// They could not be read; the runtime has logged why.
+    LoadFailed(String),
+    /// The connections could not be written; the runtime has logged why.
+    SaveFailed(String),
+    /// What an imported file held. The tree adds what it does not have
+    /// yet, and saves.
+    Imported(Box<Imported>),
+    ImportFailed(String),
+    /// Where the backup of `count` connections went, or why it could not be
+    /// written.
+    ConnectionsExported {
+        path: String,
+        count: usize,
+    },
+    ConnectionsExportFailed(String),
+}
 
 /// The database worker's answer to a [`DbCommand`](crate::db::DbCommand).
 #[derive(Clone, PartialEq, Eq)]

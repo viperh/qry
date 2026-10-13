@@ -1,7 +1,8 @@
 //! Keys that act inside a single pane.
 //!
 //! Global keys (quit, help, switching panes, …) are `Config::keybindings`:
-//! `App` turns them into [`Action`](crate::action::Action)s whatever has focus.
+//! the reducer turns them into [`Action`](crate::action::Action)s whatever
+//! has focus.
 //! The maps here come from the `panes` section of the config and are looked
 //! up by the pane that has focus. Typing a character is not a binding: the
 //! editor and the form's text fields insert unbound characters themselves.
@@ -20,7 +21,7 @@ pub(crate) trait Command: Copy + Eq + Hash + IntoEnumIterator {
 }
 
 /// Which key runs which command. Pane keys are single keys, not sequences.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Keymap<C>(HashMap<KeyEvent, C>);
 
 impl<C> Default for Keymap<C> {
@@ -86,7 +87,7 @@ impl<'de, C: Deserialize<'de>> Deserialize<'de> for Keymap<C> {
 }
 
 /// The `panes` section of the config.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct PaneKeys {
     #[serde(default)]

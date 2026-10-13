@@ -13,35 +13,31 @@
 //! assert!(h.take_effects().is_empty());
 //! ```
 //!
-//! Until the reducer lands (T101), [`AppHarness`] wraps the [`Home`]
-//! component and plays the part of `App`: keys go through the global keymap
-//! first and then to `Home`, every action is fed back through
-//! `Home::update`, and the actions `App` would turn into I/O are recorded as
-//! [effects](Effect) instead of being carried out.
+//! [`AppHarness`] drives [`App::handle`] the way the runtime does: keys,
+//! ticks and answers go in as [`UiEvent`]s, and the [effects](Effect) that
+//! come back are recorded instead of being carried out. With a
+//! [`FakeDatabase`], the database effects are answered on a virtual clock.
 
-use std::time::Duration;
+use std::{
+    collections::VecDeque,
+    time::{Duration, Instant},
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub use qry_core::testing::{Reply, grid, result};
 use qry_core::{QueryResult, testing::FakeDatabase};
 use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
-use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 
+pub use crate::app::Effect;
 pub use crate::theme::ThemeEnv;
 use crate::{
-    action::Action,
-    app::Mode,
-    components::{Component, home::Home},
-    config::{Config, parse_key_event},
-    db,
+    app::{App, DbAnswer, FileAnswer, SessionId, State, UiEvent},
+    config::{Config, KeySection, parse_key_event},
+    connections::StoredConnection,
+    db::{self, DbCommand},
     theme::Theme,
-    tui::Event,
+    views,
 };
-
-/// Something the app asked the outside world to do. Before T101 this is the
-/// [`Action`] itself (`Execute`, `Connect`, `Export`, …); T101 replaces the
-/// alias with a real `Effect` enum, and the harness API stays the same.
-pub type Effect = Action;
 
 /// Terminal sizes every view must survive, from nothing at all to a very
 /// large screen. `every_view_renders_at_every_size` renders each view at each.
@@ -55,34 +51,30 @@ pub const SIZES: &[(u16, u16)] = &[
     (300, 100),
 ];
 
-/// An answer the stand-in worker will deliver once the virtual clock reaches
+/// Answers the stand-in worker will deliver once the virtual clock reaches
 /// `due`, in milliseconds since the harness was made.
 #[derive(Debug)]
 struct Pending {
     due: u64,
-    actions: Vec<Action>,
+    answers: Vec<DbAnswer>,
 }
 
-/// Drives the main screen with scripted keys and actions on a virtual clock.
+/// Drives the app with scripted keys and events on a virtual clock.
+#[derive(Debug)]
 pub struct AppHarness {
-    home: Home,
-    config: Config,
-    mode: Mode,
-    action_tx: UnboundedSender<Action>,
-    action_rx: UnboundedReceiver<Action>,
-    /// Keys pressed since the last tick, for multi-key bindings, as in `App`.
-    chord: Vec<KeyEvent>,
+    app: App,
     effects: Vec<Effect>,
+    /// Events waiting to be handled, such as a worker's immediate answer.
+    inbox: VecDeque<UiEvent>,
+    /// The moment virtual time started, for the instants ticks carry.
+    epoch: Instant,
     /// Virtual time, in milliseconds since the harness was made.
     now: u64,
     /// Milliseconds between ticks, from the tick rate.
     tick_every: u64,
     next_tick: u64,
     ticks: u64,
-    size: (u16, u16),
     theme_env: ThemeEnv,
-    /// [`Theme::DARK`] adapted to `theme_env`.
-    theme: Theme,
     database: Option<FakeDatabase>,
     /// Worker answers not yet due, in the order they were scheduled.
     pending: Vec<Pending>,
@@ -91,64 +83,36 @@ pub struct AppHarness {
     worker_free_at: u64,
 }
 
-/// Shows the mode, the clock and what is waiting; `Home` has no `Debug`.
-impl std::fmt::Debug for AppHarness {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AppHarness")
-            .field("mode", &self.mode)
-            .field("now_ms", &self.now)
-            .field("ticks", &self.ticks)
-            .field("size", &self.size)
-            .field("effects", &self.effects)
-            .field("pending", &self.pending)
-            .finish_non_exhaustive()
-    }
-}
-
 /// The tick rate the binary uses by default (`--tick-rate 4`).
 const DEFAULT_TICK_RATE: f64 = 4.0;
 
 impl AppHarness {
-    /// A main screen set up the way `App::run` sets it up: an action channel,
-    /// this config, and `init` at 80x24. Nothing is loaded from disk and no
-    /// connection is opened.
+    /// An app with this config, drawing [`Theme::DARK`] in truecolor, before
+    /// [`UiEvent::Started`]: nothing is loaded from disk and no connection
+    /// is opened until a test sends it.
     pub fn new(config: Config) -> Self {
-        let (action_tx, action_rx) = mpsc::unbounded_channel();
-        let mut home = Home::new();
-        let size = (80, 24);
-        let setup = home
-            .register_action_handler(action_tx.clone())
-            .and_then(|()| home.register_config_handler(config.clone()))
-            .and_then(|()| home.init(ratatui::layout::Size::new(size.0, size.1)));
-        if let Err(e) = setup {
-            panic!("AppHarness::new: setting up the main screen failed: {e:?}");
-        }
+        let theme_env = ThemeEnv::truecolor();
         let tick_every = tick_interval(DEFAULT_TICK_RATE);
         Self {
-            home,
-            config,
-            mode: Mode::Home,
-            action_tx,
-            action_rx,
-            chord: Vec::new(),
+            app: App::new(config, theme_env.adapt(Theme::DARK), 0),
             effects: Vec::new(),
+            inbox: VecDeque::new(),
+            epoch: Instant::now(),
             now: 0,
             tick_every,
             next_tick: tick_every,
             ticks: 0,
-            size,
-            theme_env: ThemeEnv::truecolor(),
-            theme: ThemeEnv::truecolor().adapt(Theme::DARK),
+            theme_env,
             database: None,
             pending: Vec::new(),
             worker_free_at: 0,
         }
     }
 
-    /// Answers `Connect`, `Execute` and `ListTables` from `db`, on the
-    /// virtual clock: a [`Reply::Delay`] arrives once [`advance`] passes it,
-    /// and a [`Reply::Hang`] never does. The requests are still recorded as
-    /// effects. Without a database they are only recorded.
+    /// Answers `Connect`, `OpenSession`, `Query` and `ListTables` from `db`,
+    /// on the virtual clock: a [`Reply::Delay`] arrives once [`advance`]
+    /// passes it, and a [`Reply::Hang`] never does. The requests are still
+    /// recorded as effects. Without a database they are only recorded.
     ///
     /// [`advance`]: Self::advance
     #[must_use]
@@ -162,7 +126,7 @@ impl AppHarness {
     /// styled snapshots show the palette's exact values.
     #[must_use]
     pub fn with_theme_env(mut self, env: ThemeEnv) -> Self {
-        self.theme = env.adapt(Theme::DARK);
+        self.app.set_theme(env.adapt(Theme::DARK));
         self.theme_env = env;
         self
     }
@@ -175,18 +139,16 @@ impl AppHarness {
         self
     }
 
-    /// The main screen, for this crate's tests that check state the screen
-    /// does not show.
-    #[cfg(test)]
-    pub(crate) fn home(&self) -> &Home {
-        &self.home
+    /// The app's state, for tests that check what the screen does not show.
+    pub fn state(&self) -> &State {
+        self.app.state()
     }
 
-    /// The main screen, for this crate's tests that set up state no key
+    /// The app's state, for this crate's tests that set up state no key
     /// reaches directly, such as which form field has focus.
     #[cfg(test)]
-    pub(crate) fn home_mut(&mut self) -> &mut Home {
-        &mut self.home
+    pub(crate) fn state_mut(&mut self) -> &mut State {
+        &mut self.app.state
     }
 
     /// The terminal environment set with [`with_theme_env`](Self::with_theme_env).
@@ -196,12 +158,13 @@ impl AppHarness {
 
     /// The theme the harness draws with, adapted to [`theme_env`](Self::theme_env).
     pub fn theme(&self) -> &Theme {
-        &self.theme
+        &self.app.state().theme
     }
 
-    /// The mode `App` would be in: which modal, if any, has the keys.
-    pub fn mode(&self) -> Mode {
-        self.mode
+    /// The `keybindings` section the keys are looked up in: which modal, if
+    /// any, is open.
+    pub fn section(&self) -> KeySection {
+        self.app.state().key_section()
     }
 
     /// How many `Tick`s [`advance`](Self::advance) has delivered so far.
@@ -226,19 +189,9 @@ impl AppHarness {
         self
     }
 
-    /// Presses one key the way `App` handles it: the global keymap for the
-    /// current mode first, then `Home`, then every action that follows.
+    /// Presses one key, and handles everything that follows from it.
     pub fn key(&mut self, key: KeyEvent) -> &mut Self {
-        if let Some(action) = self.global_binding(key) {
-            self.queue(action);
-        }
-        match self.home.handle_events(Some(Event::Key(key))) {
-            Ok(Some(action)) => self.queue(action),
-            Ok(None) => {}
-            Err(e) => panic!("AppHarness::key: Home failed on {key:?}: {e:?}"),
-        }
-        self.drain();
-        self
+        self.send(UiEvent::Key(key))
     }
 
     /// Types `text`, one `Char` key per character. Capitals carry Shift, as
@@ -255,19 +208,28 @@ impl AppHarness {
         self
     }
 
-    /// Delivers an action as if the worker (or `App`) had sent it, such as a
-    /// `QueryDone` or a `ConnectFailed`, and everything that follows from it.
-    pub fn send(&mut self, action: Action) -> &mut Self {
-        self.queue(action);
+    /// Delivers an event, such as a worker's `QueryDone` or a file's
+    /// `ImportFailed`, and everything that follows from it.
+    pub fn send(&mut self, event: UiEvent) -> &mut Self {
+        self.inbox.push_back(event);
         self.drain();
         self
+    }
+
+    /// Delivers an answer from the session's database worker.
+    pub fn db(&mut self, answer: DbAnswer) -> &mut Self {
+        self.send(UiEvent::Db(SessionId::FIRST, answer))
+    }
+
+    /// Delivers the outcome of a file the runtime read or wrote.
+    pub fn file(&mut self, answer: FileAnswer) -> &mut Self {
+        self.send(UiEvent::File(answer))
     }
 
     /// Resizes the terminal. The next [`render`](Self::render) still draws at
     /// the size it is given.
     pub fn resize(&mut self, w: u16, h: u16) -> &mut Self {
-        self.size = (w, h);
-        self.send(Action::Resize(w, h))
+        self.send(UiEvent::Resize(w, h))
     }
 
     /// Moves the virtual clock on by `ms`, delivering every `Tick` and every
@@ -287,16 +249,15 @@ impl AppHarness {
                 Some((index, due)) if due <= target && due <= self.next_tick => {
                     self.now = due;
                     let pending = self.pending.remove(index);
-                    for action in pending.actions {
-                        self.queue(action);
-                    }
+                    self.deliver(pending.answers);
                     self.drain();
                 }
                 _ if self.next_tick <= target => {
                     self.now = self.next_tick;
                     self.next_tick += self.tick_every;
                     self.ticks += 1;
-                    self.send(Action::Tick);
+                    let at = self.epoch + Duration::from_millis(self.now);
+                    self.send(UiEvent::Tick(at));
                 }
                 _ => break,
             }
@@ -310,81 +271,58 @@ impl AppHarness {
         std::mem::take(&mut self.effects)
     }
 
-    /// Draws the main screen into a `w`x`h` terminal and returns it as text;
-    /// see [`buffer_to_string`].
+    /// Draws the screen into a `w`x`h` terminal and returns it as text; see
+    /// [`buffer_to_string`].
     pub fn render(&mut self, w: u16, h: u16) -> String {
         buffer_to_string(&self.render_buffer(w, h))
     }
 
-    /// Draws the main screen into a `w`x`h` terminal and returns the cells,
-    /// with their styles; see [`styled`].
+    /// Draws the screen into a `w`x`h` terminal and returns the cells, with
+    /// their styles; see [`styled`].
     pub fn render_buffer(&mut self, w: u16, h: u16) -> Buffer {
-        let (home, theme) = (&mut self.home, &self.theme);
+        let state = self.app.state();
         render_with(w, h, |frame| {
-            if let Err(e) = home.draw(frame, frame.area(), theme) {
-                panic!("AppHarness::render: drawing failed: {e:?}");
-            }
+            views::draw(state, &state.theme, frame, frame.area())
         })
     }
 
-    /// The action the global keymap binds `key` to in the current mode,
-    /// counting the keys pressed since the last tick for multi-key bindings.
-    fn global_binding(&mut self, key: KeyEvent) -> Option<Action> {
-        let keymap = self.config.keybindings.0.get(&self.mode)?;
-        if let Some(action) = keymap.get(&vec![key]) {
-            return Some(action.clone());
-        }
-        self.chord.push(key);
-        keymap.get(&self.chord).cloned()
-    }
-
-    fn queue(&self, action: Action) {
-        // The harness holds the receiver, so the channel cannot be closed.
-        let _ = self.action_tx.send(action);
-    }
-
-    /// Plays `App::handle_actions`: handles what `App` itself would, records
-    /// I/O as effects, and feeds every action through `Home::update` until
-    /// nothing is left.
+    /// Handles everything in the inbox, recording the effects and answering
+    /// the database's from the fake, until nothing is left.
     fn drain(&mut self) {
-        while let Ok(action) = self.action_rx.try_recv() {
-            match &action {
-                Action::Tick => self.chord.clear(),
-                Action::ChangeMode(mode) => self.mode = *mode,
-                Action::Execute(sql) if !sql.trim().is_empty() => {
-                    self.effects.push(action.clone());
-                    self.answer_query(sql);
-                }
-                Action::Connect(record) => {
-                    self.effects.push(action.clone());
-                    let answer = (self.database.as_ref())
-                        .map(|db| into_actions(db::connected_answer(record, db.name())));
-                    if let Some(answer) = answer {
-                        self.schedule(0, answer);
+        while let Some(event) = self.inbox.pop_front() {
+            for effect in self.app.handle(event) {
+                match &effect {
+                    Effect::Db(_, DbCommand::Connect(record)) | Effect::OpenSession(_, record) => {
+                        self.answer_connect(record);
                     }
-                }
-                Action::ListTables => {
-                    self.effects.push(action.clone());
-                    let answer = (self.database.as_ref()).map(|db| {
-                        into_actions(db::tables_answer(Ok::<_, String>(db.table_names())))
-                    });
-                    if let Some(answer) = answer {
-                        self.schedule(0, answer);
+                    Effect::Db(_, DbCommand::Query(sql)) => self.answer_query(sql),
+                    Effect::Db(_, DbCommand::ListTables) => {
+                        let answer = (self.database.as_ref())
+                            .map(|db| db::tables_answer(Ok::<_, String>(db.table_names())));
+                        if let Some(answer) = answer {
+                            self.schedule(0, answer);
+                        }
                     }
+                    _ => {}
                 }
-                Action::Export(_)
-                | Action::PasswordEntered
-                | Action::SaveConnections(_)
-                | Action::Import { .. }
-                | Action::WriteConnections { .. }
-                | Action::ForgetSecret(_) => self.effects.push(action.clone()),
-                _ => {}
+                self.effects.push(effect);
             }
-            match self.home.update(action.clone()) {
-                Ok(Some(next)) => self.queue(next),
-                Ok(None) => {}
-                Err(e) => panic!("AppHarness: Home::update({action}) failed: {e:?}"),
-            }
+        }
+    }
+
+    fn deliver(&mut self, answers: Vec<DbAnswer>) {
+        self.inbox.extend(
+            answers
+                .into_iter()
+                .map(|answer| UiEvent::Db(SessionId::FIRST, answer)),
+        );
+    }
+
+    /// Answers a connection from the fake database, if there is one.
+    fn answer_connect(&mut self, record: &StoredConnection) {
+        let answer = (self.database.as_ref()).map(|db| db::connected_answer(record, db.name()));
+        if let Some(answer) = answer {
+            self.schedule(0, answer);
         }
     }
 
@@ -417,30 +355,23 @@ impl AppHarness {
                 }
             }
         };
-        let answer = into_actions(db::query_answer(outcome, Duration::from_millis(after)));
+        let answer = db::query_answer(outcome, Duration::from_millis(after));
         self.schedule(after, answer);
     }
 
-    /// Delivers `actions` once the stand-in worker has finished what it
+    /// Delivers `answers` once the stand-in worker has finished what it
     /// already had and then spent `after` ms on this. With nothing to wait
-    /// for they arrive straight away, as part of the current drain.
-    fn schedule(&mut self, after: u64, actions: Vec<Action>) {
+    /// for they arrive straight away, after the event being handled.
+    fn schedule(&mut self, after: u64, answers: Vec<DbAnswer>) {
         let start = self.worker_free_at.max(self.now);
         let due = start.saturating_add(after);
         self.worker_free_at = due;
         if due <= self.now {
-            for action in actions {
-                self.queue(action);
-            }
+            self.deliver(answers);
         } else if due != u64::MAX {
-            self.pending.push(Pending { due, actions });
+            self.pending.push(Pending { due, answers });
         }
     }
-}
-
-/// The worker's answers as the actions `App` turns them into.
-fn into_actions(answers: Vec<crate::app::event::DbAnswer>) -> Vec<Action> {
-    answers.into_iter().map(Action::from).collect()
 }
 
 /// Milliseconds between ticks at `per_second` ticks a second, at least 1.
@@ -463,8 +394,8 @@ pub fn fixture(relative: &str) -> std::path::PathBuf {
 }
 
 /// Draws whatever `draw` draws into a `w`x`h` test terminal and returns the
-/// cells. Component tests use this with the component's own `draw` or
-/// `render`; whole-screen tests use [`AppHarness::render_buffer`].
+/// cells. A view's own tests use this with that view's `draw`; whole-screen
+/// tests use [`AppHarness::render_buffer`].
 pub fn render_with(w: u16, h: u16, draw: impl FnOnce(&mut Frame<'_>)) -> Buffer {
     let Ok(mut terminal) = Terminal::new(TestBackend::new(w, h));
     let Ok(_) = terminal.draw(draw);

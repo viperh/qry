@@ -12,7 +12,7 @@ fn test_config() -> color_eyre::Result<()> {
     assert_eq!(
         c.keybindings
             .0
-            .get(&Mode::Home)
+            .get(&KeySection::Home)
             .unwrap()
             .get(&parse_key_sequence("<ctrl-q>").unwrap_or_default())
             .unwrap(),
@@ -160,7 +160,7 @@ fn legacy_styles_section_warns_and_loads() {
         }"#,
     );
     assert_eq!(
-        c.keybindings.0[&Mode::Home][&parse_key_sequence("<ctrl-q>").unwrap()],
+        c.keybindings.0[&KeySection::Home][&parse_key_sequence("<ctrl-q>").unwrap()],
         Action::Quit
     );
     let warnings = c.warnings();

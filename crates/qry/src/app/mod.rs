@@ -1,366 +1,84 @@
+//! The reducer: `UiEvent → App::handle → Vec<Effect>`.
+//!
+//! [`App`] owns the whole UI [`State`] as plain data, and [`App::handle`] is
+//! the one place it changes. `handle` is synchronous and deterministic: it
+//! never reads the clock (time arrives inside events) and performs no I/O.
+//! What should happen outside is returned as [`Effect`]s, which the
+//! [runtime](crate::runtime) carries out; their outcomes come back as
+//! [`UiEvent`]s.
+//!
+//! This module must not import the async runtime, the filesystem, the
+//! network, the clock or the keychain; `purity_tests` enforces it.
+
+pub(crate) mod dialogs;
+pub mod effects;
 pub mod event;
+mod reducer;
 pub mod state;
 
-use crossterm::event::KeyEvent;
-use ratatui::prelude::Rect;
-use serde::{Deserialize, Serialize};
-use strum::EnumIter;
-use tokio::sync::mpsc;
-use tracing::{debug, info};
+use std::sync::Arc;
 
-use crate::{
-    action::{Action, StatusCode},
-    components::{Component, home::Home},
-    config::Config,
-    connections::{self, Driver, Secret, StoredConnection},
-    db::DbCommand,
-    theme::{self, ColorSupport, Theme},
-    tui::{Event, Tui},
+pub use self::{
+    effects::Effect,
+    event::{DbAnswer, FileAnswer, UiEvent},
+    state::{SessionId, State, StatusCode},
 };
+use crate::{config::Config, theme::Theme};
 
+/// The app: its state, and the reducer that changes it.
+#[derive(Debug, Clone, PartialEq)]
 pub struct App {
-    db: mpsc::UnboundedSender<DbCommand>,
-    config: Config,
-    /// Resolved once at startup and adapted to the terminal.
-    theme: Theme,
-    tick_rate: f64,
-    frame_rate: f64,
-    components: Vec<Box<dyn Component>>,
-    should_quit: bool,
-    should_suspend: bool,
-    mode: Mode,
-    last_tick_key_events: Vec<KeyEvent>,
-    action_tx: mpsc::UnboundedSender<Action>,
-    action_rx: mpsc::UnboundedReceiver<Action>,
-}
-
-/// Shows the mode and the run flags; the components and channels have no
-/// useful `Debug` of their own.
-impl std::fmt::Debug for App {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("App")
-            .field("mode", &self.mode)
-            .field("tick_rate", &self.tick_rate)
-            .field("frame_rate", &self.frame_rate)
-            .field("should_quit", &self.should_quit)
-            .field("should_suspend", &self.should_suspend)
-            .finish_non_exhaustive()
-    }
-}
-
-/// Input modes. Keybindings in `.config/config.json` are keyed by these
-/// names, so adding a variant here means adding a section there too.
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
-pub enum Mode {
-    #[default]
-    Home,
-    AddConnModal,
-    ExpoModal,
-    PasswordModal,
-    ImportModal,
-    ConnExportModal,
+    pub(crate) state: State,
 }
 
 impl App {
-    /// `theme` is the `--theme` flag, which wins over the config's `theme`.
-    /// An unknown theme name is an error, before the terminal is touched.
-    pub fn new(tick_rate: f64, frame_rate: f64, theme: Option<&str>) -> color_eyre::Result<Self> {
-        let config = Config::new()?;
-        for warning in config.warnings() {
-            tracing::warn!("{warning}");
-            eprintln!("qry: {warning}");
-        }
-        let theme = theme::resolve(theme, config.theme.as_deref(), ColorSupport::detect())?;
-        let (action_tx, action_rx) = mpsc::unbounded_channel();
-        // The worker answers in its own terms; they reach the components as
-        // actions.
-        let (answers, mut answer_rx) = mpsc::unbounded_channel();
-        let forward = action_tx.clone();
-        tokio::spawn(async move {
-            while let Some((_, answer)) = answer_rx.recv().await {
-                if forward.send(Action::from(answer)).is_err() {
-                    return;
-                }
-            }
-        });
-        Ok(Self {
-            db: crate::db::spawn(state::SessionId::FIRST, answers),
-            tick_rate,
-            frame_rate,
-            components: vec![Box::new(Home::new())],
-            should_quit: false,
-            should_suspend: false,
-            config,
+    /// An app with this config and theme, before [`UiEvent::Started`].
+    /// `seed` makes the connection ids it mints differ between runs; see
+    /// [`connections::id_seed`](crate::connections::id_seed).
+    pub fn new(config: Config, theme: Theme, seed: u64) -> Self {
+        let mut state = State {
+            config: Arc::new(config),
             theme,
-            mode: Mode::Home,
-            last_tick_key_events: Vec::new(),
-            action_tx,
-            action_rx,
-        })
-    }
-
-    pub async fn run(&mut self) -> color_eyre::Result<()> {
-        let mut tui = Tui::new()?
-            // .mouse(true) // uncomment this line to enable mouse support
-            .tick_rate(self.tick_rate)
-            .frame_rate(self.frame_rate);
-        tui.enter()?;
-
-        for component in self.components.iter_mut() {
-            component.register_action_handler(self.action_tx.clone())?;
-        }
-        for component in self.components.iter_mut() {
-            component.register_config_handler(self.config.clone())?;
-        }
-        for component in self.components.iter_mut() {
-            component.init(tui.size()?)?;
-        }
-
-        // Reading a file is blocking, so it happens off the event loop and
-        // arrives as an action.
-        let loaded = self.action_tx.clone();
-        tokio::task::spawn_blocking(move || {
-            let _ = match connections::load() {
-                Ok(list) => loaded.send(Action::ConnectionsLoaded(list)),
-                Err(e) => loaded.send(Action::Error(format!("{e:#}"))),
-            };
-        });
-
-        // Every session also starts on an empty in-memory SQLite database. It
-        // goes out as an action rather than straight to the worker, so the
-        // tree lists it like any other connection. It is never saved.
-        let mut scratch = StoredConnection::new("scratch", Driver::Sqlite);
-        scratch.path = Some(":memory:".to_string());
-        scratch.secret = Secret::None;
-        scratch.ephemeral = true;
-        self.action_tx.send(Action::Connect(Box::new(scratch)))?;
-
-        let action_tx = self.action_tx.clone();
-        loop {
-            self.handle_events(&mut tui).await?;
-            self.handle_actions(&mut tui)?;
-            if self.should_suspend {
-                tui.suspend()?;
-                action_tx.send(Action::Resume)?;
-                action_tx.send(Action::ClearScreen)?;
-                // tui.mouse(true);
-                tui.enter()?;
-            } else if self.should_quit {
-                tui.stop()?;
-                break;
-            }
-        }
-        tui.exit()?;
-        Ok(())
-    }
-
-    async fn handle_events(&mut self, tui: &mut Tui) -> color_eyre::Result<()> {
-        let Some(event) = tui.next_event().await else {
-            return Ok(());
+            ids: state::IdGen::new(seed),
+            ..State::default()
         };
-        let action_tx = self.action_tx.clone();
-        match event {
-            Event::Quit => action_tx.send(Action::Quit)?,
-            Event::Tick => action_tx.send(Action::Tick)?,
-            Event::Render => action_tx.send(Action::Render)?,
-            Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
-            Event::Key(key) => self.handle_key_event(key)?,
-            _ => {}
-        }
-        for component in self.components.iter_mut() {
-            if let Some(action) = component.handle_events(Some(event.clone()))? {
-                action_tx.send(action)?;
-            }
-        }
-        Ok(())
+        reducer::restyle(&mut state);
+        Self { state }
     }
 
-    fn handle_key_event(&mut self, key: KeyEvent) -> color_eyre::Result<()> {
-        let action_tx = self.action_tx.clone();
-        let Some(keymap) = self.config.keybindings.0.get(&self.mode) else {
-            return Ok(());
-        };
-        match keymap.get(&vec![key]) {
-            Some(action) => {
-                info!("Got action: {action:?}");
-                action_tx.send(action.clone())?;
-            }
-            _ => {
-                // If the key was not handled as a single key action,
-                // then consider it for multi-key combinations.
-                self.last_tick_key_events.push(key);
-
-                // Check for multi-key combinations
-                if let Some(action) = keymap.get(&self.last_tick_key_events) {
-                    info!("Got action: {action:?}");
-                    action_tx.send(action.clone())?;
-                }
-            }
-        }
-        Ok(())
+    /// Reacts to one event: changes the state and says what should happen
+    /// outside. The only entry point for input.
+    pub fn handle(&mut self, event: UiEvent) -> Vec<Effect> {
+        reducer::handle(&mut self.state, event)
     }
 
-    fn handle_actions(&mut self, tui: &mut Tui) -> color_eyre::Result<()> {
-        while let Ok(action) = self.action_rx.try_recv() {
-            // QueryDone is skipped so whole result sets don't end up in the log.
-            if !matches!(action, Action::Tick | Action::Render | Action::QueryDone(_)) {
-                debug!("{action:?}");
-            }
-            match action {
-                Action::Quit => self.should_quit = true,
-                Action::Suspend => self.should_suspend = true,
-                Action::Resume => self.should_suspend = false,
-                Action::ClearScreen => tui.terminal.clear()?,
-                Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
-                Action::Render => self.render(tui)?,
-                Action::Error(ref err) => {
-                    tracing::error!(?err)
-                }
-                Action::Tick => {
-                    self.last_tick_key_events.drain(..);
-                }
-                Action::ChangeMode(mode) => {
-                    self.mode = mode;
-                }
-                Action::Execute(ref sql) if !sql.trim().is_empty() => {
-                    self.send_db(DbCommand::Query(sql.clone()))?;
-                }
-                Action::Export(ref config) => {
-                    self.send_db(DbCommand::Export(config.clone()))?;
-                }
-                Action::Connect(ref record) => {
-                    self.send_db(DbCommand::Connect(record.clone()))?;
-                }
-                Action::PasswordEntered => self.send_db(DbCommand::PasswordEntered)?,
-                Action::SaveConnections(ref list) => self.save_connections(list.clone()),
-                Action::ForgetSecret(ref id) => {
-                    let (id, tx) = (id.clone(), self.action_tx.clone());
-                    tokio::task::spawn_blocking(move || {
-                        if let Err(e) = crate::secrets::delete(&id) {
-                            let _ = tx.send(Action::Error(format!(
-                                "cannot remove the stored password: {e:#}"
-                            )));
-                        }
-                    });
-                }
-                Action::ListTables => self.send_db(DbCommand::ListTables)?,
-                Action::Import { ref path, format } => self.import(path.clone(), format),
-                Action::WriteConnections {
-                    ref path,
-                    ref connections,
-                } => {
-                    self.export_connections(path.clone(), connections.clone());
-                }
-                _ => {}
-            }
-            for component in self.components.iter_mut() {
-                if let Some(action) = component.update(action.clone())? {
-                    self.action_tx.send(action)?
-                };
-            }
-        }
-        Ok(())
+    pub fn state(&self) -> &State {
+        &self.state
     }
 
-    /// Writes the connections off the event loop, reporting a failure
-    /// without losing the change the user just made.
-    fn save_connections(&self, list: Vec<StoredConnection>) {
-        let tx = self.action_tx.clone();
-        tokio::task::spawn_blocking(move || {
-            if let Err(e) = connections::save(&list) {
-                let _ = tx.send(Action::Error(format!("cannot save connections: {e:#}")));
-            }
-        });
+    /// Draws with `theme` from now on.
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.state.theme = theme;
+        self.state.dirty = true;
+        reducer::restyle(&mut self.state);
     }
 
-    /// Reads a file of connections off the event loop. The answer goes to the
-    /// modal that asked and to the tree, which adds what is new.
-    fn import(&self, path: String, format: crate::import::Format) {
-        let tx = self.action_tx.clone();
-        tokio::task::spawn_blocking(move || {
-            let action = match crate::import::from_file(&path, format) {
-                Ok(imported) if imported.connections.is_empty() => {
-                    Action::ImportFailed(match imported.skipped.first() {
-                        Some(first) => format!(
-                            "No connection qry can open; {} {}",
-                            first.name, first.reason
-                        ),
-                        None => "The file holds no connections".into(),
-                    })
-                }
-                Ok(imported) => Action::Imported(Box::new(imported)),
-                Err(e) => Action::ImportFailed(format!("{e:#}")),
-            };
-            // The modal's footer is one line; the status bar has room for
-            // the whole of a long path.
-            if let Action::ImportFailed(message) = &action {
-                let _ = tx.send(Action::Status(StatusCode::Error(message.clone())));
-            }
-            let _ = tx.send(action);
-        });
-    }
-
-    /// Writes a backup of the connections off the event loop, answering the
-    /// modal that asked and the status bar.
-    fn export_connections(&self, path: String, list: Vec<StoredConnection>) {
-        let tx = self.action_tx.clone();
-        tokio::task::spawn_blocking(move || {
-            let path = crate::import::expand_home(&path);
-            let (answer, status) = match connections::export(&path, &list) {
-                Ok(written) => {
-                    let written = written.display().to_string();
-                    let count = list.len();
-                    let noun = if count == 1 {
-                        "connection"
-                    } else {
-                        "connections"
-                    };
-                    (
-                        Action::ConnectionsExported(written.clone()),
-                        StatusCode::Success(format!("Exported {count} {noun} to {written}")),
-                    )
-                }
-                Err(e) => {
-                    let message = format!("{e:#}");
-                    (
-                        Action::ConnectionsExportFailed(message.clone()),
-                        StatusCode::Error(message),
-                    )
-                }
-            };
-            let _ = tx.send(Action::Status(status));
-            let _ = tx.send(answer);
-        });
-    }
-
-    /// Hands a command to the database worker. If the worker has stopped, says
-    /// so in the status bar instead of failing silently.
-    fn send_db(&self, command: DbCommand) -> color_eyre::Result<()> {
-        if self.db.send(command).is_err() {
-            self.action_tx.send(Action::Status(StatusCode::Error(
-                "database worker has stopped".into(),
-            )))?;
-        }
-        Ok(())
-    }
-
-    fn handle_resize(&mut self, tui: &mut Tui, w: u16, h: u16) -> color_eyre::Result<()> {
-        tui.resize(Rect::new(0, 0, w, h))?;
-        self.render(tui)?;
-        Ok(())
-    }
-
-    fn render(&mut self, tui: &mut Tui) -> color_eyre::Result<()> {
-        let theme = &self.theme;
-        tui.draw(|frame| {
-            for component in self.components.iter_mut() {
-                if let Err(err) = component.draw(frame, frame.area(), theme) {
-                    let _ = self
-                        .action_tx
-                        .send(Action::Error(format!("Failed to draw: {err:?}")));
-                }
-            }
-        })?;
-        Ok(())
+    /// Whether anything changed since the last call, for the runtime to know
+    /// whether to draw. Clears the flag.
+    pub fn take_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.state.dirty)
     }
 }
+
+#[cfg(test)]
+impl App {
+    /// The built-in config and the dark theme, before `Started`, as most
+    /// unit tests want it.
+    pub(crate) fn embedded() -> Self {
+        Self::new(Config::embedded(), Theme::DARK, 0)
+    }
+}
+
+#[cfg(test)]
+#[path = "reducer_tests.rs"]
+mod reducer_tests;
