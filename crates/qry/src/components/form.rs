@@ -11,9 +11,11 @@ use ratatui::{
     widgets::{Block, Clear},
 };
 
-use crate::action::Action;
-use crate::components::textinput::{TextInput, typed_char};
-use crate::keymap::FormCommand;
+use crate::{
+    action::Action,
+    components::textinput::{TextInput, typed_char},
+    keymap::FormCommand,
+};
 
 /// Each field is a bordered box, with a blank row between boxes.
 const FIELD_HEIGHT: u16 = 3;
@@ -248,10 +250,11 @@ pub trait Form {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use super::*;
-    use crate::config::Config;
     use crossterm::event::{KeyCode, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+
+    use super::*;
+    use crate::config::Config;
 
     pub fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)

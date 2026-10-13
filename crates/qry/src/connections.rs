@@ -4,9 +4,11 @@
 //! environment variable, or nowhere at all. Nothing in this module writes a
 //! password, and [`StoredConnection`] has no field to hold one.
 
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use color_eyre::eyre::{Context, bail};
 use qry_core::{
@@ -394,9 +396,11 @@ fn restrict(_path: &Path, _mode: u32) -> color_eyre::Result<()> {
 /// Eight hex characters, unique within a run and unlikely to repeat between
 /// runs. Enough for a keyring account name.
 fn mint_id() -> String {
-    use std::hash::{DefaultHasher, Hash, Hasher};
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{
+        hash::{DefaultHasher, Hash, Hasher},
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut hasher = DefaultHasher::new();
@@ -411,9 +415,12 @@ fn mint_id() -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
     use super::*;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A directory of its own per test, removed when the guard is dropped.
     struct TempDir(PathBuf);

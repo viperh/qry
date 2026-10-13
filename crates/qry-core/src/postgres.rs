@@ -1,10 +1,13 @@
-use crate::shared::{QueryResult, SslMode};
-use crate::{Database, DatabaseType};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
+
+use crate::{
+    Database, DatabaseType,
+    shared::{QueryResult, SslMode},
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostgresConfig {

@@ -189,8 +189,9 @@ fn describe_action(action: &Action) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use ratatui::{Terminal, backend::TestBackend};
+
+    use super::*;
 
     fn text(help: &mut Help, width: u16, height: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

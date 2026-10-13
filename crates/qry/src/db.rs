@@ -3,16 +3,19 @@
 //! The event loop never awaits a query. It sends a [`DbCommand`] here, and the
 //! outcome comes back later as an [`Action`] on the normal action channel.
 
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use qry_core::{Driver, ExportConfig, Exporter, QueryResult};
-
-use crate::connections::{Secret, StoredConnection};
-use crate::secrets::{self, Password};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
-use crate::action::{Action, StatusCode};
+use crate::{
+    action::{Action, StatusCode},
+    connections::{Secret, StoredConnection},
+    secrets::{self, Password},
+};
 
 pub enum DbCommand {
     /// Open this connection. The record holds no password: the worker
@@ -235,9 +238,10 @@ fn failed(message: &str) -> Vec<Action> {
 
 #[cfg(test)]
 mod tests {
+    use qry_core::ExportType;
+
     use super::*;
     use crate::connections::Driver as StoredDriver;
-    use qry_core::ExportType;
 
     /// A SQLite connection that needs no password.
     fn sqlite(name: &str, path: &str) -> StoredConnection {

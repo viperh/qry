@@ -1,5 +1,7 @@
-use crate::action::Action;
-use crate::components::form::{Field, Form};
+use crate::{
+    action::Action,
+    components::form::{Field, Form},
+};
 
 const LABELS: [&str; 1] = ["File"];
 const FILE: usize = 0;

@@ -1,7 +1,9 @@
-use crate::action::Action;
-use crate::components::form::{Field, Form};
-use crate::connections::{Driver, Secret, StoredConnection};
-use crate::secrets::{self, Password};
+use crate::{
+    action::Action,
+    components::form::{Field, Form},
+    connections::{Driver, Secret, StoredConnection},
+    secrets::{self, Password},
+};
 
 const LABELS: [&str; 11] = [
     "Name",
@@ -341,9 +343,10 @@ impl Form for ConnForm {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyCode;
+
     use super::*;
     use crate::components::form::tests::{key, lines, press, render, type_str};
-    use crossterm::event::KeyCode;
 
     fn set(form: &mut ConnForm, field: usize, value: &str) {
         let Field::Text(input) = &mut form.fields[field] else {

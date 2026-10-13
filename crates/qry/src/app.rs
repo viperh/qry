@@ -1,11 +1,9 @@
 use crossterm::event::KeyEvent;
-
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
+use strum::EnumIter;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
-
-use strum::EnumIter;
 
 use crate::{
     action::{Action, StatusCode},

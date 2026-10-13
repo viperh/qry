@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
-use crate::app::Mode;
-use crate::connections::StoredConnection;
-use crate::import::{Format, Imported};
-use qry_core::ExportConfig;
-use qry_core::QueryResult;
+use qry_core::{ExportConfig, QueryResult};
 use serde::{Deserialize, Serialize};
 use strum::Display;
+
+use crate::{
+    app::Mode,
+    connections::StoredConnection,
+    import::{Format, Imported},
+};
 
 /// Messages passed between the event loop, [`App`](crate::app::App) and every
 /// [`Component`](crate::components::Component).

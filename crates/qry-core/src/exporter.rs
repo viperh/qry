@@ -1,7 +1,9 @@
 //! Writes a query result to a file.
 
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
 
 use anyhow::{Context, Result};
 use rust_xlsxwriter::Workbook;
@@ -164,10 +166,13 @@ fn quote_csv(field: &str, separator: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs,
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
     use super::*;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// A path of its own per test, removed when the guard is dropped.
     struct TempFile(PathBuf);

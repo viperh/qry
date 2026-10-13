@@ -5,12 +5,12 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::connections::{Secret, StoredConnection};
-use crate::import::Imported;
-use crate::keymap::TreeCommand;
 use crate::{
     action::{Action, StatusCode},
     config::Config,
+    connections::{Secret, StoredConnection},
+    import::Imported,
+    keymap::TreeCommand,
 };
 
 /// A connection the tree knows about, and what it has learned of it.
@@ -451,11 +451,12 @@ impl Component for ConnTree {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::components::form::tests::key;
     use crossterm::event::KeyCode;
     use ratatui::{Terminal, backend::TestBackend};
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+
+    use super::*;
+    use crate::components::form::tests::key;
 
     /// A saved SQLite connection, as the form would build it.
     fn record(name: &str, path: &str) -> StoredConnection {

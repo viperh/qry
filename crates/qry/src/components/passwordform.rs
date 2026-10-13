@@ -1,6 +1,8 @@
-use crate::action::Action;
-use crate::components::form::{Field, Form};
-use crate::secrets::{self, Password};
+use crate::{
+    action::Action,
+    components::form::{Field, Form},
+    secrets::{self, Password},
+};
 
 const LABELS: [&str; 1] = ["Password"];
 const PASSWORD: usize = 0;

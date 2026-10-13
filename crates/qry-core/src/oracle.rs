@@ -9,11 +9,13 @@
 //! protocol, and checks the server's certificate and host name against the
 //! Mozilla roots plus any certificates in the wallet.
 
-use std::collections::HashMap;
-use std::fmt::Write as _;
-use std::fs;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    fmt::Write as _,
+    fs,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -25,8 +27,10 @@ use oracledb::{
 use rustls_pki_types::ServerName;
 use serde::{Deserialize, Serialize};
 
-use crate::DatabaseType;
-use crate::shared::{Database, QueryResult, SslMode};
+use crate::{
+    DatabaseType,
+    shared::{Database, QueryResult, SslMode},
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OracleConfig {
@@ -564,9 +568,9 @@ mod tests {
     /// thrown away after signing. Answers with the first bytes read inside
     /// the TLS session, or the handshake error.
     fn tls_server() -> (u16, std::thread::JoinHandle<Result<[u8; 5], String>>) {
-        use rustls::pki_types::pem::PemObject;
-        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
         use std::io::Read;
+
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 
         let certs = CertificateDer::pem_slice_iter(include_bytes!("../testdata/server.pem"))
             .collect::<std::result::Result<Vec<_>, _>>()

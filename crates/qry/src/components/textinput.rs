@@ -1,8 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::Frame;
-use ratatui::layout::Rect;
-use ratatui::prelude::Stylize;
-use ratatui::widgets::Paragraph;
+use ratatui::{Frame, layout::Rect, prelude::Stylize, widgets::Paragraph};
 
 #[derive(Default)]
 pub(crate) struct TextInput {

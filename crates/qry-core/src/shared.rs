@@ -1,8 +1,10 @@
-use crate::DatabaseType;
+use std::fmt::Debug;
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+
+use crate::DatabaseType;
 
 /// When to use TLS. Same names and meaning as libpq's `sslmode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

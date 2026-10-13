@@ -1,11 +1,13 @@
-use crate::shared::{QueryResult, SslMode};
-use crate::{Database, DatabaseType};
 use anyhow::Result;
 use async_trait::async_trait;
-use mysql_async::prelude::*;
-use mysql_async::{Conn, OptsBuilder, Row, Value};
+use mysql_async::{Conn, OptsBuilder, Row, Value, prelude::*};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+use crate::{
+    Database, DatabaseType,
+    shared::{QueryResult, SslMode},
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MariadbConfig {

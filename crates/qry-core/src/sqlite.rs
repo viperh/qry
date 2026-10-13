@@ -1,13 +1,13 @@
-use crate::shared::Database;
-use crate::{DatabaseType, shared};
+use std::path::PathBuf;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use hex::encode;
 use serde::{Deserialize, Serialize};
 use shared::QueryResult;
-use std::path::PathBuf;
-use tokio_rusqlite::types::ValueRef;
-use tokio_rusqlite::{Connection, OpenFlags};
+use tokio_rusqlite::{Connection, OpenFlags, types::ValueRef};
+
+use crate::{DatabaseType, shared, shared::Database};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SqliteConfig {

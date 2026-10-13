@@ -1,6 +1,8 @@
-use crate::action::Action;
-use crate::components::form::{Field, Form};
-use crate::import::Format;
+use crate::{
+    action::Action,
+    components::form::{Field, Form},
+    import::Format,
+};
 
 const LABELS: [&str; 2] = ["File", "Format"];
 const FILE: usize = 0;
@@ -95,9 +97,10 @@ impl Form for ImportForm {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyCode;
+
     use super::*;
     use crate::components::form::tests::{key, lines, press, render, type_str};
-    use crossterm::event::KeyCode;
 
     #[test]
     fn format_labels_line_up_with_the_formats() {

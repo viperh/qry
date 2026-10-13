@@ -1,23 +1,19 @@
 use crossterm::event::KeyEvent;
-use ratatui::layout::Size;
-use ratatui::prelude::*;
+use ratatui::{layout::Size, prelude::*};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::app::Mode;
-use crate::components::connexportform::ConnExportForm;
-use crate::components::connform::ConnForm;
-use crate::components::conntree::ConnTree;
-use crate::components::editor::Editor;
-use crate::components::exportform::ExportForm;
-use crate::components::form::Form;
-use crate::components::help::Help;
-use crate::components::importform::ImportForm;
-use crate::components::passwordform::PasswordForm;
-use crate::components::results::Results;
-use crate::components::statuspanel::Statuspanel;
-use crate::keymap::{FormCommand, HelpCommand};
-use crate::{action::Action, config::Config};
+use crate::{
+    action::Action,
+    app::Mode,
+    components::{
+        connexportform::ConnExportForm, connform::ConnForm, conntree::ConnTree, editor::Editor,
+        exportform::ExportForm, form::Form, help::Help, importform::ImportForm,
+        passwordform::PasswordForm, results::Results, statuspanel::Statuspanel,
+    },
+    config::Config,
+    keymap::{FormCommand, HelpCommand},
+};
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 enum Pane {
@@ -341,11 +337,11 @@ impl Component for Home {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::action::StatusCode;
-    use crate::components::form::tests::key;
     use crossterm::event::{KeyCode, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+
+    use super::*;
+    use crate::{action::StatusCode, components::form::tests::key};
 
     fn render(home: &mut Home, width: u16, height: u16) -> Buffer {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

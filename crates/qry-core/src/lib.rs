@@ -10,12 +10,11 @@ pub mod shared;
 pub mod sqlite;
 
 pub use exporter::Exporter;
-pub use shared::{Database, QueryResult, SslMode};
-
 use mariadb::{MariaDb, MariadbConfig};
 use mysql::{MySql, MySqlConfig};
 use oracle::{Oracle, OracleConfig};
 use postgres::{Postgres, PostgresConfig};
+pub use shared::{Database, QueryResult, SslMode};
 use sqlite::{Sqlite, SqliteConfig};
 
 #[derive(Debug, Clone)]

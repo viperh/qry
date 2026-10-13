@@ -3,8 +3,7 @@ use ratatui::{prelude::*, widgets::Block};
 use ratatui_textarea::{CursorMove, Scrolling, TextArea};
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::Component;
-use super::textinput::typed_char;
+use super::{Component, textinput::typed_char};
 use crate::{action::Action, config::Config, keymap::EditorCommand};
 
 #[derive(Default)]
@@ -138,8 +137,9 @@ impl Component for Editor {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crossterm::event::{KeyCode, KeyModifiers};
+
+    use super::*;
 
     fn editor() -> Editor {
         let mut editor = Editor::default();

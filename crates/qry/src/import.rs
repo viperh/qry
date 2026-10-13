@@ -6,8 +6,10 @@
 //! imported connection asks for its password on the first connect, which
 //! then offers to keep it in the keychain like any other.
 
-use std::fmt;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use color_eyre::eyre::{Context, bail};
 use qry_core::SslMode;

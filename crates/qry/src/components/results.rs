@@ -283,9 +283,10 @@ fn visible_columns(widths: &[u16], offset: usize, available: u16) -> Vec<(usize,
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crossterm::event::{KeyCode, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
+
+    use super::*;
 
     fn render_buffer(results: &mut Results, width: u16, height: u16) -> Buffer {
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

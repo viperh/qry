@@ -1,7 +1,9 @@
 use qry_core::{ExportConfig, ExportType};
 
-use crate::action::Action;
-use crate::components::form::{Field, Form};
+use crate::{
+    action::Action,
+    components::form::{Field, Form},
+};
 
 /// The fields every export has.
 const LABELS_PLAIN: [&str; 2] = ["Path", "Type"];
@@ -158,9 +160,10 @@ impl Form for ExportForm {
 
 #[cfg(test)]
 mod tests {
+    use crossterm::event::KeyCode;
+
     use super::*;
     use crate::components::form::tests::{key, lines, press, render, type_str};
-    use crossterm::event::KeyCode;
 
     /// Moves the focus to `field` from the start of the form.
     fn focus(form: &mut ExportForm, field: usize) {

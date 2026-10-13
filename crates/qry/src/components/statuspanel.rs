@@ -2,8 +2,10 @@ use ratatui::{prelude::*, widgets::Paragraph};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::action::StatusCode;
-use crate::{action::Action, config::Config};
+use crate::{
+    action::{Action, StatusCode},
+    config::Config,
+};
 
 #[derive(Default)]
 pub struct Statuspanel {
