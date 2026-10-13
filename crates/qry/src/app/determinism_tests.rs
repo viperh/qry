@@ -36,14 +36,21 @@ fn key() -> impl Strategy<Value = KeyEvent> {
         KeyCode::PageDown,
         KeyCode::Backspace,
         KeyCode::Delete,
+        KeyCode::F(1),
+        KeyCode::F(5),
         KeyCode::F(8),
         KeyCode::Char(' '),
+        KeyCode::Char('?'),
+        KeyCode::Char(':'),
+        KeyCode::Char('G'),
         KeyCode::Char('e'),
         KeyCode::Char('g'),
         KeyCode::Char('x'),
         KeyCode::Char('1'),
     ];
-    let ctrl = ['n', 'e', 'o', 's', 'h', 'a', 'w', 'u', 'r', 'x', 'y'];
+    let ctrl = [
+        'n', 'e', 'o', 's', 'a', 'w', 'x', 'y', 'z', 'c', 'v', 'p', '3',
+    ];
     prop_oneof![
         proptest::sample::select(plain.to_vec()).prop_map(|code| {
             let modifiers = if code == KeyCode::BackTab {
@@ -121,6 +128,8 @@ fn event() -> impl Strategy<Value = UiEvent> {
         8 => key().prop_map(UiEvent::Key),
         1 => (0..300u16, 0..100u16).prop_map(|(w, h)| UiEvent::Resize(w, h)),
         1 => (0..10_000u64).prop_map(|ms| UiEvent::Tick(instant(ms))),
+        // The live key-sequence timer, or a stale or future one.
+        1 => (0..6u64).prop_map(|n| UiEvent::Timer(Timer::KeySequence(n))),
         2 => db_answer().prop_map(|answer| UiEvent::Db(SessionId::FIRST, answer)),
         1 => file_answer().prop_map(UiEvent::File),
         1 => Just(UiEvent::Started),
