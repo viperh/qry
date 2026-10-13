@@ -446,6 +446,15 @@ fn tick_interval(per_second: f64) -> u64 {
     }
 }
 
+/// The path of a shared fixture under `tests/fixtures/` at the repository
+/// root, such as `fixture("dbeaver/data-sources.json")`. Tests read fixtures
+/// from there and never write into the repository.
+pub fn fixture(relative: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures")
+        .join(relative)
+}
+
 /// Draws whatever `draw` draws into a `w`x`h` test terminal and returns the
 /// cells. Component tests use this with the component's own `draw` or
 /// `render`; whole-screen tests use [`AppHarness::render_buffer`].

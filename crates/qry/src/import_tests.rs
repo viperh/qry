@@ -9,43 +9,30 @@ fn import(text: &str) -> Imported {
     from_text(text, Format::Auto, Path::new("test.json")).unwrap()
 }
 
+/// A shared fixture from `tests/fixtures/` at the repository root.
+fn fixture(relative: &str) -> String {
+    std::fs::read_to_string(crate::testing::fixture(relative)).unwrap()
+}
+
+/// The shape SQL Developer's Export Connections writes. Values are strings,
+/// the password is encrypted, and it is never read.
+fn sql_developer() -> String {
+    fixture("sqldeveloper/connections.json")
+}
+
+/// The shape of DBeaver's `data-sources.json`, from its reference docs.
+fn dbeaver() -> String {
+    fixture("dbeaver/data-sources.json")
+}
+
 fn only(imported: &Imported) -> &StoredConnection {
     assert_eq!(imported.connections.len(), 1, "{imported:#?}");
     &imported.connections[0]
 }
 
-/// The shape SQL Developer's Export Connections writes. Values are
-/// strings, the password is encrypted, and it is never read.
-const SQL_DEVELOPER: &str = r#"{"connections": [
-    {"name": "hr", "type": "jdbc", "info": {
-        "role": "", "SavePassword": "true", "OracleConnectionType": "BASIC",
-        "RaptorConnectionType": "Oracle", "serviceName": "ORCLPDB1",
-        "customUrl": "jdbc:oracle:thin:@//db.local:1521/ORCLPDB1",
-        "password": "v2_mBJrjLwxPLQ==", "hostname": "db.local",
-        "driver": "oracle.jdbc.OracleDriver", "port": "1521",
-        "subtype": "oraJDBC", "OS_AUTHENTICATION": "false",
-        "ConnName": "hr", "KERBEROS_AUTHENTICATION": "false", "user": "hr"}},
-    {"name": "legacy", "type": "jdbc", "info": {
-        "OracleConnectionType": "BASIC", "RaptorConnectionType": "Oracle",
-        "sid": "XE", "hostname": "old.local", "port": "1522", "user": "scott"}},
-    {"name": "url", "type": "jdbc", "info": {
-        "OracleConnectionType": "ADVANCED", "RaptorConnectionType": "Oracle",
-        "customUrl": "jdbc:oracle:thin:@tcps://adb.example.com:1522/svc_high",
-        "user": "admin"}},
-    {"name": "tns", "type": "jdbc", "info": {
-        "OracleConnectionType": "TNS", "RaptorConnectionType": "Oracle",
-        "TNS_ALIAS": "PRODDB", "user": "app"}},
-    {"name": "mysql", "type": "jdbc", "info": {
-        "RaptorConnectionType": "MySQL",
-        "customUrl": "jdbc:mysql://my.local:3307/shop", "user": "root"}},
-    {"name": "kerb", "type": "jdbc", "info": {
-        "OracleConnectionType": "BASIC", "KERBEROS_AUTHENTICATION": "true",
-        "serviceName": "S", "hostname": "h"}}
-]}"#;
-
 #[test]
 fn a_sql_developer_export_is_detected_and_read() {
-    let imported = import(SQL_DEVELOPER);
+    let imported = import(&sql_developer());
     assert_eq!(imported.format, Format::SqlDeveloper);
     let names: Vec<&str> = imported
         .connections
@@ -108,49 +95,9 @@ fn a_sql_developer_export_is_detected_and_read() {
     );
 }
 
-/// The shape of DBeaver's `data-sources.json`, from its reference docs.
-const DBEAVER: &str = r#"{
-    "folders": {},
-    "connections": {
-        "postgres-jdbc-19a9ccb2c0e-201a227bc74f6a48": {
-            "provider": "postgresql", "driver": "postgres-jdbc",
-            "name": "PostgreSQL - prod", "save-password": true,
-            "read-only": false, "folder": "prod",
-            "configuration": {
-                "host": "db.example.com", "port": "5432", "database": "appdb",
-                "url": "jdbc:postgresql://db.example.com:5432/appdb",
-                "configurationType": "MANUAL", "type": "dev", "auth-model": "native"
-            }
-        },
-        "mariaDB-1": {
-            "provider": "mysql", "driver": "mariaDB", "name": "maria",
-            "configuration": {"host": "m.local", "port": "3306", "database": "shop",
-                              "user": "alice"}
-        },
-        "oracle-1": {
-            "provider": "oracle", "driver": "oracle_thin", "name": "ora",
-            "configuration": {"host": "o.local", "port": "1521", "database": "XE",
-                "provider-properties": {"@dbeaver-sid-service@": "SID"}}
-        },
-        "sqlite-1": {
-            "provider": "generic", "driver": "sqlite_jdbc", "name": "local",
-            "read-only": true,
-            "configuration": {"url": "jdbc:sqlite:/home/me/app.db",
-                              "configurationType": "URL"}
-        },
-        "url-1": {
-            "provider": "postgresql", "driver": "postgres-jdbc", "name": "by url",
-            "configuration": {"url": "jdbc:postgresql://[::1]:6543/reports?ssl=true",
-                              "configurationType": "URL"}
-        },
-        "mongo-1": {"provider": "mongodb", "driver": "mongo", "name": "docs",
-                    "configuration": {"host": "x"}}
-    }
-}"#;
-
 #[test]
 fn a_dbeaver_data_sources_file_is_detected_and_read() {
-    let imported = import(DBEAVER);
+    let imported = import(&dbeaver());
     assert_eq!(imported.format, Format::DBeaver);
     let find = |name: &str| {
         imported
@@ -226,8 +173,8 @@ fn a_qry_backup_keeps_ids_and_password_modes() {
 
 #[test]
 fn a_backup_from_a_newer_qry_is_refused() {
-    let text = r#"{"version": 99, "connections": []}"#;
-    let err = from_text(text, Format::Auto, Path::new("b.json")).unwrap_err();
+    let text = fixture("qry-backup/from-a-newer-qry.json");
+    let err = from_text(&text, Format::Auto, Path::new("b.json")).unwrap_err();
     assert!(err.to_string().contains("newer qry"), "{err}");
 }
 
@@ -240,7 +187,7 @@ fn files_qry_cannot_read_say_why() {
     assert!(err(r#"{"something": 1}"#).contains("not a qry backup"));
 
     // A format chosen by hand that the file does not match.
-    let err = from_text(DBEAVER, Format::SqlDeveloper, path)
+    let err = from_text(&dbeaver(), Format::SqlDeveloper, path)
         .unwrap_err()
         .to_string();
     assert!(err.contains("connections` array"), "{err}");
@@ -248,8 +195,8 @@ fn files_qry_cannot_read_say_why() {
 
 #[test]
 fn a_zip_archive_is_explained() {
-    let dir = std::env::temp_dir().join(format!("qry-import-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let dir = dir.path();
     let file = dir.join("project.dbp");
     std::fs::write(&file, b"PK\x03\x04rest").unwrap();
     let err = from_file(file.to_str().unwrap(), Format::Auto)
@@ -264,7 +211,6 @@ fn a_zip_archive_is_explained() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("cannot read"), "{err}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

@@ -1,0 +1,38 @@
+{
+    "folders": {},
+    "connections": {
+        "postgres-jdbc-19a9ccb2c0e-201a227bc74f6a48": {
+            "provider": "postgresql", "driver": "postgres-jdbc",
+            "name": "PostgreSQL - prod", "save-password": true,
+            "read-only": false, "folder": "prod",
+            "configuration": {
+                "host": "db.example.com", "port": "5432", "database": "appdb",
+                "url": "jdbc:postgresql://db.example.com:5432/appdb",
+                "configurationType": "MANUAL", "type": "dev", "auth-model": "native"
+            }
+        },
+        "mariaDB-1": {
+            "provider": "mysql", "driver": "mariaDB", "name": "maria",
+            "configuration": {"host": "m.local", "port": "3306", "database": "shop",
+                              "user": "alice"}
+        },
+        "oracle-1": {
+            "provider": "oracle", "driver": "oracle_thin", "name": "ora",
+            "configuration": {"host": "o.local", "port": "1521", "database": "XE",
+                "provider-properties": {"@dbeaver-sid-service@": "SID"}}
+        },
+        "sqlite-1": {
+            "provider": "generic", "driver": "sqlite_jdbc", "name": "local",
+            "read-only": true,
+            "configuration": {"url": "jdbc:sqlite:/home/me/app.db",
+                              "configurationType": "URL"}
+        },
+        "url-1": {
+            "provider": "postgresql", "driver": "postgres-jdbc", "name": "by url",
+            "configuration": {"url": "jdbc:postgresql://[::1]:6543/reports?ssl=true",
+                              "configurationType": "URL"}
+        },
+        "mongo-1": {"provider": "mongodb", "driver": "mongo", "name": "docs",
+                    "configuration": {"host": "x"}}
+    }
+}

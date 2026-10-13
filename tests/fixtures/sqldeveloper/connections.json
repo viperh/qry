@@ -1,0 +1,26 @@
+{"connections": [
+    {"name": "hr", "type": "jdbc", "info": {
+        "role": "", "SavePassword": "true", "OracleConnectionType": "BASIC",
+        "RaptorConnectionType": "Oracle", "serviceName": "ORCLPDB1",
+        "customUrl": "jdbc:oracle:thin:@//db.local:1521/ORCLPDB1",
+        "password": "v2_mBJrjLwxPLQ==", "hostname": "db.local",
+        "driver": "oracle.jdbc.OracleDriver", "port": "1521",
+        "subtype": "oraJDBC", "OS_AUTHENTICATION": "false",
+        "ConnName": "hr", "KERBEROS_AUTHENTICATION": "false", "user": "hr"}},
+    {"name": "legacy", "type": "jdbc", "info": {
+        "OracleConnectionType": "BASIC", "RaptorConnectionType": "Oracle",
+        "sid": "XE", "hostname": "old.local", "port": "1522", "user": "scott"}},
+    {"name": "url", "type": "jdbc", "info": {
+        "OracleConnectionType": "ADVANCED", "RaptorConnectionType": "Oracle",
+        "customUrl": "jdbc:oracle:thin:@tcps://adb.example.com:1522/svc_high",
+        "user": "admin"}},
+    {"name": "tns", "type": "jdbc", "info": {
+        "OracleConnectionType": "TNS", "RaptorConnectionType": "Oracle",
+        "TNS_ALIAS": "PRODDB", "user": "app"}},
+    {"name": "mysql", "type": "jdbc", "info": {
+        "RaptorConnectionType": "MySQL",
+        "customUrl": "jdbc:mysql://my.local:3307/shop", "user": "root"}},
+    {"name": "kerb", "type": "jdbc", "info": {
+        "OracleConnectionType": "BASIC", "KERBEROS_AUTHENTICATION": "true",
+        "serviceName": "S", "hostname": "h"}}
+]}
