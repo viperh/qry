@@ -7,8 +7,6 @@
 //! records which answer that is, so a late one meant for a modal that has
 //! since closed, or for a different one, changes nothing.
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
 use super::{connect, tree};
 use crate::{
     action::Action,
@@ -51,9 +49,7 @@ pub(super) fn act(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
         Action::Cancel => close(state),
         action => {
             if let Some(dialog) = state.dialog_mut() {
-                // The form only reads the key for typing, which this is not.
-                let key = KeyEvent::new(KeyCode::Null, KeyModifiers::NONE);
-                dialog.form_mut().handle_key(key, Some(action));
+                dialog.form_mut().act(action);
             }
         }
     }

@@ -156,28 +156,31 @@ pub(crate) trait Form {
     /// there.
     fn handle_key(&mut self, key: KeyEvent, action: Option<Action>) {
         let focus = self.focus();
-        let count = self.labels().len();
-
         if let Some(c) = typed_char(key)
             && self.fields()[focus].is_typed()
         {
             self.set_error(None);
             self.fields_mut()[focus].insert(c);
             self.after_change();
-            return;
+        } else if let Some(action) = action {
+            self.act(action);
         }
+    }
 
+    /// Moves between fields, or edits or picks in the focused one.
+    fn act(&mut self, action: Action) {
+        let focus = self.focus();
+        let count = self.labels().len();
         match action {
-            Some(Action::NextField) => self.set_focus((focus + 1) % count),
-            Some(Action::PrevField) => self.set_focus((focus + count - 1) % count),
+            Action::NextField => self.set_focus((focus + 1) % count),
+            Action::PrevField => self.set_focus((focus + count - 1) % count),
             // Submitting is the reducer's job: it decides what follows.
-            Some(Action::Submit) => {}
-            Some(action) => {
+            Action::Submit => {}
+            action => {
                 self.set_error(None);
                 self.fields_mut()[focus].apply(action);
                 self.after_change();
             }
-            None => {}
         }
     }
 }
