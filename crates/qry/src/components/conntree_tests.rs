@@ -257,12 +257,10 @@ fn row_style(tree: &mut ConnTree, width: u16, height: u16, y: u16) -> (Color, Co
     (cell.fg, cell.bg)
 }
 
-/// The colours a theme style draws with, on a cell nothing else coloured.
+/// The colours a theme style draws with, on a cell nothing else coloured
+/// (an unset colour draws as the default, `Reset`).
 fn colours(style: Style) -> (Color, Color) {
-    (
-        style.fg.unwrap_or(Color::Reset),
-        style.bg.unwrap_or(Color::Reset),
-    )
+    (style.fg.unwrap_or_default(), style.bg.unwrap_or_default())
 }
 
 #[test]

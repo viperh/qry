@@ -2,10 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use ratatui::{
-    style::{Color, Style},
-    text::{Line, Span},
-};
+use ratatui::text::{Line, Span};
 
 use super::*;
 
@@ -50,8 +47,8 @@ fn buffer_to_string_keeps_trailing_spaces_and_row_count() {
 fn styled_lists_one_run_per_style_change() {
     let buffer = render_with(6, 1, |frame| {
         let line = Line::from(vec![
-            Span::styled("ab", Style::new().fg(Color::Red)),
-            Span::styled("cd", Style::new().bg(Color::Blue)),
+            Span::styled("ab", Theme::DARK.value_error()),
+            Span::styled("cd", Theme::DARK.editor_selection()),
         ]);
         frame.render_widget(line, frame.area());
     });
@@ -59,8 +56,8 @@ fn styled_lists_one_run_per_style_change() {
         styled(&buffer),
         "abcd  \n\
          --- styles (x,y fg bg modifiers) ---\n\
-         0,0 Red Reset NONE\n\
-         2,0 Reset Blue NONE\n\
+         0,0 Rgb(242, 139, 107) Reset NONE\n\
+         2,0 Reset Rgb(27, 37, 51) NONE\n\
          4,0 Reset Reset NONE\n"
     );
 }

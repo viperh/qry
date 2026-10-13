@@ -1,0 +1,16 @@
+// A drawing file that names colours, for tests/no_raw_colors.rs. Each
+// offence is on a known line; the scanner must report exactly those.
+use ratatui::style::{Color, Style};
+
+fn draw(theme: &Theme) -> Style {
+    let a = Style::new().fg(Color::Rgb(1, 2, 3));
+    let b = Style::new().bg(Color::Indexed(4));
+    let c = Style::new().fg(Color::Red).bg(Color::DarkGray);
+    let d = Line::from("x").cyan();
+    let e = Cell::from("y").black().on_green();
+    // Theme helpers and colour-typed parameters are fine:
+    let f = theme.dialog_border(theme.teal);
+    let g = theme.gauge(theme.amber);
+    let h = Line::from("z").bold().reversed();
+    a
+}
