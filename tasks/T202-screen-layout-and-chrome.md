@@ -156,22 +156,22 @@ Hit-testing uses the `ScreenLayout` from the last draw. It is a pure function `h
 
 ## Acceptance criteria
 
-- [ ] `components/statuspanel.rs` is deleted. Nothing on the main screen uses `Block::bordered()`, and a grep test enforces this for `ui/` and `components/` (overlays are excluded).
-- [ ] `compute_layout` returns `None` for any size below 80x24. The app then draws only the too-small message, and every key except the quit binding is ignored.
-- [ ] At 80x24, 120x40, 160x48 and 300x100 the rects tile the screen exactly: no overlaps and no gaps; the test sums the areas.
-- [ ] The tree is 30 columns wide below 160 columns and 25% of the width at 160 columns and above.
-- [ ] The inspector slot exists only when it is toggled on and the width is ≥140.
-- [ ] `ctrl-up`/`ctrl-down` change the editor share in 5% steps, and each region always keeps ≥3 body rows.
+- [x] `components/statuspanel.rs` is deleted. Nothing on the main screen uses `Block::bordered()`, and a grep test enforces this for `ui/` and `components/` (overlays are excluded).
+- [x] `compute_layout` returns `None` for any size below 80x24. The app then draws only the too-small message, and every key except the quit binding is ignored.
+- [x] At 80x24, 120x40, 160x48 and 300x100 the rects tile the screen exactly: no overlaps and no gaps; the test sums the areas.
+- [x] The tree is 30 columns wide below 160 columns and 25% of the width at 160 columns and above.
+- [x] The inspector slot exists only when it is toggled on and the width is ≥140.
+- [x] `ctrl-up`/`ctrl-down` change the editor share in 5% steps, and each region always keeps ≥3 body rows.
 - [ ] `ctrl-z` maximises the focused right-hand region and pressing it again restores the previous split.
-- [ ] The top bar shows the app name, every session tab, the connection summary and the mode pill. On overflow, tabs are replaced by `…` and the active tab always stays visible.
-- [ ] The mode pill reads NORMAL, EDIT or COMMAND as specified, and keeps the previous mode while a dialog or help is open.
-- [ ] The focused pane's title label uses `theme.pane_title_focused()` (amber bold), and every other pane title uses `theme.pane_title()` (dim).
-- [ ] The status line shows the connection, driver, database and tx state on the left and the grid position on the right. Items drop in the documented priority order as the width shrinks, and the line never wraps.
-- [ ] The hint line shows the hints for the focused context, resolved from the live keymap. A remapped key shows its new chord, and an unbound action's pair is omitted.
-- [ ] `? help` is always visible at the right of the hint line, even at 80 columns.
-- [ ] The hint line can be toggled off, and the body grows by one row when it is.
-- [ ] Mouse: clicking a pane focuses it, clicking a tab switches session, and the wheel scrolls the tree or grid under the pointer.
-- [ ] Every style comes from `Theme` helpers, and the `no_raw_colors` test (T201) passes.
+- [x] The top bar shows the app name, every session tab, the connection summary and the mode pill. On overflow, tabs are replaced by `…` and the active tab always stays visible.
+- [x] The mode pill reads NORMAL, EDIT or COMMAND as specified, and keeps the previous mode while a dialog or help is open.
+- [x] The focused pane's title label uses `theme.pane_title_focused()` (amber bold), and every other pane title uses `theme.pane_title()` (dim).
+- [x] The status line shows the connection, driver, database and tx state on the left and the grid position on the right. Items drop in the documented priority order as the width shrinks, and the line never wraps.
+- [x] The hint line shows the hints for the focused context, resolved from the live keymap. A remapped key shows its new chord, and an unbound action's pair is omitted.
+- [x] `? help` is always visible at the right of the hint line, even at 80 columns.
+- [x] The hint line can be toggled off, and the body grows by one row when it is.
+- [x] Mouse: clicking a pane focuses it, clicking a tab switches session, and the wheel scrolls the tree or grid under the pointer.
+- [x] Every style comes from `Theme` helpers, and the `no_raw_colors` test (T201) passes.
 
 ## Tests
 
@@ -207,3 +207,20 @@ Screen snapshots via the T002 `AppHarness`, in `crates/qry/src/app/screen_tests.
 - `screen_focus_moves_title_accent`: snapshots after each `FocusNext`, showing only the focused pane title in amber.
 - `every_size_renders_without_panic`: sverb's sizes `(0,0),(1,1),(2,1),(10,3),(80,24),(300,100)`.
 - `main_screen_has_no_boxes`: a source scan of `ui/` and `components/` for `Block::bordered`, excluding `ui/overlay/`.
+
+## Implementation notes
+
+- **One box stays unticked: the maximise key.** `ToggleMaximise` works as specified (the focused right-hand region, then a second press restores the split), but its default is `F11`, not `ctrl-z`. `ctrl-z` is already `Suspend` in Global and `Undo` in the editor (T102's table), and taking it would break both. A user can bind `"<ctrl-z>": "ToggleMaximise"` in Global. Likewise `ToggleInspector` keeps T102's `i` in Results rather than `ctrl-i`, because terminals send `ctrl-i` as Tab.
+- **Where things live.** The spec's `ui/` is `views/`, where T101 put the drawing code: `views/layout.rs` (`compute_layout`, `LayoutInput`, `ScreenLayout`, `Region`, `MIN_SIZE`, `hit_test`/`Hit`/`TabHits`, `centered_rect`, `render_vertical_divider`, `render_too_small`), `views/top_bar.rs` (renamed from T103's `topbar.rs`; `tab_hits` gives the click handler the same rects the draw uses), `views/status_line.rs` (replaces `views/status.rs`), `views/hints.rs` and `views/pane_title.rs`. There was no `components/statuspanel.rs` left, as T101 had removed `components/`. `ScreenLayout` also has `inspector_divider`, so the rects tile with the inspector on.
+- **Layout numbers.** Top bar 1 row; status 1; hints 1 when on; jobs `jobs_rows` (capped so the panes keep their minimum; T305 passes the real count, `State::layout_input` passes 0 for now). The tree is 30 columns (25% from 160), then a 1-column `│` (`divider_focused` while the tree has focus). The right side is the editor title, the editor, the results title and the results. The split is `round(rows × split%)` of the rows left after the two titles, clamped so each region keeps 3. With a region maximised, the other and its title get height 0. The toast rect is the last body row.
+- **State.** `State::chrome: Chrome { split_percent, maximised, inspector, hints }` (40%, none, off, on). `State::layout_input(area)` and `State::too_small()`. `pill_mode` was not needed: `State::pill()` (T102) already skips overlays without a pill. New actions `GrowEditor` (`ctrl-↑`), `ShrinkEditor` (`ctrl-↓`) and `ToggleMaximise` (`F11`), in `reducer/chrome.rs`; moving the split clears a maximise. `ToggleHints` (`ctrl-/`) and `ToggleInspector` are now live. `print_config_default` was re-accepted.
+- **Top bar.** ` qry `, then the tabs, then the summary (`postgres · app@db.local`, `sqlite · :memory:`: `SessionState::summary`, built from the record without the port or a password) and the pill. The summary is dropped first. Then tabs give way to ` … `: the window grows around the active tab, to the right first. `Pill::label()` was added.
+- **Status line.** Left: the session title in `status_session` (the spec's `status_file`), then `·` driver (`Driver::name()`), database (the record's database, Oracle service or SQLite path) and `auto-commit` (dim) or `in transaction` (`status_warning`, coral). It shows `connecting to <title>…` or `<title>: <error>` until the session is open. Right: `R 12 / 1 204  C 3/9` (`thousands()` groups digits with spaces) while there is a result with rows. Between them goes the last `StatusCode` message, until T205 makes those toasts. Items drop from the end (tx, database, driver) to make room for the message and the position; a message longer than what is left is cut with `…`. T103's status line showed the driver's connect label; it now shows the title, as this spec does.
+- **Transaction state** is worked out in the reducer: `reducer::tx_change` reads the last statement of each query sent (`begin`/`start transaction` begins; `commit`/`rollback`/`end`/`abort` ends; `rollback to` stays). `SessionState::tx_changes` queues one entry per query, applied on `QueryDone` and dropped on `QueryFailed`. Reconnecting, `Connected` and `WorkerStopped` reset it. A transaction opened inside a function or by a driver setting is not seen.
+- **Hints.** `hints::table(KeyContext)` lists `(actions, label)` per context. Each key comes from `Keymap::chords_for` over `State::contexts()` and is shown with `display_chord`; a pair with no bound action is dropped. Help's key is pinned right (`? help` in the tree and results, `F1 help` in the editor, where `?` types), and whole pairs go from the right first.
+- **Panes.** No pane draws a box any more: the tree (`SCHEMA` title row, rows indented one column, its selection amber only while focused), the editor (`QUERY  ln 4, col 12`; the `TextArea` block is a plain `base` block) and the results (`RESULTS  204 rows`, or `3 rows affected` / `statement executed`; the grid's scrollbars and its own position title are gone, as the status line shows the position). Statement counts come with T302 and timings with T305. The inspector slot draws only its `INSPECTOR` title (T304).
+- **Too small.** `views::draw` draws only `render_too_small` below 80x24. `reducer::keys` ignores every key at that size except one bound to `Quit`. The runtime now sends `UiEvent::Resize` with the terminal's size before `Started`, since the reducer needs the size before the first resize.
+- **Mouse.** `Tui::mouse(true)` is on; `UiEvent::Mouse(MouseEvent)`. `reducer/mouse.rs` works out the layout again from `State::size` (the same pure function the draw uses) and `top_bar::tab_hits`. A left click focuses the tree, editor or results, or switches to the tab clicked. The wheel moves the tree's or the grid's selection 3 rows. Nothing happens while an overlay is open.
+- **Tests.** `views/layout_tests.rs`, `top_bar_tests.rs` (with the four snapshots), `status_line_tests.rs` (plus `a_message_takes_the_room_of_the_items`, `thousands_are_grouped_by_spaces`) and `hints_tests.rs` as listed. `app/screen_tests.rs` has the screen snapshots (plain and styled at 80x24, 120x40, 160x48), `screen_too_small_72x20`, `screen_focus_moves_title_accent` (the title colours plus a snapshot of the first rows per step), `every_size_renders_without_panic`, `main_screen_has_no_boxes` (scans `views/` except `form.rs`/`help.rs` and tests), plus `every_key_but_quit_is_ignored_when_too_small`, `ctrl_up_and_down_move_the_split_in_steps`, `f11_maximises_the_focused_region_and_restores`, `the_hint_line_can_be_toggled_off` and `mouse_focuses_panes_switches_tabs_and_scrolls`. The results tests lost the border offsets, and every full-screen snapshot was re-accepted.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (297 `qry` unit tests, 31 in `qry-core`), the CI docs command, and a pty smoke run (run `select 42`, see the grid position and hints, close the session, quit; exit status 0).
+

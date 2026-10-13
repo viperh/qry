@@ -2,27 +2,27 @@
 source: crates/qry/src/app/sessions_tests.rs
 expression: "s.h.render(80, 24)"
 ---
-… 5 warehouse-replica-eu-west  6 billing-replica-eu-west                        
-┌ Connection Tree ─┐┌Query─────────────────────────────────────────────────────┐
-│▸ ● scratch       ││ 1                                                        │
-│▸   prod          ││                                                          │
-│▸   analytics     ││                                                          │
-│▸ ● orders-replica││                                                          │
-│▸ ● inventory-repl││                                                          │
-│▸ ● reporting-repl││                                                          │
-│▸ ● warehouse-repl││                                                          │
-│▸ ● billing-replic│└──────────────────────────────────────────────────────────┘
-│                  │┌ Results ─────────────────────────────────────────────────┐
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-└──────────────────┘└──────────────────────────────────────────────────────────┘
- billing.db
+ qry  …  5 warehouse-replica-eu-west  6 billing-replica-eu-west         NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+ ▸ ● scratch                  │ 1                                               
+ ▸   prod                     │                                                 
+ ▸   analytics                │                                                 
+ ▸ ● orders-replica-eu-west   │                                                 
+ ▸ ● inventory-replica-eu-west│                                                 
+ ▸ ● reporting-replica-eu-west│                                                 
+ ▸ ● warehouse-replica-eu-west│                                                 
+ ▸ ● billing-replica-eu-west  │                                                 
+                              │ RESULTS                                         
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+ billing-replica-eu-west · sqlite · billing.db · auto-commit                    
+ Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands    ? help

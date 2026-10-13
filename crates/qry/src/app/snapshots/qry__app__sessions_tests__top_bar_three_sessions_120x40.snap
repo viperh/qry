@@ -2,43 +2,43 @@
 source: crates/qry/src/app/sessions_tests.rs
 expression: "s.h.render(120, 40)"
 ---
- 1 scratch  2 prod ◐  3 analytics                                                                                       
-┌ Connection Tree ───────────┐┌Query───────────────────────────────────────────────────────────────────────────────────┐
-│▸ ● scratch                 ││ 1                                                                                      │
-│▸ ● prod                    ││                                                                                        │
-│▸ ● analytics               ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            │└────────────────────────────────────────────────────────────────────────────────────────┘
-│                            │┌ Results ───────────────────────────────────────────────────────────────────────────────┐
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-│                            ││                                                                                        │
-└────────────────────────────┘└────────────────────────────────────────────────────────────────────────────────────────┘
- analytics.db
+ qry  1 scratch  2 prod ◐  3 analytics                                                  sqlite · analytics.db   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+ ▸ ● scratch                  │ 1                                                                                       
+ ▸ ● prod                     │                                                                                         
+ ▸ ● analytics                │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS                                                                                 
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ analytics · sqlite · analytics.db · auto-commit                                                                        
+ Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                               ? help

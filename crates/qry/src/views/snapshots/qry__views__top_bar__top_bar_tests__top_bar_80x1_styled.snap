@@ -1,0 +1,14 @@
+---
+source: crates/qry/src/views/top_bar_tests.rs
+expression: "styled(&bar(&h, 80))"
+---
+ qry  1 scratch  2 scratch  3 scratch               sqlite · :memory:   NORMAL  
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+5,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+16,0 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED
+27,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+38,0 Rgb(211, 217, 224) Rgb(19, 24, 32) NONE
+52,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+71,0 Rgb(14, 17, 22) Rgb(79, 193, 201) BOLD
+79,0 Rgb(211, 217, 224) Rgb(19, 24, 32) NONE

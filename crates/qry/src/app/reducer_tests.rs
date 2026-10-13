@@ -437,18 +437,18 @@ fn help_opens_scrolls_and_closes_with_configured_keys() {
     let mut h = harness();
     h.keys("f1");
     assert!(h.state().help().is_some());
-    assert!(h.render(80, 20).contains("Global:"));
+    assert!(h.render(80, 24).contains("Global:"));
 
     // While help is open, keys go to it, not to the focused pane.
     h.state_mut().focus = Focus::Results;
     h.keys("pagedown");
-    assert!(!h.render(80, 20).contains("Global:"));
+    assert!(!h.render(80, 24).contains("Global:"));
 
     h.keys("esc");
     assert!(h.state().help().is_none());
 
     h.keys("f1");
-    assert!(h.render(80, 20).contains("Global:"));
+    assert!(h.render(80, 24).contains("Global:"));
     h.keys("f1");
     assert!(h.state().help().is_none());
 }

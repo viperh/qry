@@ -77,7 +77,6 @@ impl Tui {
         self
     }
 
-    #[allow(dead_code, reason = "part of the Tui builder API, not used by qry yet")]
     pub(crate) fn mouse(mut self, mouse: bool) -> Self {
         self.mouse = mouse;
         self

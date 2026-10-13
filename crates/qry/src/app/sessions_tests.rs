@@ -427,16 +427,20 @@ fn a_failed_saved_connection_reconnects_on_enter() {
 }
 
 #[test]
-fn the_status_line_shows_the_active_sessions_label() {
+fn the_status_line_shows_the_active_session() {
     let mut s = FakeSessions::new();
     s.select(1).keys("enter");
     s.answer(2, DbAnswer::Connected("alice@db.local:5432/app".into()));
-    let text = s.h.render(80, 24);
-    let last = text.lines().last().unwrap();
-    assert!(last.contains("alice@db.local:5432/app"), "{last}");
+    // The status line is the one above the key hints.
+    let status = |s: &mut FakeSessions| {
+        let text = s.h.render(80, 24);
+        text.lines().nth_back(1).unwrap().to_string()
+    };
+    let line = status(&mut s);
+    assert!(line.contains("prod · sqlite · prod.db"), "{line}");
     s.keys("ctrl-1");
-    let text = s.h.render(80, 24);
-    assert!(text.lines().last().unwrap().contains(":memory:"), "{text}");
+    let line = status(&mut s);
+    assert!(line.contains("scratch · sqlite · :memory:"), "{line}");
 }
 
 /// Three sessions, the second running a query and the third active.
@@ -459,7 +463,7 @@ fn top_bar_three_sessions_snapshot() {
     let theme = *s.h.theme();
     let bar = render_with(120, 1, |frame| {
         let state = s.h.state();
-        views::topbar::draw(state, &theme, frame, frame.area());
+        views::top_bar::draw(state, &theme, frame, frame.area());
     });
     let line = &buffer_lines(&bar)[0];
     let drawn = |label: &str| {
@@ -486,10 +490,10 @@ fn top_bar_overflow_snapshot() {
     // The last is active, so the first tabs give way to `…`.
     let bar = render_with(80, 1, |frame| {
         let state = s.h.state();
-        views::topbar::draw(state, &state.theme, frame, frame.area());
+        views::top_bar::draw(state, &state.theme, frame, frame.area());
     });
     let line = buffer_lines(&bar)[0].clone();
-    assert!(line.starts_with('…'), "{line}");
+    assert!(line.starts_with(" qry  … "), "{line}");
     assert!(line.contains("billing"), "the active tab is shown: {line}");
     insta::assert_snapshot!("top_bar_overflow_80x24", s.h.render(80, 24));
 
@@ -497,9 +501,9 @@ fn top_bar_overflow_snapshot() {
     s.keys("ctrl-1");
     let bar = render_with(80, 1, |frame| {
         let state = s.h.state();
-        views::topbar::draw(state, &state.theme, frame, frame.area());
+        views::top_bar::draw(state, &state.theme, frame, frame.area());
     });
     let line = buffer_lines(&bar)[0].clone();
-    assert!(line.starts_with(" 1 scratch"), "{line}");
-    assert!(line.trim_end().ends_with('…'), "{line}");
+    assert!(line.starts_with(" qry  1 scratch"), "{line}");
+    assert!(line.contains(" … "), "{line}");
 }

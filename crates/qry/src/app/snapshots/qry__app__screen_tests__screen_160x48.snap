@@ -1,0 +1,52 @@
+---
+source: crates/qry/src/app/screen_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
+ SCHEMA                                 │ QUERY  ln 1, col 27                                                                                                   
+ ▸ ● scratch                            │ 1 select id, name from users                                                                                          
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │ RESULTS  2 rows                                                                                                       
+                                        │id name                                                                                                                
+                                        │1  alice                                                                                                               
+                                        │2  NULL                                                                                                                
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+ scratch · sqlite · :memory: · auto-commit                                                                                                       R 1 / 2  C 1/2 
+ Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help

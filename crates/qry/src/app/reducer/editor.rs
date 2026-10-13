@@ -1,6 +1,6 @@
 //! The query editor's keys.
 
-use ratatui::{style::Style, text::Line, widgets::Block};
+use ratatui::{style::Style, widgets::Block};
 use ratatui_textarea::{CursorMove, Scrolling};
 
 use super::execute;
@@ -53,19 +53,11 @@ fn selection(editor: &EditorState) -> Option<String> {
     Some(text)
 }
 
-/// Styles the text area for the focus and the theme.
+/// Styles the text area for the focus and the theme. It has no box: its
+/// title row is drawn above it, and focus shows there and in the cursor.
 pub(super) fn restyle(editor: &mut EditorState, focused: bool, theme: &Theme) {
-    let (border, title) = if focused {
-        (theme.focused_border(), theme.pane_title_focused())
-    } else {
-        (theme.border(), theme.pane_title())
-    };
     let textarea = &mut editor.textarea;
-    textarea.set_block(
-        Block::bordered()
-            .border_style(border)
-            .title(Line::styled("Query", title)),
-    );
+    textarea.set_block(Block::new().style(theme.base()));
     textarea.set_cursor_style(if focused {
         theme.editor_cursor()
     } else {

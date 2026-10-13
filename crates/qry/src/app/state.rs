@@ -8,7 +8,7 @@
 
 use std::{
     cell::Cell,
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
 };
@@ -60,10 +60,20 @@ pub(crate) struct SessionState {
     pub(crate) connection_id: String,
     pub(crate) title: String,
     pub(crate) status: SessionStatus,
+    pub(crate) driver: Driver,
+    /// What it is connected to, for the top bar: `postgres · app@db.local`.
+    pub(crate) summary: String,
+    /// The database, schema or file, for the status line.
+    pub(crate) database: Option<String>,
     pub(crate) editor: EditorState,
     pub(crate) results: ResultsState,
     /// Queries sent and not answered yet. One worker runs them in order.
     pub(crate) running: usize,
+    /// What each of those does to the transaction, oldest first: `Some(true)`
+    /// begins one, `Some(false)` ends it. Applied once it succeeds.
+    pub(crate) tx_changes: VecDeque<Option<bool>>,
+    /// A transaction was begun and not yet committed or rolled back.
+    pub(crate) in_transaction: bool,
     /// Expand its connection in the tree once it is open.
     pub(crate) expand_when_connected: bool,
 }
@@ -75,15 +85,57 @@ impl SessionState {
             connection_id: record.id.clone(),
             title: record.title().to_string(),
             status: SessionStatus::Connecting,
+            driver: record.driver,
+            summary: summary(record),
+            database: record
+                .database
+                .clone()
+                .or_else(|| record.service.clone())
+                .or_else(|| record.path.clone()),
             editor: EditorState::default(),
             results: ResultsState::default(),
             running: 0,
+            tx_changes: VecDeque::new(),
+            in_transaction: false,
             expand_when_connected: false,
         }
     }
 
+    /// Takes on an edited record's name and target.
+    pub(crate) fn retarget(&mut self, record: &StoredConnection) {
+        let fresh = Self::new(self.id, record);
+        self.title = fresh.title;
+        self.driver = fresh.driver;
+        self.summary = fresh.summary;
+        self.database = fresh.database;
+        self.in_transaction = false;
+    }
+
     pub(crate) fn is_open(&self) -> bool {
         matches!(self.status, SessionStatus::Open { .. })
+    }
+}
+
+/// `postgres · app@db.local`, `sqlite · :memory:`: the driver and where it
+/// points, without the password or the port.
+fn summary(record: &StoredConnection) -> String {
+    let driver = record.driver.name();
+    let target = match (&record.path, &record.host) {
+        (Some(path), _) => path.clone(),
+        (None, Some(host)) => {
+            let who = record
+                .user
+                .as_deref()
+                .map(|u| format!("{u}@"))
+                .unwrap_or_default();
+            format!("{who}{host}")
+        }
+        (None, None) => String::new(),
+    };
+    if target.is_empty() {
+        driver.to_string()
+    } else {
+        format!("{driver} · {target}")
     }
 }
 
@@ -202,6 +254,31 @@ impl Sessions {
     }
 }
 
+/// A right-hand region that can be maximised.
+pub(crate) use crate::views::layout::Region;
+
+/// The screen's adjustable chrome: the split, maximise, the inspector slot
+/// and the key-hint line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Chrome {
+    /// The editor's share of the right-hand side, in percent.
+    pub(crate) split_percent: u16,
+    pub(crate) maximised: Option<Region>,
+    pub(crate) inspector: bool,
+    pub(crate) hints: bool,
+}
+
+impl Default for Chrome {
+    fn default() -> Self {
+        Self {
+            split_percent: crate::views::layout::DEFAULT_SPLIT,
+            maximised: None,
+            inspector: false,
+            hints: true,
+        }
+    }
+}
+
 /// The status bar's line.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum StatusCode {
@@ -305,6 +382,7 @@ pub struct State {
     /// The terminal's size, from the last resize.
     pub(crate) size: (u16, u16),
     pub(crate) focus: Focus,
+    pub(crate) chrome: Chrome,
     /// At most one dialog and one help, the help always on top.
     pub(crate) overlays: Vec<Overlay>,
     /// What the open modal is waiting for the worker to answer, if anything.
@@ -334,6 +412,7 @@ impl Default for State {
             theme: Theme::DARK,
             size: (80, 24),
             focus: Focus::default(),
+            chrome: Chrome::default(),
             overlays: Vec::new(),
             awaiting: None,
             sessions: Sessions::default(),
@@ -349,6 +428,27 @@ impl Default for State {
 }
 
 impl State {
+    /// What the layout of a screen of this size depends on.
+    pub(crate) fn layout_input(
+        &self,
+        area: ratatui::layout::Rect,
+    ) -> crate::views::layout::LayoutInput {
+        crate::views::layout::LayoutInput {
+            area,
+            split_percent: self.chrome.split_percent,
+            maximised: self.chrome.maximised,
+            inspector: self.chrome.inspector,
+            jobs_rows: 0,
+            hints: self.chrome.hints,
+        }
+    }
+
+    /// The terminal is too small to draw the main screen.
+    pub(crate) fn too_small(&self) -> bool {
+        let (min_w, min_h) = crate::views::layout::MIN_SIZE;
+        self.size.0 < min_w || self.size.1 < min_h
+    }
+
     /// The active session's editor.
     pub(crate) fn editor(&self) -> &EditorState {
         &self.sessions.active().editor

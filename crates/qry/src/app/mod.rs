@@ -84,6 +84,10 @@ impl App {
 mod reducer_tests;
 
 #[cfg(test)]
+#[path = "screen_tests.rs"]
+mod screen_tests;
+
+#[cfg(test)]
 #[path = "sessions_tests.rs"]
 mod sessions_tests;
 

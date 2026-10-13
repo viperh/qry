@@ -83,6 +83,17 @@ pub enum Pill {
     Command,
 }
 
+impl Pill {
+    /// What the pill says.
+    pub fn label(self) -> &'static str {
+        match self {
+            Pill::Normal => "NORMAL",
+            Pill::Edit => "EDIT",
+            Pill::Command => "COMMAND",
+        }
+    }
+}
+
 /// Where an open connection stands, for its dot in the tree and the status
 /// line. The app state re-exports it as `app::state::SessionStatus`.
 #[derive(Debug, Clone, PartialEq, Eq)]

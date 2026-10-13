@@ -69,15 +69,15 @@ fn query_done_renders_header_rows_and_null() {
 
     let lines = render(&results);
     assert!(
-        lines[1].contains("id") && lines[1].contains("name"),
+        lines[0].contains("id") && lines[0].contains("name"),
         "{lines:#?}"
     );
     assert!(
-        lines[2].contains('1') && lines[2].contains("alice"),
+        lines[1].contains('1') && lines[1].contains("alice"),
         "{lines:#?}"
     );
     assert!(
-        lines[3].contains('2') && lines[3].contains("NULL"),
+        lines[2].contains('2') && lines[2].contains("NULL"),
         "{lines:#?}"
     );
 }
@@ -134,15 +134,14 @@ fn the_selected_cell_is_highlighted() {
     press(&mut results, KeyCode::Right, 1);
     let buffer = drawn(&results, 40, 8);
 
-    // Border, then header, then rows: "r1c1" is on line 3, starting after "r1c0 ".
-    let x = 1 + 4 + 1;
-    assert_eq!(buffer[(x, 3)].symbol(), "r");
+    // The header, then rows: "r1c1" is on line 2, starting after "r1c0 ".
+    let x = 4 + 1;
+    assert_eq!(buffer[(x, 2)].symbol(), "r");
     let cursor = Theme::DARK.cursor_cell();
-    assert_eq!(buffer[(x, 3)].style().fg, cursor.fg);
-    assert_eq!(buffer[(x, 3)].style().bg, cursor.bg);
-    assert!(buffer[(x, 3)].modifier.contains(Modifier::BOLD));
-    assert_ne!(buffer[(x, 3)].bg, buffer[(1, 3)].bg, "the cell stands out");
-    assert!(buffer_lines(&buffer)[0].contains("row 2/3 · col 2/2"));
+    assert_eq!(buffer[(x, 2)].style().fg, cursor.fg);
+    assert_eq!(buffer[(x, 2)].style().bg, cursor.bg);
+    assert!(buffer[(x, 2)].modifier.contains(Modifier::BOLD));
+    assert_ne!(buffer[(x, 2)].bg, buffer[(0, 2)].bg, "the cell stands out");
 }
 
 /// The colours of the grid, the header and the selected cell, from the theme.
@@ -156,14 +155,14 @@ fn results_grid_snapshot() {
 
 #[test]
 fn scrolls_down_past_the_bottom_and_keeps_the_header() {
-    // 8 lines tall: 2 border + 1 header = 5 visible data rows.
+    // 8 lines tall: 1 header = 7 visible data rows.
     let mut results = grid(20, 2);
     press(&mut results, KeyCode::Down, 7);
     let lines = buffer_lines(&drawn(&results, 40, 8));
 
-    assert!(lines[1].contains("c0"), "{lines:#?}");
-    assert!(lines[2].contains("r3c0"), "{lines:#?}");
-    assert!(lines[6].contains("r7c0"), "{lines:#?}");
+    assert!(lines[0].contains("c0"), "{lines:#?}");
+    assert!(lines[1].contains("r1c0"), "{lines:#?}");
+    assert!(lines[7].contains("r7c0"), "{lines:#?}");
     assert!(!lines.iter().any(|l| l.contains("r0c0")), "{lines:#?}");
 }
 
@@ -174,7 +173,7 @@ fn scrolls_right_past_the_edge() {
     press(&mut results, KeyCode::End, 1);
     let lines = buffer_lines(&drawn(&results, 30, 6));
 
-    assert!(lines[1].contains("c19"), "{lines:#?}");
-    assert!(lines[2].contains("r0c19"), "{lines:#?}");
-    assert!(!lines[2].contains("r0c0 "), "{lines:#?}");
+    assert!(lines[0].contains("c19"), "{lines:#?}");
+    assert!(lines[1].contains("r0c19"), "{lines:#?}");
+    assert!(!lines[1].contains("r0c0 "), "{lines:#?}");
 }

@@ -2,33 +2,43 @@
 
 use ratatui::{
     prelude::*,
-    widgets::{
-        Block, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table,
-        TableState,
-    },
+    widgets::{Cell, Paragraph, Row, Table, TableState},
 };
 
 use crate::{
     app::state::{Focus, State},
     theme::Theme,
+    views::status_line::thousands,
 };
 
 const COLUMN_SPACING: u16 = 1;
 
+/// `204 rows` for the title row, once there is a result.
+pub(crate) fn summary(state: &State) -> String {
+    let Some(result) = &state.results().result else {
+        return String::new();
+    };
+    if result.columns.is_empty() {
+        return match result.affected {
+            Some(1) => "1 row affected".into(),
+            Some(n) => format!(
+                "{} rows affected",
+                thousands(usize::try_from(n).unwrap_or(usize::MAX))
+            ),
+            None => "statement executed".into(),
+        };
+    }
+    match result.rows.len() {
+        1 => "1 row".into(),
+        n => format!("{} rows", thousands(n)),
+    }
+}
+
 pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
     let results = state.results();
     let focused = state.focus == Focus::Results;
-    let (border, title) = if focused {
-        (theme.focused_border(), theme.pane_title_focused())
-    } else {
-        (theme.border(), theme.pane_title())
-    };
-    let block = Block::bordered()
-        .title(Line::styled(" Results ", title))
-        .border_style(border);
 
     let Some(result) = &results.result else {
-        frame.render_widget(block, area);
         return;
     };
     // A statement such as CREATE or INSERT returns no columns.
@@ -36,17 +46,16 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
         frame.render_widget(
             Paragraph::new("Statement executed")
                 .style(theme.muted())
-                .centered()
-                .block(block),
+                .centered(),
             area,
         );
         return;
     }
 
-    let inner = block.inner(area);
+    let inner = area;
     let total_rows = result.rows.len();
     let (row, col) = (results.row, results.col);
-    // One line of `inner` is taken by the header.
+    // One line is taken by the header.
     let page_rows = usize::from(inner.height.saturating_sub(1)).max(1);
     let row_offset = scroll_rows(results.row_offset.get(), row, page_rows, total_rows);
     let col_offset = scroll_columns(&results.widths, results.col_offset.get(), col, inner.width);
@@ -94,47 +103,7 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     if total_rows > 0 {
         table_state.select_cell(Some((row - row_offset, col - col_offset)));
     }
-
-    let position = if total_rows == 0 {
-        " 0 rows ".to_string()
-    } else {
-        format!(
-            " row {}/{total_rows} · col {}/{} ",
-            row + 1,
-            col + 1,
-            result.columns.len()
-        )
-    };
-    frame.render_widget(block.title(Line::from(position).right_aligned()), area);
     frame.render_stateful_widget(table, inner, &mut table_state);
-
-    // Scrollbars sit on the border, and only appear when there is more to see.
-    if total_rows > page_rows {
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(None)
-                .end_symbol(None)
-                .track_style(theme.border())
-                .thumb_style(theme.border_strong()),
-            area.inner(Margin::new(0, 1)),
-            &mut ScrollbarState::new(total_rows)
-                .viewport_content_length(page_rows)
-                .position(row),
-        );
-    }
-    if total_width(&results.widths) > usize::from(inner.width) {
-        frame.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
-                .begin_symbol(None)
-                .end_symbol(None)
-                .track_style(theme.border())
-                .thumb_style(theme.border_strong()),
-            area.inner(Margin::new(1, 0)),
-            &mut ScrollbarState::new(results.widths.len())
-                .viewport_content_length(visible.len())
-                .position(col),
-        );
-    }
 }
 
 /// Width of all columns side by side, including the gaps between them.

@@ -74,17 +74,20 @@ fn tree_is_focused_and_highlighted_at_startup() {
     let mut h = harness();
     assert_eq!(h.state().focus, Focus::Tree);
 
-    // The top-left corners of the tree and the editor, under the top bar.
-    let focused = h.theme().focused_border().fg.unwrap();
+    // The first letters of the tree's and the editor's titles, under the
+    // top bar.
+    let focused = h.theme().pane_title_focused().fg.unwrap();
     let buf = h.render_buffer(80, 24);
-    assert_eq!(buf[(0, 1)].fg, focused);
-    assert_ne!(buf[(20, 1)].fg, focused);
+    assert_eq!(buf[(1, 1)].symbol(), "S");
+    assert_eq!(buf[(32, 1)].symbol(), "Q");
+    assert_eq!(buf[(1, 1)].fg, focused);
+    assert_ne!(buf[(32, 1)].fg, focused);
 
     h.keys("tab");
     assert_eq!(h.state().focus, Focus::Editor);
     let buf = h.render_buffer(80, 24);
-    assert_ne!(buf[(0, 1)].fg, focused);
-    assert_eq!(buf[(20, 1)].fg, focused);
+    assert_ne!(buf[(1, 1)].fg, focused);
+    assert_eq!(buf[(32, 1)].fg, focused);
 
     h.keys("tab");
     assert_eq!(h.state().focus, Focus::Results);

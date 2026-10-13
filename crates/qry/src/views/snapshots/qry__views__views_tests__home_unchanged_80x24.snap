@@ -2,27 +2,27 @@
 source: crates/qry/src/views/views_tests.rs
 expression: "h.render(80, 24)"
 ---
- 1 scratch                                                                      
-┌ Connection Tree ─┐┌Query─────────────────────────────────────────────────────┐
-│▸ ● scratch       ││ 1                                                        │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  │└──────────────────────────────────────────────────────────┘
-│                  │┌ Results ─────────────────────────────────────────────────┐
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-│                  ││                                                          │
-└──────────────────┘└──────────────────────────────────────────────────────────┘
- :memory:  Connected to scratch (:memory:)
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+ ▸ ● scratch                  │ 1                                               
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │ RESULTS                                         
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+ scratch · sqlite · :memory: · auto-commit  Connected to scratch (:memory:)     
+ Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands    ? help

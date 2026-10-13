@@ -36,6 +36,17 @@ pub enum Driver {
 }
 
 impl Driver {
+    /// The lower-case name the config and the status line use.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Driver::Postgres => "postgres",
+            Driver::Mariadb => "mariadb",
+            Driver::Mysql => "mysql",
+            Driver::Oracle => "oracle",
+            Driver::Sqlite => "sqlite",
+        }
+    }
+
     pub(crate) fn default_port(self) -> u16 {
         match self {
             Driver::Postgres => 5432,

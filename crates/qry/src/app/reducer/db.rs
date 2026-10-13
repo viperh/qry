@@ -12,6 +12,10 @@ use crate::app::{
 pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mut Vec<Effect>) {
     match answer {
         DbAnswer::Connected(label) => {
+            // A new connection starts outside any transaction.
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.in_transaction = false;
+            }
             set_status(
                 state,
                 id,
@@ -38,12 +42,16 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
         DbAnswer::QueryDone(result) => {
             if let Some(session) = state.sessions.get_mut(id) {
                 session.running = session.running.saturating_sub(1);
+                if let Some(Some(begins)) = session.tx_changes.pop_front() {
+                    session.in_transaction = begins;
+                }
                 results::show(&mut session.results, result);
             }
         }
         DbAnswer::QueryFailed(_) => {
             if let Some(session) = state.sessions.get_mut(id) {
                 session.running = session.running.saturating_sub(1);
+                session.tx_changes.pop_front();
             }
         }
         DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export(id)),
@@ -58,6 +66,8 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
             set_status(state, id, failed);
             if let Some(session) = state.sessions.get_mut(id) {
                 session.running = 0;
+                session.tx_changes.clear();
+                session.in_transaction = false;
             }
             dialogs::failed(state, Awaiting::Connect(id), "database worker has stopped");
             dialogs::failed(state, Awaiting::Export(id), "database worker has stopped");

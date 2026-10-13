@@ -1,12 +1,14 @@
 //! How each event changes the state, one file per concern. Every function
 //! takes the state and the list of effects to add to.
 
+mod chrome;
 mod db;
 mod dialogs;
 mod editor;
 mod files;
 pub(crate) mod help;
 mod keys;
+mod mouse;
 mod results;
 mod sessions;
 mod tree;
@@ -25,6 +27,7 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     match event {
         UiEvent::Started => start(state, &mut fx),
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
+        UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Resize(w, h) => state.size = (w, h),
         UiEvent::Tick(_) => {}
         UiEvent::Timer(Timer::KeySequence(n)) => keys::timed_out(state, n, &mut fx),
@@ -77,9 +80,13 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         | Action::NextSession
         | Action::PrevSession
         | Action::CloseSession => sessions::run(state, action, fx),
-        // The palette (T206), the jobs drawer (T305) and the hint bar
-        // (T202) come later.
-        Action::Palette | Action::ToggleJobs | Action::ToggleHints => {}
+        Action::GrowEditor | Action::ShrinkEditor | Action::ToggleMaximise => {
+            chrome::run(state, action);
+        }
+        Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
+        Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
+        // The palette (T206) and the jobs drawer (T305) come later.
+        Action::Palette | Action::ToggleJobs => {}
         action => match context {
             KeyContext::Tree => tree::run(state, action, fx),
             KeyContext::Editor => editor::run(state, action, fx),
@@ -97,7 +104,26 @@ fn execute(state: &mut State, sql: String, fx: &mut Vec<Effect>) {
     if !sql.trim().is_empty() {
         let session = state.sessions.active_mut();
         session.running += 1;
+        session.tx_changes.push_back(tx_change(&sql));
         fx.push(Effect::Db(session.id, DbCommand::Query(sql)));
+    }
+}
+
+/// What `sql` does to the transaction, judged by its last statement:
+/// `Some(true)` begins one, `Some(false)` ends it, `None` leaves it be.
+pub(crate) fn tx_change(sql: &str) -> Option<bool> {
+    let last = sql
+        .split(';')
+        .map(str::trim)
+        .rfind(|statement| !statement.is_empty())?
+        .to_lowercase();
+    let words: Vec<&str> = last.split_whitespace().take(2).collect();
+    match words.as_slice() {
+        ["begin", ..] | ["start", "transaction"] => Some(true),
+        // Rolling back to a savepoint stays in the transaction.
+        ["rollback", "to"] => None,
+        ["commit" | "rollback" | "end" | "abort", ..] => Some(false),
+        _ => None,
     }
 }
 

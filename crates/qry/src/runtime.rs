@@ -74,14 +74,18 @@ impl Runtime {
 
     pub async fn run(&mut self) -> color_eyre::Result<()> {
         let mut tui = Tui::new()?
-            // .mouse(true) // uncomment this line to enable mouse support
+            .mouse(true)
             .tick_rate(self.tick_rate)
             .frame_rate(self.frame_rate);
         tui.enter()?;
 
+        // The layout depends on the size, which only a resize reports
+        // after this.
+        let size = tui.terminal.size()?;
+        let mut queued = vec![UiEvent::Resize(size.width, size.height)];
         let mut next = Some(UiEvent::Started);
         loop {
-            let event = match next.take() {
+            let event = match next.take().or_else(|| queued.pop()) {
                 Some(event) => event,
                 None => {
                     let incoming = tokio::select! {
@@ -99,6 +103,7 @@ impl Runtime {
                         }
                         Incoming::Answer(id, answer) => UiEvent::Db(id, answer),
                         Incoming::Terminal(Some(Event::Key(key))) => UiEvent::Key(key),
+                        Incoming::Terminal(Some(Event::Mouse(mouse))) => UiEvent::Mouse(mouse),
                         Incoming::Terminal(Some(Event::Tick)) => UiEvent::Tick(Instant::now()),
                         Incoming::Terminal(Some(Event::Resize(w, h))) => {
                             tui.resize(Rect::new(0, 0, w, h))?;
@@ -121,7 +126,6 @@ impl Runtime {
                     Executed::Terminal(Effect::Quit) => quit = true,
                     Executed::Terminal(Effect::Suspend) => {
                         tui.suspend()?;
-                        // tui.mouse(true);
                         tui.enter()?;
                         tui.terminal.clear()?;
                     }

@@ -17,6 +17,7 @@ use crossterm::event::KeyEvent;
 
 use super::act;
 use crate::{
+    action::Action,
     app::{
         dialogs::textinput::typed_char,
         effects::Effect,
@@ -30,6 +31,16 @@ use crate::{
 pub(crate) const SEQUENCE_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
+    // Nothing is on screen to act on but the message; only quitting works.
+    if state.too_small() {
+        let contexts = state.contexts();
+        let quit = state.config.keymap.exact(&contexts, &[key]) == Some(Action::Quit);
+        state.pending_keys.clear();
+        if quit {
+            fx.push(Effect::Quit);
+        }
+        return;
+    }
     if typing_into_dialog(state, key) {
         if let Some(dialog) = state.dialog_mut() {
             dialog.form_mut().handle_key(key, None);

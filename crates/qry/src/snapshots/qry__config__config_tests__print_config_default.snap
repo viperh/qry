@@ -25,7 +25,11 @@ expression: "Config::embedded().effective_json()"
       "ctrl-9": {"SwitchSession":9},
       "ctrl-PgDn": "NextSession",
       "ctrl-PgUp": "PrevSession",
-      "ctrl-w": "CloseSession"
+      "ctrl-w": "CloseSession",
+      "ctrl-/": "ToggleHints",
+      "ctrl-↑": "GrowEditor",
+      "ctrl-↓": "ShrinkEditor",
+      "F11": "ToggleMaximise"
     },
     "Tree": {
       "?": "Help",

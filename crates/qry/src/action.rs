@@ -67,6 +67,11 @@ pub enum Action {
     ToggleInspector,
     ToggleJobs,
     ToggleHints,
+    /// Gives the editor 5% more of the right-hand side, or less.
+    GrowEditor,
+    ShrinkEditor,
+    /// Maximises the focused right-hand region, or restores the split.
+    ToggleMaximise,
 
     Cancel,
     Submit,
@@ -151,6 +156,9 @@ impl Action {
             Self::ToggleInspector => "Show / hide the inspector",
             Self::ToggleJobs => "Show / hide the jobs",
             Self::ToggleHints => "Show / hide the key hints",
+            Self::GrowEditor => "Grow the editor",
+            Self::ShrinkEditor => "Shrink the editor",
+            Self::ToggleMaximise => "Maximise the pane / restore",
             Self::Cancel => "Cancel / close",
             Self::Submit => "Submit",
             Self::NextField => "Next field",

@@ -72,7 +72,7 @@ pub(super) fn reconnect(
 ) {
     if let Some(session) = state.sessions.get_mut(id) {
         session.status = SessionStatus::Connecting;
-        session.title = record.title().to_string();
+        session.retarget(record);
         fx.push(Effect::Db(id, DbCommand::Connect(Box::new(record.clone()))));
     }
 }

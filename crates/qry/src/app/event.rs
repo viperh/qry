@@ -5,7 +5,7 @@
 
 use std::{sync::Arc, time::Instant};
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyEvent, MouseEvent};
 use qry_core::QueryResult;
 
 use super::state::{SessionId, StatusCode};
@@ -18,6 +18,8 @@ pub enum UiEvent {
     /// connection and asks for the saved ones.
     Started,
     Key(KeyEvent),
+    /// A click or the wheel, at a cell of the screen.
+    Mouse(MouseEvent),
     Resize(u16, u16),
     /// The tick-rate timer, at the moment the runtime saw it.
     Tick(Instant),

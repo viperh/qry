@@ -37,6 +37,11 @@
       "<ctrl-pageup>": "PrevSession",
       // The editor's own ctrl-w deletes a word instead.
       "<ctrl-w>": "CloseSession",
+      "<ctrl-up>": "GrowEditor",
+      "<ctrl-down>": "ShrinkEditor",
+      // ctrl-z suspends, so maximising is F11.
+      "<f11>": "ToggleMaximise",
+      "<ctrl-/>": "ToggleHints",
       "<ctrl-z>": "Suspend"
     },
     "Tree": {
