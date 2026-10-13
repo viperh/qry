@@ -28,6 +28,7 @@ pub mod logging;
 pub mod secrets;
 pub mod theme;
 pub mod tui;
+pub mod views;
 
 // Drives the app without a terminal, for tests. Compiled for this crate's
 // own tests and, through the `test-util` feature, for other crates'

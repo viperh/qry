@@ -1,0 +1,171 @@
+---
+source: crates/qry/src/views/swatch_tests.rs
+expression: "swatch(&ThemeEnv::no_color())"
+---
+base                pg my ma ora lite   status_warning      dialog_heading      
+surface             header              status_ok           field               
+muted               header_type         status_dim          field_focused       
+dim                 header_active       gauge ████░░░░      field_placeholder   
+border              sort_indicator      hint                field_border        
+border_strong       overflow_hint       hint_key            field_border_focus  
+focused_border      gutter              info ok warn error  button              
+spinner             gutter_selected     sql_keyword         button_primary      
+value_ok            column_divider      sql_operator        palette_border      
+value_error         frozen_divider      sql_string          palette_selected    
+app_name            row(0)              sql_number          palette_match       
+tab                 row(1)              sql_comment         backdrop            
+tab_active          row_selected        sql_identifier      query fetch exp sch 
+tab_running         cursor_cell         sql_punct           jobs ▸ ✓ ✗ – …      
+NORMAL EDIT COMMAND null_value          sql_quoted_ident                        
+pane_title          match_highlight     sql_error                               
+pane_title_focused  inspector_label     editor_cursor_line                      
+divider             inspector_focused   editor_cursor                           
+divider_focused     record_field        editor_selection                        
+tree_connection     record_value        line_number                             
+tree_conn_selected  value_changed       line_number_current                     
+tree_object         status_line         dialog                                  
+tree_kind           status_session      dialog_border                           
+session ● ◌ ✗       status_jobs         dialog_title                            
+--- styles (x,y fg bg modifiers) ---
+0,0 Reset Reset NONE
+20,0 Reset Reset DIM
+22,0 Reset Reset NONE
+23,0 Reset Reset DIM
+25,0 Reset Reset NONE
+26,0 Reset Reset DIM
+28,0 Reset Reset NONE
+29,0 Reset Reset DIM
+32,0 Reset Reset NONE
+33,0 Reset Reset DIM
+37,0 Reset Reset NONE
+40,0 Reset Reset BOLD
+54,0 Reset Reset NONE
+60,0 Reset Reset BOLD
+74,0 Reset Reset NONE
+0,1 Reset Reset NONE
+20,1 Reset Reset BOLD
+26,1 Reset Reset NONE
+0,2 Reset Reset NONE
+20,2 Reset Reset DIM
+31,2 Reset Reset NONE
+40,2 Reset Reset DIM
+50,2 Reset Reset NONE
+60,2 Reset Reset BOLD
+73,2 Reset Reset NONE
+0,3 Reset Reset DIM
+3,3 Reset Reset NONE
+20,3 Reset Reset BOLD | UNDERLINED
+33,3 Reset Reset NONE
+60,3 Reset Reset DIM | ITALIC
+77,3 Reset Reset NONE
+0,4 Reset Reset NONE
+20,4 Reset Reset BOLD
+34,4 Reset Reset NONE
+40,4 Reset Reset DIM
+44,4 Reset Reset NONE
+0,5 Reset Reset BOLD
+13,5 Reset Reset NONE
+20,5 Reset Reset DIM
+33,5 Reset Reset NONE
+40,5 Reset Reset BOLD
+48,5 Reset Reset NONE
+60,5 Reset Reset BOLD
+78,5 Reset Reset NONE
+0,6 Reset Reset BOLD
+14,6 Reset Reset NONE
+20,6 Reset Reset DIM
+26,6 Reset Reset NONE
+48,6 Reset Reset BOLD
+52,6 Reset Reset NONE
+53,6 Reset Reset BOLD
+58,6 Reset Reset NONE
+0,7 Reset Reset NONE
+20,7 Reset Reset BOLD
+35,7 Reset Reset NONE
+40,7 Reset Reset BOLD
+51,7 Reset Reset NONE
+60,7 Reset Reset BOLD | REVERSED
+74,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset BOLD
+11,9 Reset Reset NONE
+20,9 Reset Reset BOLD
+34,9 Reset Reset NONE
+60,9 Reset Reset REVERSED
+76,9 Reset Reset NONE
+0,10 Reset Reset BOLD
+8,10 Reset Reset NONE
+60,10 Reset Reset BOLD
+73,10 Reset Reset NONE
+0,11 Reset Reset DIM
+3,11 Reset Reset NONE
+40,11 Reset Reset DIM | ITALIC
+51,11 Reset Reset NONE
+60,11 Reset Reset DIM
+68,11 Reset Reset NONE
+0,12 Reset Reset BOLD | UNDERLINED
+10,12 Reset Reset NONE
+20,12 Reset Reset BOLD
+32,12 Reset Reset NONE
+0,13 Reset Reset ITALIC
+11,13 Reset Reset NONE
+20,13 Reset Reset BOLD | REVERSED
+31,13 Reset Reset NONE
+69,13 Reset Reset BOLD
+70,13 Reset Reset NONE
+71,13 Reset Reset DIM
+72,13 Reset Reset NONE
+73,13 Reset Reset DIM
+74,13 Reset Reset NONE
+0,14 Reset Reset BOLD | REVERSED
+6,14 Reset Reset NONE
+7,14 Reset Reset BOLD | REVERSED
+11,14 Reset Reset NONE
+12,14 Reset Reset BOLD | REVERSED
+19,14 Reset Reset NONE
+20,14 Reset Reset DIM | ITALIC
+30,14 Reset Reset NONE
+0,15 Reset Reset DIM
+10,15 Reset Reset NONE
+20,15 Reset Reset UNDERLINED
+35,15 Reset Reset NONE
+40,15 Reset Reset BOLD | UNDERLINED
+49,15 Reset Reset NONE
+0,16 Reset Reset BOLD
+18,16 Reset Reset NONE
+20,16 Reset Reset DIM
+35,16 Reset Reset NONE
+0,17 Reset Reset NONE
+20,17 Reset Reset BOLD
+37,17 Reset Reset NONE
+40,17 Reset Reset REVERSED
+53,17 Reset Reset NONE
+0,18 Reset Reset BOLD
+15,18 Reset Reset NONE
+20,18 Reset Reset DIM
+32,18 Reset Reset NONE
+40,18 Reset Reset REVERSED
+56,18 Reset Reset NONE
+0,19 Reset Reset NONE
+40,19 Reset Reset DIM
+51,19 Reset Reset NONE
+0,20 Reset Reset BOLD | REVERSED
+18,20 Reset Reset NONE
+20,20 Reset Reset BOLD
+33,20 Reset Reset NONE
+40,20 Reset Reset BOLD
+59,20 Reset Reset NONE
+0,21 Reset Reset NONE
+0,22 Reset Reset DIM
+9,22 Reset Reset NONE
+20,22 Reset Reset BOLD
+34,22 Reset Reset NONE
+0,23 Reset Reset NONE
+10,23 Reset Reset DIM
+11,23 Reset Reset NONE
+12,23 Reset Reset BOLD
+13,23 Reset Reset NONE
+20,23 Reset Reset BOLD
+31,23 Reset Reset NONE
+40,23 Reset Reset BOLD
+52,23 Reset Reset NONE
