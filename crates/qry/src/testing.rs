@@ -181,12 +181,14 @@ impl AppHarness {
 
     /// The main screen, for this crate's tests that check state the screen
     /// does not show.
+    #[cfg(test)]
     pub(crate) fn home(&self) -> &Home {
         &self.home
     }
 
     /// The main screen, for this crate's tests that set up state no key
     /// reaches directly, such as which form field has focus.
+    #[cfg(test)]
     pub(crate) fn home_mut(&mut self) -> &mut Home {
         &mut self.home
     }
