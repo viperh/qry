@@ -1,6 +1,6 @@
 # qry
 
-[![CI](https://github.com/viperh/qry/workflows/CI/badge.svg)](https://github.com/viperh/qry/actions)
+[![CI](https://github.com/viperh/qry/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/viperh/qry/actions/workflows/ci.yml)
 
 A starting point for terminal user interfaces in Rust, built on
 [ratatui](https://ratatui.rs) with an async [tokio](https://tokio.rs) event
@@ -69,14 +69,19 @@ the filter, and `QRY_DATA` to change the directory.
 
 ## Checks
 
-The same four gates CI runs:
+The local equivalents of the CI jobs in `.github/workflows/ci.yml`:
 
 ```sh
-cargo test --locked --all-features --workspace
 cargo fmt --all --check
-cargo clippy --all-targets --all-features --workspace -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+QRY_KEYRING=off cargo test --workspace --all-features --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace --locked
+cargo deny --all-features check advisories bans licenses sources
+python3 scripts/check-layering.py
 ```
+
+CI also checks the MSRV (`rust-version` in `Cargo.toml`), builds on Windows
+and runs the database drivers against real servers.
 
 `Cargo.lock` is committed on purpose — CI builds with `--locked`.
 
