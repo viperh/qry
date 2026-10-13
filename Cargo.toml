@@ -10,7 +10,7 @@ edition = "2024"
 authors = ["qViperH <qviperh.dev@proton.me>"]
 license = "MIT"
 repository = "https://github.com/viperh/qry"
-rust-version = "1.89"
+rust-version = "1.96"
 
 # Central dependency versions. Crates reference these with
 # `some-dep = { workspace = true }` so versions stay in lockstep.
