@@ -36,5 +36,6 @@ tokio-rusqlite = { workspace = true }
 [dev-dependencies]
 # A TLS server for the Oracle tests.
 rustls = { workspace = true }
+tempfile = { workspace = true }
 # `start_paused` and `time::advance` for tests on a virtual clock.
 tokio = { workspace = true, features = ["test-util"] }

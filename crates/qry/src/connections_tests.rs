@@ -2,33 +2,13 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use tempfile::{TempDir, tempdir};
 
 use super::*;
 
-/// A directory of its own per test, removed when the guard is dropped.
-struct TempDir(PathBuf);
-
-impl TempDir {
-    fn new() -> Self {
-        static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "qry-connections-{}-{}",
-            std::process::id(),
-            COUNTER.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        Self(dir)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
+/// A directory of its own per test, removed when it is dropped.
+fn temp_dir() -> TempDir {
+    tempdir().unwrap()
 }
 
 fn postgres() -> StoredConnection {
@@ -53,29 +33,29 @@ fn ids_are_unique() {
 
 #[test]
 fn a_missing_file_is_an_empty_tree() {
-    let dir = TempDir::new();
-    assert!(load_from(&dir.0).unwrap().is_empty());
+    let dir = temp_dir();
+    assert!(load_from(dir.path()).unwrap().is_empty());
 }
 
 #[test]
 fn what_is_saved_comes_back() {
-    let dir = TempDir::new();
+    let dir = temp_dir();
     let connections = vec![postgres(), StoredConnection::new("scratch", Driver::Sqlite)];
-    save_to(&dir.0, &connections).unwrap();
+    save_to(dir.path(), &connections).unwrap();
 
-    assert_eq!(load_from(&dir.0).unwrap(), connections);
+    assert_eq!(load_from(dir.path()).unwrap(), connections);
     // The temporary file does not outlive the save.
-    assert!(!dir.0.join(TEMP).exists());
+    assert!(!dir.path().join(TEMP).exists());
 }
 
 #[test]
 fn the_file_holds_no_password_and_omits_fields_that_do_not_apply() {
-    let dir = TempDir::new();
+    let dir = temp_dir();
     let mut connection = postgres();
     connection.port = Some(5432);
-    save_to(&dir.0, &[connection]).unwrap();
+    save_to(dir.path(), &[connection]).unwrap();
 
-    let text = fs::read_to_string(dir.0.join(FILE)).unwrap();
+    let text = fs::read_to_string(dir.path().join(FILE)).unwrap();
     assert!(!text.contains("password"), "{text}");
     assert!(text.contains("\"driver\": \"postgres\""), "{text}");
     assert!(text.contains("\"mode\": \"keyring\""), "{text}");
@@ -86,9 +66,9 @@ fn the_file_holds_no_password_and_omits_fields_that_do_not_apply() {
 
 #[test]
 fn fields_from_a_newer_qry_survive_a_save() {
-    let dir = TempDir::new();
+    let dir = temp_dir();
     fs::write(
-        dir.0.join(FILE),
+        dir.path().join(FILE),
         r#"{
           "version": 1,
           "future_setting": true,
@@ -101,15 +81,15 @@ fn fields_from_a_newer_qry_survive_a_save() {
     )
     .unwrap();
 
-    let mut loaded = load_from(&dir.0).unwrap();
+    let mut loaded = load_from(dir.path()).unwrap();
     assert_eq!(
         loaded[0].extra.get("colour").and_then(Value::as_str),
         Some("red")
     );
     loaded[0].name = "renamed".into();
-    save_to(&dir.0, &loaded).unwrap();
+    save_to(dir.path(), &loaded).unwrap();
 
-    let text = fs::read_to_string(dir.0.join(FILE)).unwrap();
+    let text = fs::read_to_string(dir.path().join(FILE)).unwrap();
     assert!(text.contains("future_setting"), "{text}");
     assert!(text.contains("\"colour\": \"red\""), "{text}");
     assert!(text.contains("renamed"), "{text}");
@@ -117,23 +97,26 @@ fn fields_from_a_newer_qry_survive_a_save() {
 
 #[test]
 fn a_newer_version_is_refused_and_the_file_left_alone() {
-    let dir = TempDir::new();
+    let dir = temp_dir();
     let original = r#"{"version": 99, "connections": []}"#;
-    fs::write(dir.0.join(FILE), original).unwrap();
+    fs::write(dir.path().join(FILE), original).unwrap();
 
-    let err = load_from(&dir.0).unwrap_err().to_string();
+    let err = load_from(dir.path()).unwrap_err().to_string();
     assert!(err.contains("newer qry"), "{err}");
-    assert_eq!(fs::read_to_string(dir.0.join(FILE)).unwrap(), original);
+    assert_eq!(fs::read_to_string(dir.path().join(FILE)).unwrap(), original);
 }
 
 #[test]
 fn a_malformed_file_is_an_error_and_is_left_alone() {
-    let dir = TempDir::new();
-    fs::write(dir.0.join(FILE), "{ not json").unwrap();
+    let dir = temp_dir();
+    fs::write(dir.path().join(FILE), "{ not json").unwrap();
 
-    let err = load_from(&dir.0).unwrap_err().to_string();
+    let err = load_from(dir.path()).unwrap_err().to_string();
     assert!(err.contains("connection file"), "{err}");
-    assert_eq!(fs::read_to_string(dir.0.join(FILE)).unwrap(), "{ not json");
+    assert_eq!(
+        fs::read_to_string(dir.path().join(FILE)).unwrap(),
+        "{ not json"
+    );
 }
 
 #[test]
@@ -197,21 +180,21 @@ fn an_old_oracle_record_with_a_wallet_in_tls_means_tcps() {
 
 #[test]
 fn an_export_is_a_backup_the_importer_reads_back() {
-    let dir = TempDir::new();
+    let dir = temp_dir();
     let mut kept = postgres();
     kept.secret = Secret::Keyring;
     let list = vec![kept, oracle()];
 
     // No extension: `.json` is added.
-    let written = export(&dir.0.join("backup"), &list).unwrap();
-    assert_eq!(written, dir.0.join("backup.json"));
+    let written = export(&dir.path().join("backup"), &list).unwrap();
+    assert_eq!(written, dir.path().join("backup.json"));
     let text = fs::read_to_string(&written).unwrap();
     assert!(
         !text.contains("hunter2"),
         "a record has nowhere to keep a password"
     );
     assert!(
-        !dir.0.join("backup.json.tmp").exists(),
+        !dir.path().join("backup.json.tmp").exists(),
         "the temp file was renamed away"
     );
     #[cfg(unix)]
@@ -241,14 +224,14 @@ fn an_export_is_a_backup_the_importer_reads_back() {
 
 #[test]
 fn an_export_never_overwrites_a_file_that_is_not_a_backup() {
-    let dir = TempDir::new();
-    let other = dir.0.join("notes.txt");
+    let dir = temp_dir();
+    let other = dir.path().join("notes.txt");
     fs::write(&other, "my notes").unwrap();
     let err = export(&other, &[postgres()]).unwrap_err().to_string();
     assert!(err.contains("not a qry backup"), "{err}");
     assert_eq!(fs::read_to_string(&other).unwrap(), "my notes");
 
-    let err = export(&dir.0.join("no/such/dir/b.json"), &[postgres()]).unwrap_err();
+    let err = export(&dir.path().join("no/such/dir/b.json"), &[postgres()]).unwrap_err();
     assert!(err.to_string().contains("cannot write"), "{err}");
 }
 

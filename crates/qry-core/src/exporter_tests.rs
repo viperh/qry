@@ -2,36 +2,29 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::fs;
 
 use super::*;
 
-/// A path of its own per test, removed when the guard is dropped.
-struct TempFile(PathBuf);
+/// A path of its own per test, in a directory removed when the guard is
+/// dropped.
+struct TempFile {
+    _dir: tempfile::TempDir,
+    path: String,
+}
 
 impl TempFile {
     fn new(extension: &str) -> Self {
-        static COUNTER: AtomicUsize = AtomicUsize::new(0);
-        let name = format!(
-            "qry-export-{}-{}.{extension}",
-            std::process::id(),
-            COUNTER.fetch_add(1, Ordering::Relaxed)
-        );
-        Self(std::env::temp_dir().join(name))
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("rows.{extension}"));
+        Self {
+            path: path.display().to_string(),
+            _dir: dir,
+        }
     }
 
     fn path(&self) -> String {
-        self.0.display().to_string()
-    }
-}
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        self.path.clone()
     }
 }
 
@@ -65,7 +58,7 @@ fn csv_has_a_header_quotes_what_it_must_and_writes_null_as_empty() {
 
     assert_eq!(rows, 3);
     assert_eq!(
-        fs::read_to_string(&file.0).unwrap(),
+        fs::read_to_string(file.path()).unwrap(),
         "id,note\n1,plain\n2,\"has, comma and \"\"quotes\"\"\"\n3,\n"
     );
 }
@@ -80,7 +73,7 @@ fn text_separates_with_tabs_and_keeps_rows_on_one_line() {
         .write(config.etype)
         .unwrap();
 
-    let written = fs::read_to_string(&file.0).unwrap();
+    let written = fs::read_to_string(file.path()).unwrap();
     assert_eq!(written.lines().count(), 4);
     assert!(written.starts_with("id\tnote\n1\ttwo lines\n"), "{written}");
 }
@@ -97,7 +90,7 @@ fn json_writes_one_object_per_row_with_null_and_escapes() {
 
     assert_eq!(rows, 3);
     assert_eq!(
-        fs::read_to_string(&file.0).unwrap(),
+        fs::read_to_string(file.path()).unwrap(),
         concat!(
             "[\n",
             "  {\"id\": \"1\", \"note\": \"tab\\there \\\"quoted\\\" and \\\\ back\"},\n",
@@ -118,7 +111,7 @@ fn excel_writes_a_workbook() {
 
     assert_eq!(rows, 3);
     // An .xlsx is a zip archive, so it starts with the zip magic bytes.
-    assert_eq!(&fs::read(&file.0).unwrap()[..2], b"PK");
+    assert_eq!(&fs::read(file.path()).unwrap()[..2], b"PK");
 }
 
 #[test]

@@ -25,15 +25,15 @@ fn tls() -> OracleConfig {
     }
 }
 
-/// The wallet tests need real files; each gets its own directory.
-fn wallet_dir(name: &str, pem: Option<&str>) -> String {
-    let dir = std::env::temp_dir().join(format!("qry-wallet-{}-{name}", std::process::id()));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
+/// The wallet tests need real files; each gets its own directory, removed
+/// when the returned guard is dropped.
+fn wallet_dir(pem: Option<&str>) -> (tempfile::TempDir, String) {
+    let dir = tempfile::tempdir().unwrap();
     if let Some(pem) = pem {
-        fs::write(dir.join("ewallet.pem"), pem).unwrap();
+        fs::write(dir.path().join("ewallet.pem"), pem).unwrap();
     }
-    dir.display().to_string()
+    let path = dir.path().display().to_string();
+    (dir, path)
 }
 
 /// Accepts one connection on loopback, connects to it with `config`,
@@ -221,7 +221,7 @@ async fn an_untrusted_certificate_is_refused() {
 
 #[tokio::test]
 async fn a_wallet_can_add_the_ca_to_trust() {
-    let dir = wallet_dir("ca", Some(include_str!("../testdata/ca.pem")));
+    let (_guard, dir) = wallet_dir(Some(include_str!("../testdata/ca.pem")));
     let (port, server) = tls_server();
     let config = OracleConfig {
         host: "127.0.0.1".into(),
@@ -238,7 +238,7 @@ async fn a_wallet_can_add_the_ca_to_trust() {
 
 #[tokio::test]
 async fn a_missing_wallet_file_says_where_it_looked() {
-    let dir = wallet_dir("missing", None);
+    let (_guard, dir) = wallet_dir(None);
     let config = OracleConfig {
         wallet: Some(dir.clone()),
         host: "127.0.0.1".into(),
@@ -253,7 +253,7 @@ async fn a_missing_wallet_file_says_where_it_looked() {
 #[tokio::test]
 async fn an_encrypted_wallet_key_is_explained() {
     let pem = "-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----\n";
-    let dir = wallet_dir("encrypted", Some(pem));
+    let (_guard, dir) = wallet_dir(Some(pem));
     let config = OracleConfig {
         wallet: Some(dir),
         host: "127.0.0.1".into(),
