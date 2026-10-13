@@ -20,6 +20,20 @@ pub struct MariadbConfig {
     pub ssl_mode: SslMode,
 }
 
+/// Written by hand so the password never reaches a log or panic message.
+impl std::fmt::Debug for MariadbConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MariadbConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"[redacted]")
+            .field("database", &self.database)
+            .field("ssl_mode", &self.ssl_mode)
+            .finish()
+    }
+}
+
 impl MariadbConfig {
     fn opts(&self) -> OptsBuilder {
         OptsBuilder::default()
@@ -34,6 +48,16 @@ impl MariadbConfig {
 pub struct MariaDb {
     conn: Mutex<Conn>,
     config: MariadbConfig,
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for MariaDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MariaDb")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MariaDb {

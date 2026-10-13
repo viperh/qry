@@ -23,6 +23,21 @@ pub struct PostgresConfig {
     pub ssl_mode: SslMode,
 }
 
+/// Written by hand so the password never reaches a log or panic message.
+impl std::fmt::Debug for PostgresConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PostgresConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"[redacted]")
+            .field("database", &self.database)
+            .field("schema", &self.schema)
+            .field("ssl_mode", &self.ssl_mode)
+            .finish()
+    }
+}
+
 /// Quotes an identifier for use in SQL, e.g. `my"schema` → `"my""schema"`.
 fn quote_ident(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
@@ -32,6 +47,16 @@ pub struct Postgres {
     client: Client,
     driver: JoinHandle<()>,
     config: PostgresConfig,
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for Postgres {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Postgres")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Postgres {

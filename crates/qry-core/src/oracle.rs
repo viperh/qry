@@ -52,6 +52,22 @@ pub struct OracleConfig {
     pub wallet: Option<String>,
 }
 
+/// Written by hand so the password never reaches a log or panic message.
+impl std::fmt::Debug for OracleConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OracleConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"[redacted]")
+            .field("service", &self.service)
+            .field("schema", &self.schema)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("wallet", &self.wallet)
+            .finish()
+    }
+}
+
 impl OracleConfig {
     /// `user@host:port/service`, the shape the other backends label with.
     pub fn label(&self) -> String {
@@ -251,6 +267,16 @@ pub struct Oracle {
     /// `Connection`. The driver has no async API of its own.
     conn: Arc<Mutex<Connection>>,
     config: OracleConfig,
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for Oracle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Oracle")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Oracle {

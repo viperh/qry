@@ -29,6 +29,16 @@ pub struct Sqlite {
     config: SqliteConfig,
 }
 
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for Sqlite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sqlite")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Sqlite {
     pub async fn connect(config: SqliteConfig) -> Result<Self> {
         let flags = if config.read_only {
@@ -92,15 +102,11 @@ impl Database for Sqlite {
             .call(move |conn| {
                 let mut stmt = conn.prepare(&sql)?;
                 let affected = stmt.execute([])?;
-                Ok::<_, tokio_rusqlite::Error>(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    affected: Some(affected as u64),
-                })
+                Ok::<_, tokio_rusqlite::Error>(affected as u64)
             })
             .await?;
 
-        Ok(affected.affected.unwrap())
+        Ok(affected)
     }
 }
 

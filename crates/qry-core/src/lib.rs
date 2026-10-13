@@ -137,6 +137,16 @@ pub struct Driver {
     db: Option<Box<dyn Database>>,
 }
 
+/// Shows the label of the open connection, if any; the connection itself has
+/// no `Debug`.
+impl std::fmt::Debug for Driver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Driver")
+            .field("connected_to", &self.db.as_ref().map(|db| db.label()))
+            .finish()
+    }
+}
+
 impl Driver {
     pub fn new() -> Self {
         Self::default()
