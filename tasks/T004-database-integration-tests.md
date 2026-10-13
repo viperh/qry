@@ -13,7 +13,7 @@ No test opens a real Postgres, MySQL, MariaDB or Oracle session, so several beha
 
 - type-to-string conversion (`NULL`, numeric, date, binary through `hex`)
 - `affected` counts
-- `tables()` (and Oracle's `bail!("listing tables is not supported…")`)
+- `tables()` (Oracle overrides it in `oracle.rs` with an `all_tables`/`all_views` query on `CURRENT_SCHEMA`; the default's Oracle arm in `shared.rs` is unreachable)
 - TLS modes (`SslMode::ensure_supported`)
 - error messages users see
 
@@ -160,7 +160,7 @@ Document this in CONTRIBUTING (T401).
 
 Fix the small ones in this task. File anything larger as a follow-up, with a failing test marked `#[ignore = "T0xx: <reason>"]`.
 
-- Oracle's `tables()` bails today. Implement it with `SELECT table_name FROM user_tables UNION SELECT view_name FROM user_views ORDER BY 1` (T301 will extend this to schemas).
+- Oracle's `tables()` is overridden in `oracle.rs`, so the `bail!` arm in the default `Database::tables()` (`shared.rs`) is dead code. Cover the override with a contract test, and replace the dead arm with `unreachable!`-free code (e.g. move per-backend SQL into each backend). T301 extends this to schemas.
 - Binary columns, dates and booleans render differently per backend. The contract pins one textual form per type, and each backend converts to it.
 
 ### Out of scope
@@ -177,7 +177,7 @@ Fix the small ones in this task. File anything larger as a follow-up, with a fai
 - [ ] With `CI=true` and no URLs, the server tests panic with a message naming the missing variable (verify once).
 - [ ] Each test creates and drops its own database, and tests pass with the default parallel test threads.
 - [ ] `zz_no_leftover_test_databases` passes on CI.
-- [ ] Oracle `tables()` returns the seed tables and view. The `bail!` in `shared.rs` is gone.
+- [ ] Oracle `tables()` (the `oracle.rs` override) returns the seed tables and view under the current schema. The dead Oracle `bail!` arm in `shared.rs` is gone.
 - [ ] `deploy/docker-compose.test.yml` and `scripts/db-test-env.sh` work: `docker compose … up -d --wait` followed by the tests passes on a developer machine.
 - [ ] The `db` job (or `db` plus `db-oracle`) is green and listed under `ci-ok`'s `needs`.
 

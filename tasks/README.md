@@ -32,7 +32,7 @@ Each task file has a **Description**, **Acceptance criteria** and **Tests** sect
 | [T007](T007-release-pipeline.md) | Release pipeline (CD) and packaging | T003 |
 | **Phase 1 — Architecture** | | |
 | [T101](T101-state-reducer-architecture.md) | App state and reducer architecture | T002 |
-| [T102](T102-keymap-contexts.md) | Keymap redesign: contexts and chord display | T101 |
+| [T102](T102-keymap-contexts.md) | Keymap redesign: contexts and chord display | T101 (warnings shown as toasts once T205 lands) |
 | [T103](T103-multi-connection-sessions.md) | Multiple open connections (sessions) | T101 |
 | **Phase 2 — Visual system** | | |
 | [T201](T201-theme-system.md) | Theme system ported from tachy | T001 |
