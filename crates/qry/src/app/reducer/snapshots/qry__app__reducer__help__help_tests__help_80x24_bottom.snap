@@ -3,14 +3,14 @@ source: crates/qry/src/app/reducer/help_tests.rs
 expression: "h.render(80, 24)"
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────┐
-│ Command palette                                                              │
-│ ctrl-q               quit                                                    │
-│ F1                   show / hide the help                                    │
-│ ctrl-p               command palette                                         │
-│ ↑                    up                                                      │
-│ ↓                    down                                                    │
+│ PgDn                 down a page                                             │
+│ Home                 start of the line                                       │
+│ End                  end of the line                                         │
 │ Esc                  cancel / close                                          │
 │ Enter                submit                                                  │
+│ Tab                  next field                                              │
+│ Backspace            delete the character before                             │
+│ Del                  delete the character after                              │
 │                                                                              │
 │ Jobs                                                                         │
 │ ?                    show / hide the help                                    │
@@ -25,4 +25,4 @@ expression: "h.render(80, 24)"
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 129–146 of 146 ─┘
+└───────────────────────────────────────────────────────────── 138–155 of 155 ─┘

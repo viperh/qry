@@ -196,6 +196,102 @@ impl Action {
         }
     }
 
+    /// What the command palette calls it, for the actions a user would look
+    /// for there; `None` for moving about, editing text and answering a
+    /// dialog, which only make sense on a key.
+    pub fn palette_label(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Quit => "Quit",
+            Self::Suspend => "Suspend to the shell",
+            Self::ClearScreen => "Redraw the screen",
+            Self::Help => "Help",
+            Self::FocusTree => "Go to the tree",
+            Self::FocusEditor => "Go to the editor",
+            Self::FocusResults => "Go to the results",
+            Self::NewConnection => "New connection",
+            Self::EditConnection => "Edit connection",
+            Self::DeleteConnection => "Delete connection",
+            Self::ImportConnections => "Import connections",
+            Self::ExportConnections => "Export connections",
+            Self::OpenNewSession => "Open another session",
+            Self::NextSession => "Next session",
+            Self::PrevSession => "Previous session",
+            Self::CloseSession => "Close session",
+            Self::RunStatement => "Run statement",
+            Self::RunAll => "Run all",
+            Self::RunSelection => "Run selection",
+            Self::CancelQuery => "Cancel query",
+            Self::ExportResults => "Export results",
+            Self::Refresh => "Refresh tables",
+            Self::Filter => "Filter the tree",
+            Self::Search => "Search the results",
+            Self::CopyCell => "Copy cell",
+            Self::CopyRow => "Copy row",
+            Self::Inspect => "Inspect value",
+            Self::ToggleInspector => "Toggle inspector",
+            Self::ToggleJobs => "Toggle jobs",
+            Self::ToggleHints => "Toggle hints",
+            Self::GrowEditor => "Grow editor",
+            Self::ShrinkEditor => "Shrink editor",
+            Self::ToggleMaximise => "Maximise pane",
+            Self::ShowMessages => "Show messages",
+            _ => return None,
+        })
+    }
+
+    /// The palette's category tag for it.
+    pub fn palette_category(&self) -> &'static str {
+        match self {
+            Self::NewConnection
+            | Self::EditConnection
+            | Self::DeleteConnection
+            | Self::ImportConnections
+            | Self::ExportConnections
+            | Self::Refresh
+            | Self::Filter => "connection",
+            Self::OpenNewSession | Self::NextSession | Self::PrevSession | Self::CloseSession => {
+                "session"
+            }
+            Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => "query",
+            Self::ExportResults
+            | Self::Search
+            | Self::CopyCell
+            | Self::CopyRow
+            | Self::Inspect
+            | Self::ToggleInspector => "results",
+            Self::FocusTree
+            | Self::FocusEditor
+            | Self::FocusResults
+            | Self::ToggleJobs
+            | Self::ToggleHints
+            | Self::GrowEditor
+            | Self::ShrinkEditor
+            | Self::ToggleMaximise
+            | Self::ShowMessages
+            | Self::ClearScreen => "view",
+            _ => "app",
+        }
+    }
+
+    /// The pane whose keys an action belongs to, for running it from the
+    /// palette as its key would: the tree's actions act on the selected
+    /// connection, the editor's on its text, the results' on the grid.
+    pub(crate) fn home_context(&self) -> crate::keymap::KeyContext {
+        use crate::keymap::KeyContext;
+        match self {
+            Self::EditConnection
+            | Self::DeleteConnection
+            | Self::OpenNewSession
+            | Self::Refresh
+            | Self::Filter => KeyContext::Tree,
+            Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => {
+                KeyContext::Editor
+            }
+            Self::Search | Self::CopyCell | Self::CopyRow | Self::Inspect => KeyContext::Results,
+            _ => KeyContext::Global,
+        }
+    }
+
     /// Where the variant is declared, for listing actions in that order.
     /// Every `SwitchSession(n)` shares one place, after which `n` orders
     /// them.

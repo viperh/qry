@@ -172,9 +172,20 @@ expression: "Config::embedded().effective_json()"
       "F1": "Help",
       "ctrl-p": "Palette",
       "↑": "Up",
+      "ctrl-k": "Up",
       "↓": "Down",
+      "ctrl-j": "Down",
+      "←": "Left",
+      "→": "Right",
+      "PgUp": "PageUp",
+      "PgDn": "PageDown",
+      "Home": "LineStart",
+      "End": "LineEnd",
       "Esc": "Cancel",
-      "Enter": "Submit"
+      "Enter": "Submit",
+      "Tab": "NextField",
+      "Backspace": "DeleteBack",
+      "Del": "DeleteForward"
     },
     "Jobs": {
       "?": "Help",

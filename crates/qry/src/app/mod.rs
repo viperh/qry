@@ -88,6 +88,10 @@ mod reducer_tests;
 mod overlay_tests;
 
 #[cfg(test)]
+#[path = "palette_flow_tests.rs"]
+mod palette_flow_tests;
+
+#[cfg(test)]
 #[path = "screen_tests.rs"]
 mod screen_tests;
 

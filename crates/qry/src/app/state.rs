@@ -323,6 +323,7 @@ pub(crate) enum Overlay {
     Dialog(DialogState),
     Help(HelpState),
     Messages(MessagesState),
+    Palette(crate::palette::PaletteState),
 }
 
 /// The Messages dialog: which entry of the history, newest first, is
@@ -403,6 +404,8 @@ pub struct State {
     pub(crate) messages: NoticeLog,
     /// The wall-clock time of day, from the last `UiEvent::Clock`.
     pub(crate) clock: TimeOfDay,
+    /// The labels of the palette items run lately, newest first.
+    pub(crate) palette_recent: Vec<String>,
     /// The start of a multi-key binding typed so far, normalised.
     pub(crate) pending_keys: Vec<KeyEvent>,
     /// Which `Timer::KeySequence` is the live one: each key that leaves a
@@ -434,6 +437,7 @@ impl Default for State {
             toasts: Toasts::default(),
             messages: NoticeLog::default(),
             clock: TimeOfDay::default(),
+            palette_recent: Vec::new(),
             pending_keys: Vec::new(),
             key_timer: 0,
             spinner: 0,
@@ -487,21 +491,21 @@ impl State {
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
         })
     }
 
     pub(crate) fn dialog_mut(&mut self) -> Option<&mut DialogState> {
         self.overlays.iter_mut().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
         })
     }
 
     pub(crate) fn help(&self) -> Option<&HelpState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Help(help) => Some(help),
-            Overlay::Dialog(_) | Overlay::Messages(_) => None,
+            Overlay::Dialog(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
         })
     }
 
@@ -523,6 +527,7 @@ impl State {
         match self.overlays.last() {
             // The Messages dialog scrolls and closes with the help's keys.
             Some(Overlay::Help(_) | Overlay::Messages(_)) => vec![KeyContext::Help],
+            Some(Overlay::Palette(_)) => vec![KeyContext::Palette],
             Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
             None => vec![self.focus.context(), KeyContext::Global],
         }
@@ -534,6 +539,7 @@ impl State {
     pub fn pill(&self) -> Pill {
         let overlays = self.overlays.iter().rev().map(|overlay| match overlay {
             Overlay::Help(_) | Overlay::Messages(_) => KeyContext::Help,
+            Overlay::Palette(_) => KeyContext::Palette,
             Overlay::Dialog(_) => KeyContext::Dialog,
         });
         overlays

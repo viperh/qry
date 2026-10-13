@@ -47,6 +47,13 @@ pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
         }
         return;
     }
+    // The palette's query takes plain characters the same way.
+    if matches!(state.overlays.last(), Some(Overlay::Palette(_)))
+        && let Some(c) = typed_char(key)
+    {
+        super::palette::type_char(state, c);
+        return;
+    }
 
     let contexts = state.contexts();
     state.pending_keys.push(normalise(key));

@@ -27,18 +27,18 @@ expression: text
 │ ctrl-a               select all                            ctrl-q     quit                                           │
 │ Backspace            delete the character before           F1         show / hide the help                           │
 │ Del                  delete the character after            ctrl-p     command palette                                │
-│ ctrl-w               delete the word before                ↑          up                                             │
-│ alt-d                delete the word after                 ↓          down                                           │
-│ ctrl-k               delete to the end of the line         Esc        cancel / close                                 │
-│ ctrl-z               undo                                  Enter      submit                                         │
-│ ctrl-y ctrl-shift-z  redo                                                                                            │
-│ ctrl-x               cut                                   Jobs                                                      │
-│ ctrl-v               paste                                 ?          show / hide the help                           │
-│                                                            :          command palette                                │
-│ Editor · Running                                           k ↑        up                                             │
-│ F5 alt-r ctrl-Enter  run the statement                     j ↓        down                                           │
-│ F8                   run everything                        h ←        left                                           │
+│ ctrl-w               delete the word before                ↑ ctrl-k   up                                             │
+│ alt-d                delete the word after                 ↓ ctrl-j   down                                           │
+│ ctrl-k               delete to the end of the line         ←          left                                           │
+│ ctrl-z               undo                                  →          right                                          │
+│ ctrl-y ctrl-shift-z  redo                                  PgUp       up a page                                      │
+│ ctrl-x               cut                                   PgDn       down a page                                    │
+│ ctrl-v               paste                                 Home       start of the line                              │
+│                                                            End        end of the line                                │
+│ Editor · Running                                           Esc        cancel / close                                 │
+│ F5 alt-r ctrl-Enter  run the statement                     Enter      submit                                         │
+│ F8                   run everything                        Tab        next field                                     │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Enter inspect value                   │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                     │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 36–70 of 73 ─┘
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 36–70 of 82 ─┘

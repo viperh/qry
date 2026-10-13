@@ -200,11 +200,23 @@
       "<ctrl-p>": "Palette",
       "<ctrl-q>": "Quit"
     },
+    // Plain characters type into the query.
     "Palette": {
       "<enter>": "Submit",
       "<esc>": "Cancel",
       "<up>": "Up",
       "<down>": "Down",
+      "<ctrl-k>": "Up",
+      "<ctrl-j>": "Down",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
+      "<tab>": "NextField",
+      "<left>": "Left",
+      "<right>": "Right",
+      "<home>": "LineStart",
+      "<end>": "LineEnd",
+      "<backspace>": "DeleteBack",
+      "<delete>": "DeleteForward",
       "<ctrl-p>": "Palette",
       "<f1>": "Help",
       "<ctrl-q>": "Quit"

@@ -10,6 +10,7 @@ pub(crate) mod help;
 mod keys;
 mod mouse;
 pub(crate) mod notices;
+pub(crate) mod palette;
 mod results;
 mod sessions;
 mod tree;
@@ -94,8 +95,9 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         }
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
         Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
-        // The palette (T206) and the jobs drawer (T305) come later.
-        Action::Palette | Action::ToggleJobs => {}
+        Action::Palette => palette::toggle(state),
+        // The jobs drawer comes with T305.
+        Action::ToggleJobs => {}
         action => match context {
             KeyContext::Tree => tree::run(state, action, fx),
             KeyContext::Editor => editor::run(state, action, fx),
@@ -103,8 +105,8 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Dialog => dialogs::act(state, action, fx),
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
             KeyContext::Help => help::act(state, action),
-            KeyContext::Global | KeyContext::Inspector | KeyContext::Palette | KeyContext::Jobs => {
-            }
+            KeyContext::Palette => palette::run_key(state, action, fx),
+            KeyContext::Global | KeyContext::Inspector | KeyContext::Jobs => {}
         },
     }
 }

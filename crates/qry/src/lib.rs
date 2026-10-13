@@ -27,6 +27,7 @@ pub mod import;
 pub mod keymap;
 pub mod logging;
 pub mod notice;
+pub mod palette;
 pub mod runtime;
 pub mod secrets;
 pub mod sessions;

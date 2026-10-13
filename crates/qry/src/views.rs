@@ -10,6 +10,7 @@ pub(crate) mod hints;
 pub(crate) mod layout;
 pub(crate) mod messages;
 pub(crate) mod overlay;
+pub(crate) mod palette;
 pub(crate) mod pane_title;
 pub(crate) mod results;
 pub(crate) mod status_line;
@@ -115,6 +116,7 @@ fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
             ),
             Overlay::Help(help) => help::draw(help, theme, frame, area),
             Overlay::Messages(messages) => messages::draw(messages, state, theme, frame, area),
+            Overlay::Palette(open) => palette::draw(open, theme, frame, area),
         }
     }
 }
