@@ -1,7 +1,7 @@
 //! Background task that owns the database connection.
 //!
 //! The event loop never awaits a query. It sends a [`DbCommand`] here, and the
-//! outcome comes back later as an [`Action`] on the normal action channel.
+//! outcome comes back later as [`DbAnswer`]s, tagged with the session's id.
 
 use std::{
     sync::Arc,
@@ -12,12 +12,16 @@ use qry_core::{Driver, ExportConfig, Exporter, QueryResult};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::{
-    action::{Action, StatusCode},
+    app::{
+        event::DbAnswer,
+        state::{SessionId, StatusCode},
+    },
     connections::{Secret, StoredConnection},
     secrets::{self, Password},
 };
 
-pub(crate) enum DbCommand {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DbCommand {
     /// Open this connection. The record holds no password: the worker
     /// resolves the secret from the keychain, the environment, or a prompt.
     Connect(Box<StoredConnection>),
@@ -40,22 +44,23 @@ struct Worker {
     asked: Option<StoredConnection>,
 }
 
-/// Starts the worker and returns the sender used to reach it. Commands run one
-/// at a time, in order. The worker stops once every sender has been dropped.
-pub(crate) fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
-    spawn_worker(Worker::default(), action_tx)
+/// Answers as they arrive from the workers, each tagged with its session.
+pub(crate) type Answers = UnboundedSender<(SessionId, DbAnswer)>;
+
+/// Starts the worker for session `id` and returns the sender used to reach
+/// it. Commands run one at a time, in order. The worker stops once every
+/// sender has been dropped, or once nobody listens to its answers.
+pub(crate) fn spawn(id: SessionId, answers: Answers) -> UnboundedSender<DbCommand> {
+    spawn_worker(Worker::default(), id, answers)
 }
 
 /// Runs `worker` on its own task; tests hand in one whose driver is a fake.
-fn spawn_worker(
-    mut worker: Worker,
-    action_tx: UnboundedSender<Action>,
-) -> UnboundedSender<DbCommand> {
+fn spawn_worker(mut worker: Worker, id: SessionId, answers: Answers) -> UnboundedSender<DbCommand> {
     let (tx, mut rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
         while let Some(command) = rx.recv().await {
-            for action in worker.run(command).await {
-                if action_tx.send(action).is_err() {
+            for answer in worker.run(command).await {
+                if answers.send((id, answer)).is_err() {
                     return;
                 }
             }
@@ -65,7 +70,7 @@ fn spawn_worker(
 }
 
 impl Worker {
-    async fn run(&mut self, command: DbCommand) -> Vec<Action> {
+    async fn run(&mut self, command: DbCommand) -> Vec<DbAnswer> {
         match command {
             DbCommand::Connect(record) => self.connect(*record).await,
             DbCommand::PasswordEntered => match self.asked.take() {
@@ -78,7 +83,7 @@ impl Worker {
             DbCommand::Query(sql) => {
                 let started = Instant::now();
                 let actions = query_answer(self.driver.query(&sql).await, started.elapsed());
-                if let Some(Action::QueryDone(result)) = actions.first() {
+                if let Some(DbAnswer::QueryDone(result)) = actions.first() {
                     self.last = Some(result.clone());
                 }
                 actions
@@ -91,7 +96,7 @@ impl Worker {
     /// Finds the password this record says it uses, and opens the
     /// connection. Anything it cannot find without the user is asked for,
     /// and the stored mode is never rewritten behind their back.
-    async fn connect(&mut self, record: StoredConnection) -> Vec<Action> {
+    async fn connect(&mut self, record: StoredConnection) -> Vec<DbAnswer> {
         // A password typed into the New Connection form is waiting here.
         if let Some(typed) = secrets::take_stash() {
             return self.open(record, typed, true).await;
@@ -115,8 +120,8 @@ impl Worker {
         }
     }
 
-    fn ask(&mut self, record: StoredConnection) -> Vec<Action> {
-        let action = Action::NeedPassword {
+    fn ask(&mut self, record: StoredConnection) -> Vec<DbAnswer> {
+        let action = DbAnswer::NeedPassword {
             id: record.id.clone(),
             name: record.title().to_string(),
         };
@@ -131,7 +136,7 @@ impl Worker {
         record: StoredConnection,
         password: Password,
         typed: bool,
-    ) -> Vec<Action> {
+    ) -> Vec<DbAnswer> {
         let config = match record.to_config(password.as_str()) {
             Ok(config) => config,
             Err(e) => return failed(&format!("{e:#}")),
@@ -151,7 +156,7 @@ impl Worker {
             let id = record.id.clone();
             let stored = tokio::task::spawn_blocking(move || secrets::store(&id, &password)).await;
             if !matches!(stored, Ok(Ok(()))) {
-                actions.push(Action::SecretNotStored(record.id.clone()));
+                actions.push(DbAnswer::SecretNotStored(record.id.clone()));
                 actions.push(error(format!(
                     "{} is saved, but the keychain would not take its password: you will be asked each time",
                     record.title()
@@ -161,10 +166,13 @@ impl Worker {
         actions
     }
 
-    async fn export(&self, config: ExportConfig) -> Vec<Action> {
+    async fn export(&self, config: ExportConfig) -> Vec<DbAnswer> {
         let Some(result) = &self.last else {
             let message = "Nothing to export yet: run a query first";
-            return vec![Action::ExportFailed(message.into()), error(message.into())];
+            return vec![
+                DbAnswer::ExportFailed(message.into()),
+                error(message.into()),
+            ];
         };
         let exporter = Exporter::from_result(result, &config);
         let etype = config.etype;
@@ -174,17 +182,17 @@ impl Worker {
         let written = tokio::task::spawn_blocking(move || exporter.write(etype)).await;
         match written {
             Ok(Ok(rows)) => vec![
-                Action::Exported(config.path.clone()),
+                DbAnswer::Exported(config.path.clone()),
                 success(format!("Exported {rows} rows to {}", config.path)),
             ],
             // As with a connection, the modal gets the short message and the
             // status bar the whole chain.
             Ok(Err(e)) => vec![
-                Action::ExportFailed(e.to_string()),
+                DbAnswer::ExportFailed(e.to_string()),
                 error(format!("Export failed: {e:#}")),
             ],
             Err(e) => vec![
-                Action::ExportFailed(e.to_string()),
+                DbAnswer::ExportFailed(e.to_string()),
                 error(format!("Export failed: {e}")),
             ],
         }
@@ -193,12 +201,12 @@ impl Worker {
 
 /// What the worker reports for a finished query: the result and a summary
 /// for the status bar, or the error. The app harness in [`crate::testing`]
-/// answers with the same actions, so its stand-in worker cannot drift from
+/// answers with the same answers, so its stand-in worker cannot drift from
 /// this one.
 pub(crate) fn query_answer<E: std::fmt::Display>(
     outcome: Result<QueryResult, E>,
     elapsed: Duration,
-) -> Vec<Action> {
+) -> Vec<DbAnswer> {
     match outcome {
         Ok(result) => {
             let took = took(elapsed);
@@ -208,30 +216,35 @@ pub(crate) fn query_answer<E: std::fmt::Display>(
                 1 => format!("Fetched 1 row in {took}"),
                 n => format!("Fetched {n} rows in {took}"),
             };
-            vec![Action::QueryDone(Arc::new(result)), success(summary)]
+            vec![DbAnswer::QueryDone(Arc::new(result)), success(summary)]
         }
         Err(e) => vec![error(format!("{e:#}"))],
     }
 }
 
 /// What the worker reports for a table listing, for the tree.
-pub(crate) fn tables_answer<E: std::fmt::Display>(outcome: Result<Vec<String>, E>) -> Vec<Action> {
+pub(crate) fn tables_answer<E: std::fmt::Display>(
+    outcome: Result<Vec<String>, E>,
+) -> Vec<DbAnswer> {
     match outcome {
-        Ok(tables) => vec![Action::TablesLoaded(tables)],
-        Err(e) => vec![Action::TablesFailed(e.to_string()), error(format!("{e:#}"))],
+        Ok(tables) => vec![DbAnswer::TablesLoaded(tables)],
+        Err(e) => vec![
+            DbAnswer::TablesFailed(e.to_string()),
+            error(format!("{e:#}")),
+        ],
     }
 }
 
 /// What the worker reports once `record` is open as `label`: the answer the
 /// modal waits for, and the name the status bar shows.
-pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<Action> {
+pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<DbAnswer> {
     let shown = if record.name.is_empty() {
         label.clone()
     } else {
         format!("{} ({label})", record.name)
     };
     vec![
-        Action::Connected(label),
+        DbAnswer::Connected(label),
         success(format!("Connected to {shown}")),
     ]
 }
@@ -246,21 +259,21 @@ fn took(elapsed: Duration) -> String {
     }
 }
 
-fn success(message: String) -> Action {
-    Action::Status(StatusCode::Success(message))
+fn success(message: String) -> DbAnswer {
+    DbAnswer::Status(StatusCode::Success(message))
 }
 
-fn error(message: String) -> Action {
-    Action::Status(StatusCode::Error(message))
+fn error(message: String) -> DbAnswer {
+    DbAnswer::Status(StatusCode::Error(message))
 }
 
 /// A connection that did not open: the short message for the modal, the whole
 /// chain for the status bar, both with any password taken out of them.
-fn failed(message: &str) -> Vec<Action> {
+fn failed(message: &str) -> Vec<DbAnswer> {
     let message = secrets::redact(message);
     let short = message.lines().next().unwrap_or_default().to_string();
     vec![
-        Action::ConnectFailed(short),
+        DbAnswer::ConnectFailed(short),
         error(format!("Connection failed: {message}")),
     ]
 }

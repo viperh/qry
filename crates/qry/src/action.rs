@@ -4,8 +4,9 @@ use qry_core::{ExportConfig, QueryResult};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
+pub use crate::app::state::StatusCode;
 use crate::{
-    app::Mode,
+    app::{Mode, event::DbAnswer},
     connections::StoredConnection,
     import::{Format, Imported},
 };
@@ -96,10 +97,24 @@ pub enum Action {
     ConnectionsExportFailed(String),
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Display, Serialize, Deserialize)]
-pub enum StatusCode {
-    #[default]
-    None,
-    Success(String),
-    Error(String),
+/// The worker's answers still reach the components as actions, until the
+/// reducer takes them as events.
+impl From<DbAnswer> for Action {
+    fn from(answer: DbAnswer) -> Self {
+        match answer {
+            DbAnswer::Connected(label) => Action::Connected(label),
+            DbAnswer::ConnectFailed(message) => Action::ConnectFailed(message),
+            DbAnswer::NeedPassword { id, name } => Action::NeedPassword { id, name },
+            DbAnswer::SecretNotStored(id) => Action::SecretNotStored(id),
+            DbAnswer::QueryDone(result) => Action::QueryDone(result),
+            DbAnswer::Exported(path) => Action::Exported(path),
+            DbAnswer::ExportFailed(message) => Action::ExportFailed(message),
+            DbAnswer::TablesLoaded(tables) => Action::TablesLoaded(tables),
+            DbAnswer::TablesFailed(message) => Action::TablesFailed(message),
+            DbAnswer::Status(status) => Action::Status(status),
+            DbAnswer::WorkerStopped => {
+                Action::Status(StatusCode::Error("database worker has stopped".into()))
+            }
+        }
+    }
 }

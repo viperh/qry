@@ -357,16 +357,17 @@ impl AppHarness {
                 }
                 Action::Connect(record) => {
                     self.effects.push(action.clone());
-                    let answer =
-                        (self.database.as_ref()).map(|db| db::connected_answer(record, db.name()));
+                    let answer = (self.database.as_ref())
+                        .map(|db| into_actions(db::connected_answer(record, db.name())));
                     if let Some(answer) = answer {
                         self.schedule(0, answer);
                     }
                 }
                 Action::ListTables => {
                     self.effects.push(action.clone());
-                    let answer = (self.database.as_ref())
-                        .map(|db| db::tables_answer(Ok::<_, String>(db.table_names())));
+                    let answer = (self.database.as_ref()).map(|db| {
+                        into_actions(db::tables_answer(Ok::<_, String>(db.table_names())))
+                    });
                     if let Some(answer) = answer {
                         self.schedule(0, answer);
                     }
@@ -416,7 +417,7 @@ impl AppHarness {
                 }
             }
         };
-        let answer = db::query_answer(outcome, Duration::from_millis(after));
+        let answer = into_actions(db::query_answer(outcome, Duration::from_millis(after)));
         self.schedule(after, answer);
     }
 
@@ -435,6 +436,11 @@ impl AppHarness {
             self.pending.push(Pending { due, actions });
         }
     }
+}
+
+/// The worker's answers as the actions `App` turns them into.
+fn into_actions(answers: Vec<crate::app::event::DbAnswer>) -> Vec<Action> {
+    answers.into_iter().map(Action::from).collect()
 }
 
 /// Milliseconds between ticks at `per_second` ticks a second, at least 1.

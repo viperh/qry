@@ -1,3 +1,6 @@
+pub mod event;
+pub mod state;
+
 use crossterm::event::KeyEvent;
 use ratatui::prelude::Rect;
 use serde::{Deserialize, Serialize};
@@ -69,8 +72,19 @@ impl App {
         }
         let theme = theme::resolve(theme, config.theme.as_deref(), ColorSupport::detect())?;
         let (action_tx, action_rx) = mpsc::unbounded_channel();
+        // The worker answers in its own terms; they reach the components as
+        // actions.
+        let (answers, mut answer_rx) = mpsc::unbounded_channel();
+        let forward = action_tx.clone();
+        tokio::spawn(async move {
+            while let Some((_, answer)) = answer_rx.recv().await {
+                if forward.send(Action::from(answer)).is_err() {
+                    return;
+                }
+            }
+        });
         Ok(Self {
-            db: crate::db::spawn(action_tx.clone()),
+            db: crate::db::spawn(state::SessionId::FIRST, answers),
             tick_rate,
             frame_rate,
             components: vec![Box::new(Home::new())],
