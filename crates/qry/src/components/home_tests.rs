@@ -349,15 +349,17 @@ fn tree_is_focused_and_highlighted_at_startup() {
     let mut h = harness();
     assert!(h.home().focus == Pane::Tree);
 
+    // The top-left corners of the tree and the editor.
+    let focused = h.theme().focused_border().fg.unwrap();
     let buf = h.render_buffer(80, 24);
-    assert_eq!(buf[(0, 0)].fg, Color::Yellow);
-    assert_ne!(buf[(20, 0)].fg, Color::Yellow);
+    assert_eq!(buf[(0, 0)].fg, focused);
+    assert_ne!(buf[(20, 0)].fg, focused);
 
     h.keys("tab");
     assert!(h.home().focus == Pane::Editor);
     let buf = h.render_buffer(80, 24);
-    assert_ne!(buf[(0, 0)].fg, Color::Yellow);
-    assert_eq!(buf[(20, 0)].fg, Color::Cyan);
+    assert_ne!(buf[(0, 0)].fg, focused);
+    assert_eq!(buf[(20, 0)].fg, focused);
 
     h.keys("tab");
     assert!(h.home().focus == Pane::Results);

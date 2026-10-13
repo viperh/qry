@@ -1,5 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{Frame, layout::Rect, prelude::Stylize, widgets::Paragraph};
+use ratatui::{Frame, layout::Rect, widgets::Paragraph};
+
+use crate::theme::Theme;
 
 #[derive(Default)]
 pub(crate) struct TextInput {
@@ -77,7 +79,7 @@ impl TextInput {
 
     /// Draws the input, scrolled so the cursor stays visible. The terminal
     /// cursor is only placed on the focused input.
-    pub(crate) fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+    pub(crate) fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
         let width = usize::from(area.width).max(1);
         let offset = (self.cursor + 1).saturating_sub(width);
         let visible: String = if self.masked {
@@ -88,9 +90,12 @@ impl TextInput {
 
         match (visible.is_empty(), self.placeholder) {
             (true, Some(placeholder)) => {
-                frame.render_widget(Paragraph::new(placeholder).dark_gray(), area);
+                frame.render_widget(
+                    Paragraph::new(placeholder).style(theme.field_placeholder()),
+                    area,
+                );
             }
-            _ => frame.render_widget(Paragraph::new(visible), area),
+            _ => frame.render_widget(Paragraph::new(visible).style(theme.field()), area),
         }
         if focused {
             let x = area.x + u16::try_from(self.cursor - offset).unwrap_or(0);

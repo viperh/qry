@@ -15,6 +15,7 @@ use crate::{
     action::Action,
     components::textinput::{TextInput, typed_char},
     keymap::FormCommand,
+    theme::Theme,
 };
 
 /// Each field is a bordered box, with a blank row between boxes.
@@ -77,15 +78,15 @@ impl Field {
         }
     }
 
-    fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+    fn render(&self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
         match self {
-            Field::Text(input) => input.render(frame, area, focused),
+            Field::Text(input) => input.render(frame, area, focused, theme),
             Field::Choice { options, selected } => {
                 let option = options[*selected];
                 let line = if focused {
-                    Line::from(format!("‹ {option} ›")).cyan()
+                    Line::styled(format!("‹ {option} ›"), theme.field_focused())
                 } else {
-                    Line::from(format!("  {option}"))
+                    Line::styled(format!("  {option}"), theme.field())
                 };
                 frame.render_widget(line, area);
             }
@@ -179,7 +180,7 @@ pub(crate) trait Form {
     }
 
     /// Draws the popup centred on `area`, shrinking to fit a short terminal.
-    fn render(&self, frame: &mut Frame, area: Rect) {
+    fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let height = self.height().min(area.height);
         let [popup] = Layout::horizontal([Constraint::Length(MODAL_WIDTH)])
             .flex(Flex::Center)
@@ -190,21 +191,26 @@ pub(crate) trait Form {
 
         frame.render_widget(Clear, popup);
         let footer = match (self.pending(), self.error()) {
-            (Some(pending), _) => Line::from(format!(" {pending} ")).cyan(),
-            (None, Some(error)) => Line::from(format!(" {error} ")).red(),
-            (None, None) => Line::from(format!(" {} ", self.hint())).dark_gray(),
+            (Some(pending), _) => Line::styled(format!(" {pending} "), theme.spinner()),
+            (None, Some(error)) => Line::styled(format!(" {error} "), theme.value_error()),
+            (None, None) => Line::styled(format!(" {} ", self.hint()), theme.hint()),
         };
-        let mut block = Block::bordered().title(self.title()).title_bottom(footer);
+        let mut block = Block::bordered()
+            .style(theme.dialog())
+            .border_style(theme.dialog_border(theme.teal))
+            .title(Line::styled(self.title(), theme.dialog_title(theme.teal)))
+            .title_bottom(footer);
         if let Some(subtitle) = self.subtitle() {
-            block = block.title(Line::from(format!(" {subtitle} ")).right_aligned());
+            block =
+                block.title(Line::styled(format!(" {subtitle} "), theme.muted()).right_aligned());
         }
         let inner = block.inner(popup).inner(Margin::new(2, 1));
         frame.render_widget(block, popup);
-        self.render_fields(frame, inner);
+        self.render_fields(frame, inner, theme);
     }
 
     /// Draws as many fields as fit, scrolled so the focused one is visible.
-    fn render_fields(&self, frame: &mut Frame, area: Rect) {
+    fn render_fields(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         let labels = self.labels();
         let fits = usize::from((area.height + FIELD_GAP) / (FIELD_HEIGHT + FIELD_GAP))
             .clamp(1, labels.len());
@@ -229,21 +235,21 @@ pub(crate) trait Form {
                 ..label_area
             };
             let label = if focused {
-                Line::from(format!("› {}", labels[i])).cyan().bold()
+                Line::styled(format!("› {}", labels[i]), theme.field_focused())
             } else {
-                Line::from(format!("  {}", labels[i]))
+                Line::styled(format!("  {}", labels[i]), theme.field())
             };
             frame.render_widget(label, label_area);
 
             let block = Block::bordered().border_style(if focused {
-                Style::new().cyan()
+                theme.field_border_focused()
             } else {
-                Style::new().dark_gray()
+                theme.field_border()
             });
             let input_area = block.inner(box_area).inner(Margin::new(1, 0));
             frame.render_widget(block, box_area);
 
-            self.fields()[i].render(frame, input_area, focused);
+            self.fields()[i].render(frame, input_area, focused, theme);
         }
     }
 }

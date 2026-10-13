@@ -39,6 +39,6 @@ pub mod testing;
 
 /// Runs the TUI until the user quits.
 pub async fn run(cli: cli::Cli) -> color_eyre::Result<()> {
-    let mut app = app::App::new(cli.tick_rate, cli.frame_rate)?;
+    let mut app = app::App::new(cli.tick_rate, cli.frame_rate, cli.theme.as_deref())?;
     app.run().await
 }

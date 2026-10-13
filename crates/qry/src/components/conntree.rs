@@ -11,6 +11,7 @@ use crate::{
     connections::{Secret, StoredConnection},
     import::Imported,
     keymap::TreeCommand,
+    theme::Theme,
 };
 
 /// A connection the tree knows about, and what it has learned of it.
@@ -263,12 +264,18 @@ impl ConnTree {
         self.selected = self.selected.min(self.rows().len().saturating_sub(1));
     }
 
-    fn line(&self, row: &Row) -> Line<'static> {
-        match row {
+    /// One row of the tree; `selected` is the row the keys act on.
+    fn line(&self, row: &Row, selected: bool, theme: &Theme) -> Line<'static> {
+        let line = match row {
             Row::Connection(i) => {
                 let connection = &self.connections[*i];
                 let marker = if connection.expanded { "▾" } else { "▸" };
-                let line = Line::from(format!("{marker} {}", connection.title()));
+                let style = if selected {
+                    theme.tree_connection_selected()
+                } else {
+                    theme.tree_connection()
+                };
+                let line = Line::styled(format!("{marker} {}", connection.title()), style);
                 // The one the worker is on stands out without taking the
                 // colour, which belongs to the selection.
                 if self.active == Some(*i) {
@@ -283,9 +290,15 @@ impl ConnTree {
                     reason = "table rows are only built for connections whose tables are loaded"
                 )]
                 let table = &self.connections[*i].tables.as_ref().expect("expanded")[*t];
-                Line::from(format!("    {table}"))
+                Line::styled(format!("    {table}"), theme.tree_object())
             }
-            Row::Note(note) => Line::from(format!("    {note}")),
+            Row::Note(note) => Line::styled(format!("    {note}"), theme.tree_kind()),
+        };
+        // Tables and notes take the selection's background too.
+        if selected && !matches!(row, Row::Connection(_)) {
+            line.style(theme.row_selected())
+        } else {
+            line
         }
     }
 }
@@ -398,19 +411,23 @@ impl Component for ConnTree {
         Ok(None)
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()> {
+        let (border, title) = if self.focus {
+            (theme.focused_border(), theme.pane_title_focused())
+        } else {
+            (theme.border(), theme.pane_title())
+        };
         let block = Block::bordered()
-            .title(" Connection Tree ")
-            .border_style(if self.focus {
-                Style::new().yellow()
-            } else {
-                Style::new()
-            });
+            .title(Line::styled(" Connection Tree ", title))
+            .border_style(border);
 
         let rows = self.rows();
         if rows.is_empty() {
             frame.render_widget(
-                Paragraph::new("No connections yet").centered().block(block),
+                Paragraph::new("No connections yet")
+                    .style(theme.dim())
+                    .centered()
+                    .block(block),
                 area,
             );
             return Ok(());
@@ -432,16 +449,7 @@ impl Component for ConnTree {
             .enumerate()
             .skip(self.offset)
             .take(page)
-            .map(|(i, row)| {
-                // The colour carries the selection: green for it, grey for
-                // the rest, and no background behind either.
-                let line = self.line(row);
-                if i == self.selected {
-                    line.green()
-                } else {
-                    line.gray()
-                }
-            })
+            .map(|(i, row)| self.line(row, i == self.selected, theme))
             .collect();
 
         frame.render_widget(Paragraph::new(lines).block(block), area);

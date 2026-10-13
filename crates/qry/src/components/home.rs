@@ -13,6 +13,7 @@ use crate::{
     },
     config::Config,
     keymap::{FormCommand, HelpCommand},
+    theme::Theme,
 };
 
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
@@ -306,7 +307,9 @@ impl Component for Home {
         Ok(result)
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()> {
+        // The app background and default text, under everything else.
+        frame.render_widget(ratatui::widgets::Block::new().style(theme.base()), area);
         let status_height = if self.statuspanel.is_empty() { 0 } else { 3 };
 
         let [all, statuspanel] =
@@ -316,16 +319,16 @@ impl Component for Home {
         let [querypane, resultspane] =
             Layout::vertical([Constraint::Percentage(40), Constraint::Fill(1)]).areas(rest);
 
-        self.conntree.draw(frame, connpanel)?;
-        self.editor.draw(frame, querypane)?;
-        self.results.draw(frame, resultspane)?;
-        self.statuspanel.draw(frame, statuspanel)?;
+        self.conntree.draw(frame, connpanel, theme)?;
+        self.editor.draw(frame, querypane, theme)?;
+        self.results.draw(frame, resultspane, theme)?;
+        self.statuspanel.draw(frame, statuspanel, theme)?;
 
         if let Some(modal) = &self.modal {
-            modal.render(frame, area);
+            modal.render(frame, area, theme);
         }
         if self.helpvisible {
-            self.help.draw(frame, area)?;
+            self.help.draw(frame, area, theme)?;
         }
         Ok(())
     }

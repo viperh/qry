@@ -8,7 +8,7 @@ use crate::testing::{buffer_to_string, render_with};
 /// The help drawn over a `width`x`height` terminal, as text.
 fn text(help: &mut Help, width: u16, height: u16) -> String {
     buffer_to_string(&render_with(width, height, |frame| {
-        help.draw(frame, frame.area()).unwrap();
+        help.draw(frame, frame.area(), &Theme::DARK).unwrap();
     }))
 }
 

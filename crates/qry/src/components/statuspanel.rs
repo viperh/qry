@@ -5,6 +5,7 @@ use super::Component;
 use crate::{
     action::{Action, StatusCode},
     config::Config,
+    theme::Theme,
 };
 
 #[derive(Default)]
@@ -43,15 +44,20 @@ impl Component for Statuspanel {
         Ok(None)
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()> {
         match self.statuscode {
             StatusCode::Error(ref err) => frame.render_widget(
-                Paragraph::new(format!("Error: {}", err)).red().centered(),
+                Paragraph::new(format!("Error: {}", err))
+                    .style(theme.status_warning())
+                    .centered(),
                 area,
             ),
-            StatusCode::Success(ref msg) => {
-                frame.render_widget(Paragraph::new(msg.as_str()).green().centered(), area)
-            }
+            StatusCode::Success(ref msg) => frame.render_widget(
+                Paragraph::new(msg.as_str())
+                    .style(theme.status_ok())
+                    .centered(),
+                area,
+            ),
             _ => {}
         }
 

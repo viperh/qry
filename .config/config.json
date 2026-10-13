@@ -1,4 +1,5 @@
 {
+  "theme": "dark",
   "keybindings": {
     "Home": {
       "<Ctrl-q>": "Quit",
@@ -110,8 +111,5 @@
       "<pageup>": "PageUp",
       "<pagedown>": "PageDown"
     }
-  },
-  "styles": {
-    "Home": {}
   }
 }

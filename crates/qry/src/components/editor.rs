@@ -4,7 +4,7 @@ use ratatui_textarea::{CursorMove, Scrolling, TextArea};
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::{Component, textinput::typed_char};
-use crate::{action::Action, config::Config, keymap::EditorCommand};
+use crate::{action::Action, config::Config, keymap::EditorCommand, theme::Theme};
 
 #[derive(Default)]
 pub(super) struct Editor {
@@ -21,22 +21,27 @@ impl Editor {
         self.textarea.lines().join("\n")
     }
 
-    fn restyle(&mut self) {
-        let border = if self.focus {
-            Style::new().cyan()
+    /// Styles the text area for the current focus; called on every draw,
+    /// so a focus change shows at once.
+    fn restyle(&mut self, theme: &Theme) {
+        let (border, title) = if self.focus {
+            (theme.focused_border(), theme.pane_title_focused())
         } else {
-            Style::new().dark_gray()
+            (theme.border(), theme.pane_title())
         };
-        self.textarea
-            .set_block(Block::bordered().border_style(border).title("Query"));
+        self.textarea.set_block(
+            Block::bordered()
+                .border_style(border)
+                .title(Line::styled("Query", title)),
+        );
         self.textarea.set_cursor_style(if self.focus {
-            Style::new().reversed()
+            theme.editor_cursor()
         } else {
             Style::new()
         });
         self.textarea.set_cursor_line_style(Style::new());
-        self.textarea
-            .set_line_number_style(Style::new().dark_gray());
+        self.textarea.set_selection_style(theme.editor_selection());
+        self.textarea.set_line_number_style(theme.line_number());
     }
 
     fn apply(&mut self, command: EditorCommand) {
@@ -98,7 +103,6 @@ impl Component for Editor {
     }
     fn register_config_handler(&mut self, config: Config) -> color_eyre::Result<()> {
         self.config = config;
-        self.restyle();
         Ok(())
     }
 
@@ -124,14 +128,14 @@ impl Component for Editor {
         Ok(None)
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()> {
+        self.restyle(theme);
         frame.render_widget(&self.textarea, area);
         Ok(())
     }
 
     fn set_focus(&mut self, focus: bool) {
         self.focus = focus;
-        self.restyle()
     }
 }
 

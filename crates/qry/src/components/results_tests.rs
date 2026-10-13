@@ -11,7 +11,7 @@ use crate::testing::{buffer_lines, render_with, styled};
 /// Draws `results` into a `width`x`height` terminal.
 fn drawn(results: &mut Results, width: u16, height: u16) -> Buffer {
     render_with(width, height, |frame| {
-        results.draw(frame, frame.area()).unwrap();
+        results.draw(frame, frame.area(), &Theme::DARK).unwrap();
     })
 }
 
@@ -182,12 +182,15 @@ fn the_selected_cell_is_highlighted() {
     // Border, then header, then rows: "r1c1" is on line 3, starting after "r1c0 ".
     let x = 1 + 4 + 1;
     assert_eq!(buffer[(x, 3)].symbol(), "r");
+    let cursor = Theme::DARK.cursor_cell();
+    assert_eq!(buffer[(x, 3)].style().fg, cursor.fg);
+    assert_eq!(buffer[(x, 3)].style().bg, cursor.bg);
+    assert!(buffer[(x, 3)].modifier.contains(Modifier::BOLD));
     assert_ne!(buffer[(x, 3)].bg, buffer[(1, 3)].bg, "the cell stands out");
     assert!(buffer_lines(&buffer)[0].contains("row 2/3 · col 2/2"));
 }
 
-/// The colours of the grid, the header and the selected cell. T201 changes
-/// the colours, and re-accepts this snapshot.
+/// The colours of the grid, the header and the selected cell, from the theme.
 #[test]
 fn results_grid_snapshot() {
     let mut results = grid(30, 8);

@@ -34,6 +34,7 @@ use crate::{
     components::{Component, home::Home},
     config::{Config, parse_key_event},
     db,
+    theme::Theme,
     tui::Event,
 };
 
@@ -80,6 +81,8 @@ pub struct AppHarness {
     ticks: u64,
     size: (u16, u16),
     theme_env: ThemeEnv,
+    /// [`Theme::DARK`] adapted to `theme_env`.
+    theme: Theme,
     database: Option<FakeDatabase>,
     /// Worker answers not yet due, in the order they were scheduled.
     pending: Vec<Pending>,
@@ -134,7 +137,8 @@ impl AppHarness {
             next_tick: tick_every,
             ticks: 0,
             size,
-            theme_env: ThemeEnv::default(),
+            theme_env: ThemeEnv::truecolor(),
+            theme: ThemeEnv::truecolor().adapt(Theme::DARK),
             database: None,
             pending: Vec::new(),
             worker_free_at: 0,
@@ -153,10 +157,12 @@ impl AppHarness {
         self
     }
 
-    /// Uses this terminal environment for the theme. Stored only, until the
-    /// theme system lands (T201).
+    /// Draws as a terminal with this environment would: 256 colours, or no
+    /// colour under `NO_COLOR`. The default is [`ThemeEnv::truecolor`], so
+    /// styled snapshots show the palette's exact values.
     #[must_use]
     pub fn with_theme_env(mut self, env: ThemeEnv) -> Self {
+        self.theme = env.adapt(Theme::DARK);
         self.theme_env = env;
         self
     }
@@ -186,6 +192,11 @@ impl AppHarness {
     /// The terminal environment set with [`with_theme_env`](Self::with_theme_env).
     pub fn theme_env(&self) -> &ThemeEnv {
         &self.theme_env
+    }
+
+    /// The theme the harness draws with, adapted to [`theme_env`](Self::theme_env).
+    pub fn theme(&self) -> &Theme {
+        &self.theme
     }
 
     /// The mode `App` would be in: which modal, if any, has the keys.
@@ -308,9 +319,9 @@ impl AppHarness {
     /// Draws the main screen into a `w`x`h` terminal and returns the cells,
     /// with their styles; see [`styled`].
     pub fn render_buffer(&mut self, w: u16, h: u16) -> Buffer {
-        let home = &mut self.home;
+        let (home, theme) = (&mut self.home, &self.theme);
         render_with(w, h, |frame| {
-            if let Err(e) = home.draw(frame, frame.area()) {
+            if let Err(e) = home.draw(frame, frame.area(), theme) {
                 panic!("AppHarness::render: drawing failed: {e:?}");
             }
         })

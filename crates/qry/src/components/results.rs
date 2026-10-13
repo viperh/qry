@@ -12,7 +12,7 @@ use ratatui::{
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::{action::Action, config::Config, keymap::ResultsCommand};
+use crate::{action::Action, config::Config, keymap::ResultsCommand, theme::Theme};
 
 /// Wider values are cut off at this many columns.
 const MAX_COLUMN_WIDTH: u16 = 40;
@@ -94,14 +94,15 @@ impl Component for Results {
         Ok(None)
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()> {
+        let (border, title) = if self.focus {
+            (theme.focused_border(), theme.pane_title_focused())
+        } else {
+            (theme.border(), theme.pane_title())
+        };
         let block = Block::bordered()
-            .title(" Results ")
-            .border_style(if self.focus {
-                Style::new().green()
-            } else {
-                Style::new()
-            });
+            .title(Line::styled(" Results ", title))
+            .border_style(border);
 
         let Some(result) = self.result.clone() else {
             frame.render_widget(block, area);
@@ -110,7 +111,10 @@ impl Component for Results {
         // A statement such as CREATE or INSERT returns no columns.
         if result.columns.is_empty() {
             frame.render_widget(
-                Paragraph::new("Statement executed").centered().block(block),
+                Paragraph::new("Statement executed")
+                    .style(theme.muted())
+                    .centered()
+                    .block(block),
                 area,
             );
             return Ok(());
@@ -127,29 +131,35 @@ impl Component for Results {
         let header = Row::new(visible.iter().map(|&(c, _)| {
             let name = Cell::from(result.columns[c].as_str());
             if c == self.col {
-                name.underlined()
+                name.style(theme.header_active())
             } else {
                 name
             }
         }))
-        .bold();
+        .style(theme.header());
         let end = (self.row_offset + self.page_rows).min(total_rows);
-        let rows =
-            result.rows[self.row_offset..end].iter().map(|row| {
+        let rows = result.rows[self.row_offset..end]
+            .iter()
+            .zip(self.row_offset..)
+            .map(|(row, index)| {
                 Row::new(visible.iter().map(
                     |&(c, _)| match row.get(c).and_then(Option::as_deref) {
                         Some(value) => Cell::from(value),
-                        None => Cell::from("NULL").dark_gray(),
+                        None => Cell::from("NULL").style(theme.null_value()),
                     },
                 ))
+                .style(theme.row(index))
             });
+        // The selected row always shows; the cursor cell only while the
+        // pane has focus, so it is clear where the keys go.
         let table = Table::new(rows, visible.iter().map(|&(_, w)| Constraint::Length(w)))
             .header(header)
             .column_spacing(COLUMN_SPACING)
+            .row_highlight_style(theme.row_selected())
             .cell_highlight_style(if self.focus {
-                Style::new().black().on_green()
+                theme.cursor_cell()
             } else {
-                Style::new().reversed()
+                theme.row_selected()
             });
 
         let mut state = TableState::default();
@@ -178,7 +188,9 @@ impl Component for Results {
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .begin_symbol(None)
-                    .end_symbol(None),
+                    .end_symbol(None)
+                    .track_style(theme.border())
+                    .thumb_style(theme.border_strong()),
                 area.inner(Margin::new(0, 1)),
                 &mut ScrollbarState::new(total_rows)
                     .viewport_content_length(self.page_rows)
@@ -189,7 +201,9 @@ impl Component for Results {
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::HorizontalBottom)
                     .begin_symbol(None)
-                    .end_symbol(None),
+                    .end_symbol(None)
+                    .track_style(theme.border())
+                    .thumb_style(theme.border_strong()),
                 area.inner(Margin::new(1, 0)),
                 &mut ScrollbarState::new(self.widths.len())
                     .viewport_content_length(visible.len())

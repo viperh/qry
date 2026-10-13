@@ -1,6 +1,9 @@
-use clap::Parser;
+use clap::{Parser, builder::PossibleValuesParser};
 
-use crate::config::{get_config_dir, get_data_dir};
+use crate::{
+    config::{get_config_dir, get_data_dir},
+    theme::{ColorSupport, Theme},
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version = version(), about)]
@@ -12,6 +15,10 @@ pub struct Cli {
     /// Frame rate, i.e. number of frames per second
     #[arg(short, long, value_name = "FLOAT", default_value_t = 60.0)]
     pub frame_rate: f64,
+
+    /// Colour theme; overrides the config's "theme"
+    #[arg(long, value_name = "NAME", value_parser = PossibleValuesParser::new(Theme::NAMES))]
+    pub theme: Option<String>,
 }
 
 const VERSION_MESSAGE: &str = concat!(
@@ -29,6 +36,7 @@ pub(crate) fn version() -> String {
     // let current_exe_path = PathBuf::from(clap::crate_name!()).display().to_string();
     let config_dir_path = get_config_dir().display().to_string();
     let data_dir_path = get_data_dir().display().to_string();
+    let colors = ColorSupport::detect();
 
     format!(
         "\
@@ -37,6 +45,11 @@ pub(crate) fn version() -> String {
 Authors: {author}
 
 Config directory: {config_dir_path}
-Data directory: {data_dir_path}"
+Data directory: {data_dir_path}
+Colour support: {colors}"
     )
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod cli_tests;

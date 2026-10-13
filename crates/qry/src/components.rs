@@ -5,7 +5,7 @@ use ratatui::{
 };
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{action::Action, config::Config, tui::Event};
+use crate::{action::Action, config::Config, theme::Theme, tui::Event};
 mod connexportform;
 mod connform;
 mod conntree;
@@ -131,11 +131,12 @@ pub(crate) trait Component {
     ///
     /// * `f` - A frame used for rendering.
     /// * `area` - The area in which the component should be drawn.
+    /// * `theme` - The styles to draw with; drawing code never names a colour.
     ///
     /// # Returns
     ///
     /// * [`color_eyre::Result<()>`] - An Ok result or an error.
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()>;
+    fn draw(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) -> color_eyre::Result<()>;
 
     /// Sets the focus for this component
     /// Needs to be handled above

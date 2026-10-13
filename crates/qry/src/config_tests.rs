@@ -7,53 +7,6 @@ use pretty_assertions::assert_eq;
 use super::*;
 
 #[test]
-fn test_parse_style_default() {
-    let style = parse_style("");
-    assert_eq!(style, Style::default());
-}
-
-#[test]
-fn test_parse_style_foreground() {
-    let style = parse_style("red");
-    assert_eq!(style.fg, Some(Color::Indexed(1)));
-}
-
-#[test]
-fn test_parse_style_background() {
-    let style = parse_style("on blue");
-    assert_eq!(style.bg, Some(Color::Indexed(4)));
-}
-
-#[test]
-fn test_parse_style_modifiers() {
-    let style = parse_style("underline red on blue");
-    assert_eq!(style.fg, Some(Color::Indexed(1)));
-    assert_eq!(style.bg, Some(Color::Indexed(4)));
-}
-
-#[test]
-fn test_process_color_string() {
-    let (color, modifiers) = process_color_string("underline bold inverse gray");
-    assert_eq!(color, "gray");
-    assert!(modifiers.contains(Modifier::UNDERLINED));
-    assert!(modifiers.contains(Modifier::BOLD));
-    assert!(modifiers.contains(Modifier::REVERSED));
-}
-
-#[test]
-fn test_parse_color_rgb() {
-    let color = parse_color("rgb123");
-    let expected = 16 + 36 + 2 * 6 + 3;
-    assert_eq!(color, Some(Color::Indexed(expected)));
-}
-
-#[test]
-fn test_parse_color_unknown() {
-    let color = parse_color("unknown");
-    assert_eq!(color, None);
-}
-
-#[test]
 fn test_config() -> color_eyre::Result<()> {
     let c = Config::new()?;
     assert_eq!(
@@ -154,4 +107,64 @@ fn test_case_insensitivity() {
         parse_key_event("AlT-eNtEr").unwrap(),
         KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
     );
+}
+
+/// Loads `json` the way [`Config::new`] loads a user's config file.
+fn from_user_file(json: &str) -> Config {
+    config::Config::builder()
+        .add_source(config::File::from_str(json, config::FileFormat::Json))
+        .build()
+        .unwrap()
+        .try_deserialize()
+        .unwrap()
+}
+
+#[test]
+fn the_embedded_config_names_the_dark_theme() {
+    let c = Config::embedded();
+    assert_eq!(c.theme.as_deref(), Some("dark"));
+    assert!(c.warnings().is_empty(), "{:?}", c.warnings());
+}
+
+#[test]
+fn theme_key_is_read() {
+    assert_eq!(
+        from_user_file(r#"{"theme": "dark"}"#).theme.as_deref(),
+        Some("dark")
+    );
+    assert_eq!(from_user_file("{}").theme, None);
+}
+
+#[test]
+fn unknown_theme_is_an_error_listing_names() {
+    let c = from_user_file(r#"{"theme": "neon"}"#);
+    let err = crate::theme::resolve(
+        None,
+        c.theme.as_deref(),
+        crate::theme::ColorSupport::TrueColor,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("`neon`"), "{err}");
+    for name in crate::theme::Theme::NAMES {
+        assert!(err.contains(name), "{name} missing from: {err}");
+    }
+}
+
+#[test]
+fn legacy_styles_section_warns_and_loads() {
+    let c = from_user_file(
+        r#"{
+            "keybindings": {"Home": {"<ctrl-q>": "Quit"}},
+            "styles": {"Home": {"title": "bold red on blue"}}
+        }"#,
+    );
+    assert_eq!(
+        c.keybindings.0[&Mode::Home][&parse_key_sequence("<ctrl-q>").unwrap()],
+        Action::Quit
+    );
+    let warnings = c.warnings();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("\"styles\""), "{}", warnings[0]);
+    assert!(!warnings[0].contains('\n'), "one line: {}", warnings[0]);
 }

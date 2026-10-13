@@ -27,7 +27,9 @@ pub(crate) fn type_str(form: &mut impl Form, text: &str) {
 
 /// Draws `form` as a popup over a `width`x`height` terminal.
 pub(crate) fn render(form: &impl Form, width: u16, height: u16) -> Buffer {
-    render_with(width, height, |frame| form.render(frame, frame.area()))
+    render_with(width, height, |frame| {
+        form.render(frame, frame.area(), &Theme::DARK)
+    })
 }
 
 /// A two-field form, so the trait can be tested without either real one.

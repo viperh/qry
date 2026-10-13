@@ -9,6 +9,7 @@ use crate::{
     app::Mode,
     config::Config,
     keymap::{HelpCommand, display_key},
+    theme::Theme,
 };
 
 /// The help popup. Built from the config, so it always lists the keys that
@@ -70,7 +71,8 @@ impl Help {
         .min(self.max_scroll);
     }
 
-    fn lines(&self) -> Vec<Line<'static>> {
+    /// Group titles in the help's teal accent, keys in amber.
+    fn lines(&self, theme: &Theme) -> Vec<Line<'static>> {
         let key_width = self
             .sections
             .iter()
@@ -84,16 +86,27 @@ impl Help {
             if i > 0 {
                 lines.push(Line::default());
             }
-            lines.push(Line::from(format!("{title}:")).bold());
+            lines.push(Line::styled(
+                format!("{title}:"),
+                theme.dialog_heading(theme.teal),
+            ));
             for (keys, desc) in binds {
-                lines.push(Line::from(format!("{keys:<key_width$} : {desc}")));
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{keys:<key_width$}"), theme.hint_key()),
+                    Span::raw(format!(" : {desc}")),
+                ]));
             }
         }
         lines
     }
 
-    pub(super) fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
-        let lines = self.lines();
+    pub(super) fn draw(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        theme: &Theme,
+    ) -> color_eyre::Result<()> {
+        let lines = self.lines(theme);
         let total = lines.len();
 
         let width = lines.iter().map(|l| l.width()).max().unwrap_or(0) as u16 + 4;
@@ -112,12 +125,18 @@ impl Help {
         self.scroll = self.scroll.min(self.max_scroll);
 
         let mut block = Block::bordered()
-            .title(" Help ")
+            .title(Line::styled(" Help ", theme.dialog_title(theme.teal)))
+            .style(theme.dialog())
+            .border_style(theme.dialog_border(theme.teal))
             .padding(Padding::horizontal(1));
         if self.max_scroll > 0 {
             let last = (self.scroll + self.page).min(total);
             block = block.title_bottom(
-                Line::from(format!(" {}-{last} of {total} ", self.scroll + 1)).right_aligned(),
+                Line::styled(
+                    format!(" {}-{last} of {total} ", self.scroll + 1),
+                    theme.hint(),
+                )
+                .right_aligned(),
             );
         }
 

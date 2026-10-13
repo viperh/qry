@@ -45,7 +45,7 @@ fn press(tree: &mut ConnTree, code: KeyCode) {
 /// Draws `tree` into a `width`x`height` terminal.
 fn drawn(tree: &mut ConnTree, width: u16, height: u16) -> Buffer {
     render_with(width, height, |frame| {
-        tree.draw(frame, frame.area()).unwrap();
+        tree.draw(frame, frame.area(), &Theme::DARK).unwrap();
     })
 }
 
@@ -251,25 +251,39 @@ fn a_keychain_that_refused_downgrades_the_record_and_saves() {
     assert_eq!(saved[0].secret, Secret::Prompt, "it asks each time now");
 }
 
-/// The cells of one rendered row, for checking its colours.
+/// The colours of the first cell of one rendered row.
 fn row_style(tree: &mut ConnTree, width: u16, height: u16, y: u16) -> (Color, Color) {
     let cell = &drawn(tree, width, height)[(1, y)];
     (cell.fg, cell.bg)
 }
 
+/// The colours a theme style draws with, on a cell nothing else coloured.
+fn colours(style: Style) -> (Color, Color) {
+    (
+        style.fg.unwrap_or(Color::Reset),
+        style.bg.unwrap_or(Color::Reset),
+    )
+}
+
 #[test]
-fn the_selection_is_green_and_the_rest_grey_with_no_background() {
+fn the_selection_takes_the_selected_style_and_the_rest_the_plain_one() {
     let (mut tree, _rx) = tree();
     connect(&mut tree, "one", "one.db");
     connect(&mut tree, "two", "two.db");
+    let t = Theme::DARK;
+    let (selected, plain) = (
+        colours(t.tree_connection_selected()),
+        colours(t.tree_connection()),
+    );
+    assert_ne!(selected, plain);
 
     // Row 0 is the border, so the connections are on rows 1 and 2.
-    assert_eq!(row_style(&mut tree, 30, 8, 1), (Color::Green, Color::Reset));
-    assert_eq!(row_style(&mut tree, 30, 8, 2), (Color::Gray, Color::Reset));
+    assert_eq!(row_style(&mut tree, 30, 8, 1), selected);
+    assert_eq!(row_style(&mut tree, 30, 8, 2), plain);
 
     press(&mut tree, KeyCode::Down);
-    assert_eq!(row_style(&mut tree, 30, 8, 1), (Color::Gray, Color::Reset));
-    assert_eq!(row_style(&mut tree, 30, 8, 2), (Color::Green, Color::Reset));
+    assert_eq!(row_style(&mut tree, 30, 8, 1), plain);
+    assert_eq!(row_style(&mut tree, 30, 8, 2), selected);
 }
 
 #[test]

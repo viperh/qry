@@ -11,12 +11,15 @@ use crate::{
     config::Config,
     connections::{self, Driver, Secret, StoredConnection},
     db::DbCommand,
+    theme::{self, ColorSupport, Theme},
     tui::{Event, Tui},
 };
 
 pub struct App {
     db: mpsc::UnboundedSender<DbCommand>,
     config: Config,
+    /// Resolved once at startup and adapted to the terminal.
+    theme: Theme,
     tick_rate: f64,
     frame_rate: f64,
     components: Vec<Box<dyn Component>>,
@@ -42,8 +45,8 @@ impl std::fmt::Debug for App {
     }
 }
 
-/// Input modes. Keybindings and styles in `.config/config.json` are keyed by
-/// these names, so adding a variant here means adding a section there too.
+/// Input modes. Keybindings in `.config/config.json` are keyed by these
+/// names, so adding a variant here means adding a section there too.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
 pub enum Mode {
     #[default]
@@ -56,7 +59,15 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
+    /// `theme` is the `--theme` flag, which wins over the config's `theme`.
+    /// An unknown theme name is an error, before the terminal is touched.
+    pub fn new(tick_rate: f64, frame_rate: f64, theme: Option<&str>) -> color_eyre::Result<Self> {
+        let config = Config::new()?;
+        for warning in config.warnings() {
+            tracing::warn!("{warning}");
+            eprintln!("qry: {warning}");
+        }
+        let theme = theme::resolve(theme, config.theme.as_deref(), ColorSupport::detect())?;
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             db: crate::db::spawn(action_tx.clone()),
@@ -65,7 +76,8 @@ impl App {
             components: vec![Box::new(Home::new())],
             should_quit: false,
             should_suspend: false,
-            config: Config::new()?,
+            config,
+            theme,
             mode: Mode::Home,
             last_tick_key_events: Vec::new(),
             action_tx,
@@ -325,9 +337,10 @@ impl App {
     }
 
     fn render(&mut self, tui: &mut Tui) -> color_eyre::Result<()> {
+        let theme = &self.theme;
         tui.draw(|frame| {
             for component in self.components.iter_mut() {
-                if let Err(err) = component.draw(frame, frame.area()) {
+                if let Err(err) = component.draw(frame, frame.area(), theme) {
                     let _ = self
                         .action_tx
                         .send(Action::Error(format!("Failed to draw: {err:?}")));
