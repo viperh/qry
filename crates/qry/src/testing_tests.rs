@@ -68,12 +68,14 @@ fn keys_open_the_new_connection_modal() {
     assert!(!h.render(80, 24).contains("New Connection"));
 
     h.keys("ctrl-n");
-    assert_eq!(h.section(), KeySection::AddConnModal);
+    assert_eq!(h.dialog_title(), Some("New Connection"));
+    assert_eq!(h.contexts(), [KeyContext::Dialog]);
     assert!(h.render(80, 24).contains("New Connection"));
 
-    // Esc is bound in the modal's own section, so it closes it again.
+    // Esc is bound in the dialogs' context, so it closes it again.
     h.keys("esc");
-    assert_eq!(h.section(), KeySection::Home);
+    assert_eq!(h.dialog_title(), None);
+    assert_eq!(h.contexts(), [KeyContext::Tree, KeyContext::Global]);
     assert!(!h.render(80, 24).contains("New Connection"));
     assert!(h.take_effects().is_empty());
 }
@@ -84,7 +86,8 @@ fn io_actions_become_effects_not_dispatches() {
     let path = dir.path().join("rows.csv").display().to_string();
     let mut h = AppHarness::new(Config::embedded());
 
-    h.keys("ctrl-e").type_str(&path).keys("enter");
+    // ctrl-s in the results opens the Export modal.
+    h.keys("shift-tab ctrl-s").type_str(&path).keys("enter");
 
     let effects = h.take_effects();
     let [Effect::Db(_, DbCommand::Export(config))] = effects.as_slice() else {
@@ -116,13 +119,18 @@ async fn advance_delivers_ticks_without_real_time() {
 }
 
 #[test]
-fn ticks_clear_a_half_typed_key_sequence() {
+fn the_apps_timers_fire_on_the_virtual_clock() {
     let mut h = AppHarness::new(Config::embedded());
-    // An unbound key is remembered as the start of a sequence…
-    h.keys("x");
+    // `g` starts `g g` in the tree, and waits a second for the rest.
+    h.keys("g");
+    assert!(matches!(
+        h.take_effects().as_slice(),
+        [Effect::ScheduleTimer { .. }]
+    ));
     assert_eq!(h.state().pending_keys.len(), 1);
-    // …until the next tick.
-    h.advance(250);
+    h.advance(999);
+    assert_eq!(h.state().pending_keys.len(), 1);
+    h.advance(1);
     assert!(h.state().pending_keys.is_empty());
 }
 
@@ -162,7 +170,7 @@ fn every_view_renders_at_every_size() {
     let views: [(&str, Open); 7] = [
         ("home", |_| {}),
         ("new connection", |h| _ = h.keys("ctrl-n")),
-        ("export", |h| _ = h.keys("ctrl-e")),
+        ("export", |h| _ = h.keys("shift-tab ctrl-s")),
         ("password", |h| {
             h.db(DbAnswer::NeedPassword {
                 id: "c7f3a1e2".into(),
@@ -171,12 +179,17 @@ fn every_view_renders_at_every_size() {
         }),
         ("import", |h| _ = h.keys("ctrl-o")),
         ("export connections", |h| _ = h.keys("ctrl-s")),
-        ("help", |h| _ = h.keys("ctrl-h")),
+        ("help", |h| _ = h.keys("f1")),
     ];
     for &(w, h) in SIZES {
         for (view, open) in views {
             let mut harness = AppHarness::new(Config::embedded());
             open(&mut harness);
+            assert_eq!(
+                harness.state().overlays.is_empty(),
+                view == "home",
+                "{view} did not open"
+            );
             assert_screen(&harness.render(w, h), w, h, view);
         }
     }

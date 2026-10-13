@@ -8,6 +8,7 @@ use ratatui::buffer::Buffer;
 use super::*;
 use crate::{
     config::Config,
+    keymap::KeyContext,
     testing::{buffer_lines, render_with},
     theme::Theme,
     views::form::{MODAL_WIDTH, draw, height},
@@ -17,10 +18,14 @@ pub(crate) fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
-/// Sends `key` to `form` the way the reducer does: with its configured
-/// command.
+/// Sends `key` to `form` the way the reducer does: typed if it is typing,
+/// else with what the `Dialog` keymap binds it to.
 pub(crate) fn press(form: &mut impl Form, key: KeyEvent) {
-    form.handle_key(key, Config::embedded().panes.form.get(key));
+    let action = Config::embedded()
+        .keymap
+        .exact(&[KeyContext::Dialog], &[key])
+        .filter(|_| !(form.is_typing() && typed_char(key).is_some()));
+    form.handle_key(key, action);
 }
 
 pub(crate) fn type_str(form: &mut impl Form, text: &str) {

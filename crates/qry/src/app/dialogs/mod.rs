@@ -16,7 +16,7 @@ use self::{
     connexportform::ConnExportForm, connform::ConnForm, exportform::ExportForm, form::Form,
     importform::ImportForm, passwordform::PasswordForm,
 };
-use crate::{config::KeySection, connections::StoredConnection, import::Format, secrets::Password};
+use crate::{connections::StoredConnection, import::Format, secrets::Password};
 
 /// The open modal.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,17 +46,6 @@ impl DialogState {
             Self::Password(form) => form,
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
-        }
-    }
-
-    /// The `keybindings` section that applies while this modal is open.
-    pub(crate) fn section(&self) -> KeySection {
-        match self {
-            Self::Connection(_) => KeySection::AddConnModal,
-            Self::Export(_) => KeySection::ExpoModal,
-            Self::Password(_) => KeySection::PasswordModal,
-            Self::Import(_) => KeySection::ImportModal,
-            Self::ConnExport(_) => KeySection::ConnExportModal,
         }
     }
 }

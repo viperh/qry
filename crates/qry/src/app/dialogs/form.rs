@@ -10,7 +10,7 @@ use super::{
     Submission,
     textinput::{SecretInput, TextInput, typed_char},
 };
-use crate::{keymap::FormCommand, secrets::Password};
+use crate::{action::Action, secrets::Password};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Field {
@@ -58,31 +58,31 @@ impl Field {
         }
     }
 
-    fn apply(&mut self, command: FormCommand) {
+    fn apply(&mut self, action: Action) {
         match self {
-            Field::Text(input) => match command {
-                FormCommand::Left => input.move_left(),
-                FormCommand::Right => input.move_right(),
-                FormCommand::LineStart => input.move_home(),
-                FormCommand::LineEnd => input.move_end(),
-                FormCommand::DeleteBack => input.delete_back(),
-                FormCommand::DeleteForward => input.delete_forward(),
+            Field::Text(input) => match action {
+                Action::Left => input.move_left(),
+                Action::Right => input.move_right(),
+                Action::LineStart => input.move_home(),
+                Action::LineEnd => input.move_end(),
+                Action::DeleteBack => input.delete_back(),
+                Action::DeleteForward => input.delete_forward(),
                 _ => {}
             },
-            Field::Secret(input) => match command {
-                FormCommand::Left => input.move_left(),
-                FormCommand::Right => input.move_right(),
-                FormCommand::LineStart => input.move_home(),
-                FormCommand::LineEnd => input.move_end(),
-                FormCommand::DeleteBack => input.delete_back(),
-                FormCommand::DeleteForward => input.delete_forward(),
+            Field::Secret(input) => match action {
+                Action::Left => input.move_left(),
+                Action::Right => input.move_right(),
+                Action::LineStart => input.move_home(),
+                Action::LineEnd => input.move_end(),
+                Action::DeleteBack => input.delete_back(),
+                Action::DeleteForward => input.delete_forward(),
                 _ => {}
             },
-            Field::Choice { options, selected } => match command {
-                FormCommand::Right | FormCommand::NextChoice => {
+            Field::Choice { options, selected } => match action {
+                Action::Right | Action::NextChoice => {
                     *selected = (*selected + 1) % options.len();
                 }
-                FormCommand::Left => *selected = (*selected + options.len() - 1) % options.len(),
+                Action::Left => *selected = (*selected + options.len() - 1) % options.len(),
                 _ => {}
             },
         }
@@ -145,9 +145,16 @@ pub(crate) trait Form {
         }
     }
 
-    /// `command` is what the config binds `key` to. In a text field, plain
-    /// characters are typed even if bound, so Space types a space there.
-    fn handle_key(&mut self, key: KeyEvent, command: Option<FormCommand>) {
+    /// Whether the focused field types characters, so a plain character key
+    /// goes to it before any binding.
+    fn is_typing(&self) -> bool {
+        self.fields()[self.focus()].is_typed()
+    }
+
+    /// `action` is what the `Dialog` keymap binds `key` to. In a text field,
+    /// plain characters are typed even if bound, so Space types a space
+    /// there.
+    fn handle_key(&mut self, key: KeyEvent, action: Option<Action>) {
         let focus = self.focus();
         let count = self.labels().len();
 
@@ -160,14 +167,14 @@ pub(crate) trait Form {
             return;
         }
 
-        match command {
-            Some(FormCommand::NextField) => self.set_focus((focus + 1) % count),
-            Some(FormCommand::PrevField) => self.set_focus((focus + count - 1) % count),
+        match action {
+            Some(Action::NextField) => self.set_focus((focus + 1) % count),
+            Some(Action::PrevField) => self.set_focus((focus + count - 1) % count),
             // Submitting is the reducer's job: it decides what follows.
-            Some(FormCommand::Submit) => {}
-            Some(command) => {
+            Some(Action::Submit) => {}
+            Some(action) => {
                 self.set_error(None);
-                self.fields_mut()[focus].apply(command);
+                self.fields_mut()[focus].apply(action);
                 self.after_change();
             }
             None => {}

@@ -18,6 +18,7 @@ pub mod action;
 pub mod app;
 pub mod cli;
 pub mod config;
+pub mod config_migrate;
 pub mod connections;
 pub mod db;
 pub mod errors;
@@ -38,8 +39,17 @@ pub mod views;
 #[cfg(any(test, feature = "test-util"))]
 pub mod testing;
 
-/// Runs the TUI until the user quits.
+/// Runs the TUI until the user quits, or prints the config with
+/// `--print-config`.
 pub async fn run(cli: cli::Cli) -> color_eyre::Result<()> {
+    if cli.print_config {
+        let config = config::Config::new()?;
+        for warning in config.warnings() {
+            eprintln!("qry: {warning}");
+        }
+        print!("{}", config.effective_json());
+        return Ok(());
+    }
     let mut runtime = runtime::Runtime::new(cli.tick_rate, cli.frame_rate, cli.theme.as_deref())?;
     runtime.run().await
 }

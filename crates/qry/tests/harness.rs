@@ -5,7 +5,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use qry::{
-    config::{Config, KeySection},
+    config::Config,
+    keymap::KeyContext,
     testing::{AppHarness, Reply, result},
 };
 use qry_core::testing::FakeDatabase;
@@ -14,7 +15,8 @@ use qry_core::testing::FakeDatabase;
 fn the_harness_drives_the_app_from_an_integration_test() {
     let mut h = AppHarness::new(Config::embedded());
     h.keys("ctrl-n");
-    assert_eq!(h.section(), KeySection::AddConnModal);
+    assert_eq!(h.dialog_title(), Some("New Connection"));
+    assert_eq!(h.contexts(), [KeyContext::Dialog]);
     assert!(h.render(80, 24).contains("New Connection"));
 }
 

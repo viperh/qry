@@ -1,10 +1,9 @@
 //! The connection tree: what it lists, its keys, and what the worker's
 //! answers mean for it.
 
-use crossterm::event::KeyEvent;
-
 use super::{connect, dialogs};
 use crate::{
+    action::Action,
     app::{
         effects::Effect,
         state::{Awaiting, Node, Row, State, StatusCode},
@@ -12,14 +11,7 @@ use crate::{
     connections::{Secret, StoredConnection},
     db::DbCommand,
     import::Imported,
-    keymap::TreeCommand,
 };
-
-pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
-    if let Some(command) = state.config.panes.tree.get(key) {
-        run(state, command, fx);
-    }
-}
 
 /// Remembers a connection the app is about to open, adding it to the tree if
 /// its id is new and taking on its fields if it was edited. The entry stays
@@ -113,7 +105,9 @@ fn load_tables(state: &mut State, connection: usize, fx: &mut Vec<Effect>) {
     fx.push(Effect::Db(state.session, DbCommand::ListTables));
 }
 
-fn run(state: &mut State, command: TreeCommand, fx: &mut Vec<Effect>) {
+/// What a `Tree` binding does. Filtering comes with the schema browser
+/// (T301).
+pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     let rows = state.tree.rows();
     if rows.is_empty() {
         return;
@@ -125,12 +119,28 @@ fn run(state: &mut State, command: TreeCommand, fx: &mut Vec<Effect>) {
         Some(Row::Connection(i)) => Some(*i),
         _ => None,
     };
-    match command {
-        TreeCommand::Up => tree.selected = tree.selected.saturating_sub(1),
-        TreeCommand::Down => tree.selected = (tree.selected + 1).min(rows.len() - 1),
-        TreeCommand::First => tree.selected = 0,
-        TreeCommand::Last => tree.selected = rows.len() - 1,
-        TreeCommand::Toggle => {
+    // Right opens a closed connection, Left closes an open one or, on a
+    // table, goes up to its connection.
+    let action = match (action, rows.get(tree.selected)) {
+        (Action::Right, Some(Row::Connection(i))) if !tree.connections[*i].expanded => {
+            Action::Toggle
+        }
+        (Action::Left, Some(Row::Connection(i))) if tree.connections[*i].expanded => Action::Toggle,
+        (Action::Left, Some(Row::Table(i, _))) => {
+            tree.selected = rows
+                .iter()
+                .position(|row| *row == Row::Connection(*i))
+                .unwrap_or(0);
+            return;
+        }
+        (action, _) => action,
+    };
+    match action {
+        Action::Up => tree.selected = tree.selected.saturating_sub(1),
+        Action::Down => tree.selected = (tree.selected + 1).min(rows.len() - 1),
+        Action::Top => tree.selected = 0,
+        Action::Bottom => tree.selected = rows.len() - 1,
+        Action::Toggle => {
             if let Some(i) = selected {
                 let node = &mut tree.connections[i];
                 node.expanded = !node.expanded;
@@ -147,19 +157,19 @@ fn run(state: &mut State, command: TreeCommand, fx: &mut Vec<Effect>) {
                 }
             }
         }
-        TreeCommand::Connect => {
+        Action::Open => {
             if let Some(i) = selected {
                 let record = tree.connections[i].record.clone();
                 connect(state, record, fx);
             }
         }
-        TreeCommand::Edit => {
+        Action::EditConnection => {
             if let Some(i) = selected {
                 let record = tree.connections[i].record.clone();
                 dialogs::edit_connection(state, &record);
             }
         }
-        TreeCommand::Delete => {
+        Action::DeleteConnection => {
             if let Some(i) = selected {
                 let record = &tree.connections[i].record;
                 // Its password goes with it, so nothing is orphaned.
@@ -173,6 +183,18 @@ fn run(state: &mut State, command: TreeCommand, fx: &mut Vec<Effect>) {
                 }
             }
         }
+        // Reads the tables of the open connection again.
+        Action::Refresh => {
+            let open = match rows.get(tree.selected) {
+                Some(Row::Connection(i) | Row::Table(i, _)) => Some(*i),
+                _ => None,
+            };
+            if let Some(i) = open.filter(|i| tree.active == Some(*i)) {
+                tree.connections[i].expanded = true;
+                load_tables(state, i, fx);
+            }
+        }
+        _ => {}
     }
 }
 

@@ -27,12 +27,7 @@ fn sections_come_from_the_config_in_a_fixed_order() {
             "Connection tree",
             "Editor",
             "Results",
-            "Forms",
-            "New Connection",
-            "Export",
-            "Password",
-            "Import",
-            "Export Connections",
+            "Dialogs",
             "Help"
         ]
     );
@@ -44,32 +39,51 @@ fn sections_come_from_the_config_in_a_fixed_order() {
             .find(|(_, d)| d == desc)
             .map(|(k, _)| k.clone())
     };
-    assert_eq!(find("Global", "Quit").as_deref(), Some("Ctrl-q"));
-    assert_eq!(find("Connection tree", "Connect").as_deref(), Some("Enter"));
+    assert_eq!(find("Global", "Quit").as_deref(), Some("ctrl-q"));
+    assert_eq!(
+        find("Global", "Switch to session N").as_deref(),
+        Some("ctrl-1 … ctrl-9")
+    );
+    assert_eq!(find("Connection tree", "Open").as_deref(), Some("Enter"));
     assert_eq!(
         find("Connection tree", "Expand or collapse").as_deref(),
         Some("Space")
     );
-    assert_eq!(find("Editor", "Run query").as_deref(), Some("F8"));
-    assert_eq!(find("Results", "Up a row").as_deref(), Some("↑ / i"));
-    assert_eq!(find("Results", "Last row").as_deref(), Some("G"));
-    assert_eq!(find("New Connection", "Close").as_deref(), Some("Esc"));
-    assert_eq!(find("Export", "Close").as_deref(), Some("Esc"));
+    assert_eq!(find("Editor", "Run everything").as_deref(), Some("F8"));
     assert_eq!(
-        find("Forms", "Previous field").as_deref(),
-        Some("Shift-Tab")
+        find("Editor", "Run the statement").as_deref(),
+        Some("F5 / ctrl-Enter")
     );
-    assert_eq!(find("Forms", "Submit the form").as_deref(), Some("Enter"));
+    assert_eq!(find("Results", "Up").as_deref(), Some("k / ↑"));
+    assert_eq!(find("Results", "To the top").as_deref(), Some("g g"));
+    assert_eq!(find("Results", "To the bottom").as_deref(), Some("G"));
+    assert_eq!(find("Dialogs", "Cancel / close").as_deref(), Some("Esc"));
+    assert_eq!(
+        find("Dialogs", "Previous field").as_deref(),
+        Some("shift-Tab")
+    );
+    assert_eq!(find("Dialogs", "Submit").as_deref(), Some("Enter"));
+
+    // Lines follow the actions' order.
+    let (_, global) = &help.sections[0];
+    assert_eq!(global[0].1, "Quit");
 }
 
 #[test]
 fn a_rebound_key_shows_up_in_the_help() {
-    let config: Config =
-        json5::from_str(r#"{ "panes": { "Results": { "<x>": "FirstRow" } } }"#).unwrap();
+    let config = Config::with_user_file(
+        "c.json",
+        r#"{ "keybindings": { "Results": { "<x>": "Top" } } }"#,
+    )
+    .unwrap();
     let help = HelpState::from_config(&config);
-    let shown = text(&help, 60, 10);
-    assert!(shown.contains("x : First row"), "{shown}");
-    assert!(!shown.contains("Editor"), "{shown}");
+    let shown = text(&help, 80, 120);
+    assert!(
+        shown
+            .lines()
+            .any(|l| l.contains("x / g g ") && l.contains(": To the top")),
+        "{shown}"
+    );
 }
 
 #[test]
@@ -80,11 +94,15 @@ fn a_tall_help_scrolls_and_stops_at_the_end() {
     assert!(first.contains(" 1-18 of "), "{first}");
 
     for _ in 0..500 {
-        help.scroll(HelpCommand::PageDown);
+        help.scroll(Action::PageDown);
     }
     let last = text(&help, 80, 20);
     assert!(!last.contains("Global:"), "{last}");
-    assert!(last.contains("Close help"), "{last}");
+    assert!(last.contains("Cancel / close"), "{last}");
+    help.scroll(Action::Top);
+    assert!(text(&help, 80, 20).contains("Global:"));
+    help.scroll(Action::Bottom);
+    assert_eq!(text(&help, 80, 20), last);
 
     // Closed and opened again, it starts from the top.
     let mut state = State {
@@ -93,9 +111,9 @@ fn a_tall_help_scrolls_and_stops_at_the_end() {
     };
     toggle(&mut state);
     text(state.help().unwrap(), 80, 20);
-    scroll(&mut state, HelpCommand::PageDown);
+    act(&mut state, Action::PageDown);
     assert!(!text(state.help().unwrap(), 80, 20).contains("Global:"));
-    toggle(&mut state);
+    act(&mut state, Action::Cancel);
     assert!(state.help().is_none());
     toggle(&mut state);
     assert!(text(state.help().unwrap(), 80, 20).contains("Global:"));

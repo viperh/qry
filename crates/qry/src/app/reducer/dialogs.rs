@@ -7,8 +7,11 @@
 //! records which answer that is, so a late one meant for a modal that has
 //! since closed, or for a different one, changes nothing.
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
 use super::{connect, tree};
 use crate::{
+    action::Action,
     app::{
         dialogs::{
             DialogState, Submission, connexportform::ConnExportForm, connform::ConnForm,
@@ -17,31 +20,43 @@ use crate::{
         effects::Effect,
         state::{Awaiting, State},
     },
-    config::KeySection,
     connections::StoredConnection,
     db::DbCommand,
 };
 
-/// Opens the modal of `section`, freshly filled in, or closes any with
-/// `Home`. Whatever the old one was waiting for no longer matters.
-pub(super) fn change_mode(state: &mut State, section: KeySection) {
-    let dialog = match section {
-        KeySection::Home => None,
-        KeySection::AddConnModal => Some(DialogState::Connection(ConnForm::new(
-            state.ids.connection_id(),
-        ))),
-        KeySection::ExpoModal => Some(DialogState::Export(ExportForm::default())),
-        KeySection::PasswordModal => Some(DialogState::Password(PasswordForm::new(
-            state.asked.clone().unwrap_or_default(),
-        ))),
-        KeySection::ImportModal => Some(DialogState::Import(ImportForm::default())),
-        KeySection::ConnExportModal => Some(DialogState::ConnExport(ConnExportForm::default())),
+/// Opens the modal `action` asks for, freshly filled in, in place of any
+/// open one. Whatever the old one was waiting for no longer matters.
+pub(super) fn open(state: &mut State, action: Action) {
+    let dialog = match action {
+        Action::NewConnection => DialogState::Connection(ConnForm::new(state.ids.connection_id())),
+        Action::ExportResults => DialogState::Export(ExportForm::default()),
+        Action::ImportConnections => DialogState::Import(ImportForm::default()),
+        Action::ExportConnections => DialogState::ConnExport(ConnExportForm::default()),
+        _ => return,
     };
-    match dialog {
-        Some(dialog) => state.open_dialog(dialog),
-        None => state.close_dialog(),
-    }
+    state.open_dialog(dialog);
     state.awaiting = None;
+}
+
+/// Closes the modal, and stops waiting for its answer.
+fn close(state: &mut State) {
+    state.close_dialog();
+    state.awaiting = None;
+}
+
+/// What a `Dialog` binding does: submit, close, or move about the form.
+pub(super) fn act(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
+    match action {
+        Action::Submit => submit(state, fx),
+        Action::Cancel => close(state),
+        action => {
+            if let Some(dialog) = state.dialog_mut() {
+                // The form only reads the key for typing, which this is not.
+                let key = KeyEvent::new(KeyCode::Null, KeyModifiers::NONE);
+                dialog.form_mut().handle_key(key, Some(action));
+            }
+        }
+    }
 }
 
 /// The tree asked for a connection to be changed.
@@ -52,8 +67,8 @@ pub(super) fn edit_connection(state: &mut State, record: &StoredConnection) {
 
 /// The worker wants a password typed for `name`.
 pub(super) fn need_password(state: &mut State, name: String) {
-    state.asked = Some(name);
-    change_mode(state, KeySection::PasswordModal);
+    state.open_dialog(DialogState::Password(PasswordForm::new(name)));
+    state.awaiting = None;
 }
 
 /// Carries out what the open modal produced, or keeps it open showing why it
@@ -108,8 +123,7 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
 /// The answer the modal waited for came: it is done, so close it.
 pub(super) fn done(state: &mut State, answer: Awaiting) {
     if state.awaiting == Some(answer) {
-        state.close_dialog();
-        state.awaiting = None;
+        close(state);
     }
 }
 

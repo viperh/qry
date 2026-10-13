@@ -235,6 +235,13 @@ impl Executor {
                 secrets::stash(password);
                 Executed::Done
             }
+            Effect::ScheduleTimer { timer, after } => {
+                let events = self.events.clone();
+                Executed::Spawned(tokio::spawn(async move {
+                    tokio::time::sleep(after).await;
+                    let _ = events.send(UiEvent::Timer(timer));
+                }))
+            }
             effect @ (Effect::ClearScreen | Effect::Suspend | Effect::Quit) => {
                 Executed::Terminal(effect)
             }

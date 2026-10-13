@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 pub use self::{
     effects::Effect,
-    event::{DbAnswer, FileAnswer, UiEvent},
+    event::{DbAnswer, FileAnswer, Timer, UiEvent},
     state::{SessionId, State, StatusCode},
 };
 use crate::{config::Config, theme::Theme};

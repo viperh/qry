@@ -47,8 +47,8 @@ pub(crate) fn typed_char(key: KeyEvent) -> Option<char> {
     }
 }
 
-// Editing operations. Which key runs which is decided by the config (see
-// `crate::keymap::FormCommand`), not here.
+// Editing operations. Which key runs which is decided by the config (the
+// `Dialog` context of `crate::keymap`), not here.
 impl TextInput {
     pub(crate) fn insert(&mut self, c: char) {
         let at = self.byte_index();

@@ -1,33 +1,56 @@
 //! The query editor's keys.
 
-use crossterm::event::KeyEvent;
 use ratatui::{style::Style, text::Line, widgets::Block};
 use ratatui_textarea::{CursorMove, Scrolling};
 
 use super::execute;
 use crate::{
+    action::Action,
     app::{
-        dialogs::textinput::typed_char,
         effects::Effect,
         state::{EditorState, State},
     },
-    keymap::EditorCommand,
     theme::Theme,
 };
 
-pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
-    match state.config.panes.editor.get(key) {
-        Some(EditorCommand::RunQuery) => {
+/// What an `Editor` binding does.
+pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
+    match action {
+        // Until statements are split (T302), the statement is everything.
+        Action::RunStatement | Action::RunAll => {
             let sql = state.editor.query();
             execute(state, sql, fx);
         }
-        Some(command) => apply(&mut state.editor, command),
-        None => {
-            if let Some(c) = typed_char(key) {
-                state.editor.textarea.insert_char(c);
-            }
+        Action::RunSelection => {
+            let sql = selection(&state.editor).unwrap_or_else(|| state.editor.query());
+            execute(state, sql, fx);
+        }
+        // No query can be cancelled until there are jobs (T305), so it
+        // always copies.
+        Action::CancelQuery => apply(&mut state.editor, Action::Copy),
+        action => apply(&mut state.editor, action),
+    }
+}
+
+/// The selected text, if anything is selected.
+fn selection(editor: &EditorState) -> Option<String> {
+    let ((start_row, start_col), (end_row, end_col)) = editor.textarea.selection_range()?;
+    let lines = editor.textarea.lines();
+    let mut text = String::new();
+    for row in start_row..=end_row {
+        let line = lines.get(row)?;
+        let from = if row == start_row { start_col } else { 0 };
+        let to = if row == end_row {
+            end_col
+        } else {
+            line.chars().count()
+        };
+        text.extend(line.chars().skip(from).take(to.saturating_sub(from)));
+        if row != end_row {
+            text.push('\n');
         }
     }
+    Some(text)
 }
 
 /// Styles the text area for the focus and the theme.
@@ -53,12 +76,12 @@ pub(super) fn restyle(editor: &mut EditorState, focused: bool, theme: &Theme) {
     textarea.set_line_number_style(theme.line_number());
 }
 
-fn apply(editor: &mut EditorState, command: EditorCommand) {
-    use EditorCommand as C;
+fn apply(editor: &mut EditorState, action: Action) {
+    use Action as C;
     let t = &mut editor.textarea;
-    match command {
-        C::RunQuery => {}
+    match action {
         C::NewLine => t.insert_newline(),
+        C::Indent => _ = t.insert_tab(),
         C::Left => move_cursor(editor, CursorMove::Back, false),
         C::Right => move_cursor(editor, CursorMove::Forward, false),
         C::Up => move_cursor(editor, CursorMove::Up, false),
@@ -90,6 +113,7 @@ fn apply(editor: &mut EditorState, command: EditorCommand) {
         C::Paste => _ = t.paste(),
         C::Undo => _ = t.undo(),
         C::Redo => _ = t.redo(),
+        _ => {}
     }
 }
 

@@ -2,27 +2,27 @@
 source: crates/qry/src/views/views_tests.rs
 expression: "h.render(80, 24)"
 ---
-┌ Connection Tr┌ Help ──────────────────────────────────────────┐──────────────┐
-│No connections│ Global:                                        │              │
-│              │ Ctrl-s       : Export connections              │              │
-│              │ Ctrl-e       : Export to file                  │              │
-│              │ Ctrl-o       : Import connections              │              │
-│              │ Ctrl-n       : New connection                  │              │
-│              │ Tab          : Next pane                       │              │
-│              │ Shift-Tab    : Previous pane                   │              │
-│              │ Ctrl-q       : Quit                            │              │
-│              │ Ctrl-h       : Show / hide this help           │──────────────┘
-│              │                                                │──────────────┐
-│              │ Connection tree:                               │              │
-│              │ ↑ / i        : Up a row                        │              │
-│              │ ↓ / k        : Down a row                      │              │
-│              │ Space        : Expand or collapse              │              │
-│              │ Enter        : Connect                         │              │
-│              │ e            : Edit this connection            │              │
-│              │ Delete       : Forget this connection          │              │
-│              │ Home         : First row                       │              │
-│              │ End          : Last row                        │              │
-│              │                                                │              │
-│              │ Editor:                                        │              │
-│              │ F8           : Run query                       │              │
-└──────────────└─────────────────────────────────── 1-22 of 100 ┘──────────────┘
+┌ Conne┌ Help ──────────────────────────────────────────────────────────┐──────┐
+│No con│ Global:                                                        │      │
+│      │ ctrl-q                : Quit                                   │      │
+│      │ ctrl-z                : Suspend to the shell                   │      │
+│      │ F1                    : Show / hide the help                   │      │
+│      │ ctrl-p                : Command palette                        │      │
+│      │ Tab                   : Next pane                              │      │
+│      │ shift-Tab             : Previous pane                          │      │
+│      │ ctrl-n                : New connection                         │      │
+│      │ ctrl-o                : Import connections                     │──────┘
+│      │ ctrl-1 … ctrl-9       : Switch to session N                    │──────┐
+│      │ ctrl-PgDn             : Next session                           │      │
+│      │ ctrl-PgUp             : Previous session                       │      │
+│      │                                                                │      │
+│      │ Connection tree:                                               │      │
+│      │ ?                     : Show / hide the help                   │      │
+│      │ :                     : Command palette                        │      │
+│      │ e                     : Edit this connection                   │      │
+│      │ Del                   : Forget this connection                 │      │
+│      │ ctrl-s                : Export connections                     │      │
+│      │ k / ↑                 : Up                                     │      │
+│      │ j / ↓                 : Down                                   │      │
+│      │ h / ←                 : Left                                   │      │
+└──────└─────────────────────────────────────────────────── 1-22 of 112 ┘──────┘

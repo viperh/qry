@@ -21,10 +21,21 @@ pub enum UiEvent {
     Resize(u16, u16),
     /// The tick-rate timer, at the moment the runtime saw it.
     Tick(Instant),
+    /// A timer the reducer asked for with `Effect::ScheduleTimer` ran out.
+    Timer(Timer),
     /// A session's database worker answered.
     Db(SessionId, DbAnswer),
     /// A file the runtime read or wrote off the event loop.
     File(FileAnswer),
+}
+
+/// Which timer ran out. The reducer tells a stale one from the live one by
+/// what it carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Timer {
+    /// The wait for the rest of a multi-key binding, numbered as
+    /// `State::key_timer` counts them.
+    KeySequence(u64),
 }
 
 /// The outcome of an effect that reads or writes a file.

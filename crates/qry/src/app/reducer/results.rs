@@ -2,13 +2,12 @@
 
 use std::sync::Arc;
 
-use crossterm::event::KeyEvent;
 use qry_core::QueryResult;
 use ratatui::text::Span;
 
 use crate::{
+    action::Action,
     app::state::{ResultsState, State},
-    keymap::ResultsCommand,
 };
 
 /// Wider values are cut off at this many columns.
@@ -23,7 +22,9 @@ pub(super) fn show(results: &mut ResultsState, result: Arc<QueryResult>) {
     results.col_offset.set(0);
 }
 
-pub(super) fn key(state: &mut State, key: KeyEvent) {
+/// What a `Results` binding does. Copying, searching and inspecting come
+/// with the grid's redesign (T303, T304).
+pub(super) fn run(state: &mut State, action: Action) {
     let results = &mut state.results;
     let Some((rows, cols)) = results
         .result
@@ -32,22 +33,20 @@ pub(super) fn key(state: &mut State, key: KeyEvent) {
     else {
         return;
     };
-    let Some(command) = state.config.panes.results.get(key) else {
-        return;
-    };
     let (last_row, last_col) = (rows.saturating_sub(1), cols.saturating_sub(1));
     let page = results.page_rows.get().max(1);
-    match command {
-        ResultsCommand::Up => results.row = results.row.saturating_sub(1),
-        ResultsCommand::Down => results.row = (results.row + 1).min(last_row),
-        ResultsCommand::Left => results.col = results.col.saturating_sub(1),
-        ResultsCommand::Right => results.col = (results.col + 1).min(last_col),
-        ResultsCommand::PageUp => results.row = results.row.saturating_sub(page),
-        ResultsCommand::PageDown => results.row = (results.row + page).min(last_row),
-        ResultsCommand::FirstColumn => results.col = 0,
-        ResultsCommand::LastColumn => results.col = last_col,
-        ResultsCommand::FirstRow => results.row = 0,
-        ResultsCommand::LastRow => results.row = last_row,
+    match action {
+        Action::Up => results.row = results.row.saturating_sub(1),
+        Action::Down => results.row = (results.row + 1).min(last_row),
+        Action::Left => results.col = results.col.saturating_sub(1),
+        Action::Right => results.col = (results.col + 1).min(last_col),
+        Action::PageUp => results.row = results.row.saturating_sub(page),
+        Action::PageDown => results.row = (results.row + page).min(last_row),
+        Action::LineStart => results.col = 0,
+        Action::LineEnd => results.col = last_col,
+        Action::Top => results.row = 0,
+        Action::Bottom => results.row = last_row,
+        _ => {}
     }
 }
 

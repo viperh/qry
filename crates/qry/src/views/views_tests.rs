@@ -45,7 +45,8 @@ fn connection_form_new_snapshot() {
 #[test]
 fn export_form_snapshot() {
     let mut h = harness();
-    h.keys("ctrl-e");
+    // ctrl-s with the results focused.
+    h.keys("shift-tab ctrl-s");
     insta::assert_snapshot!("export_form_80x24", h.render(80, 24));
 }
 
@@ -62,7 +63,7 @@ fn password_prompt_snapshot() {
 #[test]
 fn help_snapshot() {
     let mut h = harness();
-    h.keys("ctrl-h");
+    h.keys("f1");
     insta::assert_snapshot!("help_80x24", h.render(80, 24));
 }
 

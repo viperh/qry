@@ -4,7 +4,9 @@
 //! [runtime](crate::runtime) carries it out; anything that has an outcome
 //! comes back later as a [`UiEvent`](super::event::UiEvent).
 
-use super::state::SessionId;
+use std::time::Duration;
+
+use super::{event::Timer, state::SessionId};
 use crate::{connections::StoredConnection, db::DbCommand, import::Format, secrets::Password};
 
 /// A side-effect request. Not `Clone`: [`Effect::StashPassword`] holds a
@@ -39,6 +41,12 @@ pub enum Effect {
     /// from. The `Db` effect that follows carries no password, only the
     /// connection's record or nothing at all.
     StashPassword(Password),
+    /// Deliver `UiEvent::Timer(timer)` once `after` has passed. Nothing
+    /// cancels one: the reducer ignores a timer it no longer waits for.
+    ScheduleTimer {
+        timer: Timer,
+        after: Duration,
+    },
     /// Redraw the whole terminal.
     ClearScreen,
     Suspend,

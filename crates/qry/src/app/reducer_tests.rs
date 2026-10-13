@@ -6,7 +6,6 @@
 
 use super::{state::Focus, *};
 use crate::{
-    config::KeySection,
     connections::{Driver, StoredConnection},
     db::DbCommand,
     import::{Format, Imported},
@@ -16,6 +15,12 @@ use crate::{
 /// The main screen with the built-in config, as the runtime sets it up.
 fn harness() -> AppHarness {
     AppHarness::new(Config::embedded())
+}
+
+/// Opens the results' Export modal: ctrl-s with the results focused.
+fn open_export(h: &mut AppHarness) -> &mut AppHarness {
+    h.state_mut().focus = Focus::Results;
+    h.keys("ctrl-s")
 }
 
 #[test]
@@ -55,7 +60,8 @@ fn each_mode_opens_its_own_modal() {
     h.keys("ctrl-n");
     assert!(h.render(80, 50).contains("New Connection"));
 
-    h.keys("esc ctrl-e");
+    h.keys("esc");
+    open_export(&mut h);
     let text = h.render(80, 50);
     assert!(
         text.contains("Export") && !text.contains("New Connection"),
@@ -70,18 +76,19 @@ fn each_mode_opens_its_own_modal() {
 #[test]
 fn keys_reach_the_open_modal_and_it_reopens_empty() {
     let mut h = harness();
-    h.keys("ctrl-e").type_str("rows.csv");
+    open_export(&mut h).type_str("rows.csv");
     assert!(h.render(80, 50).contains("rows.csv"));
 
     // Reopening builds a fresh form.
-    h.keys("esc ctrl-e");
+    h.keys("esc");
+    open_export(&mut h);
     assert!(!h.render(80, 50).contains("rows.csv"));
 }
 
 #[test]
 fn a_failed_export_keeps_the_modal_and_the_path() {
     let mut h = harness();
-    h.keys("ctrl-e")
+    open_export(&mut h)
         .type_str("no/such/dir/rows.csv")
         .keys("enter");
 
@@ -90,7 +97,7 @@ fn a_failed_export_keeps_the_modal_and_the_path() {
         panic!("expected an export, got {effects:?}");
     };
     assert_eq!(config.path, "no/such/dir/rows.csv");
-    assert_eq!(h.section(), KeySection::ExpoModal, "still open");
+    assert_eq!(h.dialog_title(), Some("Export"), "still open");
     assert!(h.render(80, 50).contains("Exporting"));
 
     h.db(DbAnswer::ExportFailed(
@@ -106,7 +113,7 @@ fn import_waits_and_keeps_path_on_failure() {
     let mut h = harness();
     // Ctrl-o opens it from the main screen.
     h.keys("ctrl-o");
-    assert_eq!(h.section(), KeySection::ImportModal);
+    assert_eq!(h.dialog_title(), Some("Import Connections"));
     h.type_str("~/nope.json").keys("enter");
 
     let effects = h.take_effects();
@@ -135,7 +142,7 @@ fn import_waits_and_keeps_path_on_failure() {
         skipped: Vec::new(),
         warnings: Vec::new(),
     })));
-    assert_eq!(h.section(), KeySection::Home);
+    assert_eq!(h.dialog_title(), None);
 }
 
 #[test]
@@ -145,7 +152,7 @@ fn exporting_connections_waits_for_the_file() {
     saved.path = Some("app.db".into());
     h.file(FileAnswer::ConnectionsLoaded(vec![saved]));
     h.keys("ctrl-s");
-    assert_eq!(h.section(), KeySection::ConnExportModal);
+    assert_eq!(h.dialog_title(), Some("Export Connections"));
     assert!(h.render(80, 50).contains("Export Connections"));
     h.type_str("/root/b.json").keys("enter");
 
@@ -172,7 +179,7 @@ fn exporting_connections_waits_for_the_file() {
         path: "/tmp/b.json".into(),
         count: 1,
     });
-    assert_eq!(h.section(), KeySection::Home);
+    assert_eq!(h.dialog_title(), None);
     assert!(
         h.render(80, 24)
             .contains("Exported 1 connection to /tmp/b.json")
@@ -189,13 +196,13 @@ fn exporting_no_saved_connections_is_refused_in_the_modal() {
         text.contains("There are no saved connections to export"),
         "{text}"
     );
-    assert_eq!(h.section(), KeySection::ConnExportModal);
+    assert_eq!(h.dialog_title(), Some("Export Connections"));
 }
 
 #[test]
 fn a_written_export_closes_the_modal() {
     let mut h = harness();
-    h.keys("ctrl-e").type_str("rows.csv").keys("enter");
+    open_export(&mut h).type_str("rows.csv").keys("enter");
     assert!(matches!(
         h.take_effects().as_slice(),
         [Effect::Db(_, DbCommand::Export(_))]
@@ -203,13 +210,13 @@ fn a_written_export_closes_the_modal() {
 
     h.db(DbAnswer::Exported("rows.csv".into()));
     assert!(h.state().dialog().is_none());
-    assert_eq!(h.section(), KeySection::Home);
+    assert_eq!(h.dialog_title(), None);
 }
 
 #[test]
 fn late_answer_for_closed_modal_is_ignored() {
     let mut h = harness();
-    h.keys("ctrl-e").type_str("rows.csv").keys("enter esc");
+    open_export(&mut h).type_str("rows.csv").keys("enter esc");
     assert!(h.state().dialog().is_none());
 
     let before = h.state().clone();
@@ -225,7 +232,7 @@ fn late_answer_for_closed_modal_is_ignored() {
 fn answer_for_other_modal_is_ignored() {
     let mut h = harness();
     // An export is waiting, and a connection's answer arrives late.
-    h.keys("ctrl-e").type_str("rows.csv").keys("enter");
+    open_export(&mut h).type_str("rows.csv").keys("enter");
     h.db(DbAnswer::Connected(":memory:".into()));
     h.db(DbAnswer::ConnectFailed("nope".into()));
 
@@ -243,7 +250,7 @@ fn answer_for_other_modal_is_ignored() {
 #[test]
 fn a_refused_modal_stays_open_with_its_error() {
     let mut h = harness();
-    h.keys("ctrl-e enter");
+    open_export(&mut h).keys("enter");
     assert!(h.take_effects().is_empty());
     assert!(h.render(80, 50).contains("Path is required"));
 }
@@ -271,7 +278,7 @@ fn connect_modal_waits_for_answer() {
         panic!("expected a connection and nothing else, got {effects:?}");
     };
     assert_eq!(record.host.as_deref(), Some("db.local"));
-    assert_eq!(h.section(), KeySection::AddConnModal, "still open");
+    assert_eq!(h.dialog_title(), Some("New Connection"), "still open");
     assert_eq!(h.state().focus, focus);
     assert!(h.render(80, 50).contains("Connecting"));
 }
@@ -330,7 +337,7 @@ fn a_working_connection_closes_the_modal() {
 
     h.db(DbAnswer::Connected("alice@db.local:5432/app".into()));
     assert!(h.state().dialog().is_none());
-    assert_eq!(h.section(), KeySection::Home);
+    assert_eq!(h.dialog_title(), None);
     assert!(!h.render(80, 50).contains("New Connection"));
 }
 
@@ -343,7 +350,7 @@ fn a_connect_answer_without_a_waiting_modal_is_ignored() {
     assert!(h.state().dialog().is_none());
 
     // An export modal is not touched by a connection's answer either.
-    h.keys("ctrl-e");
+    open_export(&mut h);
     h.db(DbAnswer::ConnectFailed("nope".into()));
     let text = h.render(80, 50);
     assert!(text.contains("Export") && !text.contains("nope"), "{text}");
@@ -356,8 +363,8 @@ fn need_password_opens_prompt_and_submit_awaits_connect() {
         id: "c7f3a1e2".into(),
         name: "prod".into(),
     });
-    // It is the password modal's keys now, so Esc closes the prompt.
-    assert_eq!(h.section(), KeySection::PasswordModal);
+    // The prompt is a dialog, so its keys are the dialogs'.
+    assert_eq!(h.dialog_title(), Some("Password"));
     let text = h.render(80, 30);
     assert!(
         text.contains("Password") && text.contains("for prod"),
@@ -426,7 +433,7 @@ fn password_text_never_in_effects() {
 #[test]
 fn help_opens_scrolls_and_closes_with_configured_keys() {
     let mut h = harness();
-    h.keys("ctrl-h");
+    h.keys("f1");
     assert!(h.state().help().is_some());
     assert!(h.render(80, 20).contains("Global:"));
 
@@ -438,9 +445,9 @@ fn help_opens_scrolls_and_closes_with_configured_keys() {
     h.keys("esc");
     assert!(h.state().help().is_none());
 
-    h.keys("ctrl-h");
+    h.keys("f1");
     assert!(h.render(80, 20).contains("Global:"));
-    h.keys("ctrl-h");
+    h.keys("f1");
     assert!(h.state().help().is_none());
 }
 
@@ -488,4 +495,221 @@ fn quitting_is_an_effect_for_the_runtime() {
     let mut h = harness();
     h.keys("ctrl-q");
     assert_eq!(h.take_effects(), [Effect::Quit]);
+}
+
+/// The harness with a 5x3 result in the grid, its cursor on row 3.
+fn results_on_row_3() -> AppHarness {
+    let mut h = harness();
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        crate::testing::grid(5, 3),
+    )));
+    h.state_mut().focus = Focus::Results;
+    h.keys("j j j");
+    assert_eq!(h.state().results.row, 3);
+    h
+}
+
+#[test]
+fn sequence_times_out_after_one_second() {
+    let mut h = results_on_row_3();
+    h.keys("g");
+    let effects = h.take_effects();
+    assert!(
+        matches!(
+            effects.as_slice(),
+            [Effect::ScheduleTimer { after, .. }] if *after == std::time::Duration::from_secs(1)
+        ),
+        "{effects:?}"
+    );
+    h.advance(1001);
+    assert!(h.state().pending_keys.is_empty());
+    h.keys("g");
+    assert_eq!(h.state().results.row, 3, "a lone g after the timeout");
+
+    // Within the second, g g goes to the top.
+    let mut h = results_on_row_3();
+    h.keys("g");
+    h.advance(999);
+    h.keys("g");
+    assert_eq!(h.state().results.row, 0);
+    assert!(h.state().pending_keys.is_empty());
+}
+
+#[test]
+fn ticks_leave_a_half_typed_sequence_alone() {
+    let mut h = results_on_row_3();
+    h.keys("g");
+    // Ticks no longer clear it; only the timer does.
+    h.advance(750);
+    assert_eq!(h.ticks(), 3);
+    assert_eq!(h.state().pending_keys.len(), 1);
+    h.keys("g");
+    assert_eq!(h.state().results.row, 0);
+}
+
+#[test]
+fn a_broken_sequence_hands_on_the_key() {
+    let mut h = results_on_row_3();
+    // `g` waits, `k` is no second `g`: it moves up as usual.
+    h.keys("g k");
+    assert_eq!(h.state().results.row, 2);
+    assert!(h.state().pending_keys.is_empty());
+}
+
+#[test]
+fn a_prefix_binding_runs_once_the_sequence_times_out() {
+    let config = Config::with_user_file(
+        "u.json",
+        r#"{"keybindings": {"Results": {"<g>": "Bottom"}}}"#,
+    )
+    .unwrap();
+    let mut h = AppHarness::new(config);
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        crate::testing::grid(5, 3),
+    )));
+    h.state_mut().focus = Focus::Results;
+    h.keys("g");
+    assert_eq!(h.state().results.row, 0, "waits for a second g");
+    h.advance(1000);
+    assert_eq!(h.state().results.row, 4);
+
+    // A stale timer does nothing: the second wait is still on.
+    h.keys("k k g");
+    h.advance(500);
+    h.keys("g");
+    assert_eq!(h.state().results.row, 0, "g g");
+    h.keys("j g");
+    h.advance(600);
+    assert_eq!(h.state().results.row, 1, "only 600 ms into the new wait");
+    h.advance(400);
+    assert_eq!(h.state().results.row, 4);
+}
+
+#[test]
+fn question_mark_types_in_editor_but_opens_help_in_results() {
+    let mut h = harness();
+    h.keys("tab").type_str("a?b:c");
+    assert_eq!(h.state().editor.query(), "a?b:c");
+    assert!(h.state().help().is_none());
+
+    h.keys("tab ?");
+    assert!(h.state().help().is_some());
+    h.keys("?");
+    assert!(h.state().help().is_none());
+}
+
+#[test]
+fn pill_follows_focus() {
+    use crate::theme::Pill;
+    let mut h = harness();
+    h.keys("tab");
+    assert_eq!(h.state().pill(), Pill::Edit);
+    h.keys("tab");
+    assert_eq!(h.state().pill(), Pill::Normal);
+    h.keys("tab");
+    assert_eq!(h.state().pill(), Pill::Normal, "the tree");
+
+    // The help and the dialogs keep the pill of what is underneath.
+    h.keys("tab f1");
+    assert!(h.state().help().is_some());
+    assert_eq!(h.state().pill(), Pill::Edit);
+    h.keys("esc ctrl-n");
+    assert_eq!(h.state().pill(), Pill::Edit);
+    h.keys("f1");
+    assert_eq!(h.state().pill(), Pill::Edit);
+    // There is no palette to open until T206; its context gives COMMAND.
+    assert_eq!(
+        crate::keymap::KeyContext::Palette.pill(),
+        Some(Pill::Command)
+    );
+}
+
+#[test]
+fn overlays_take_the_keys_alone() {
+    let mut h = harness();
+    h.keys("f1 ctrl-n");
+    assert!(h.state().dialog().is_none(), "ctrl-n does nothing in help");
+    h.keys("esc");
+
+    // In a dialog, ctrl-q still quits, F1 opens the help over it, and
+    // ctrl-p goes to the text field, which ignores it.
+    h.keys("ctrl-n");
+    h.type_str("ab").keys("ctrl-p");
+    assert!(h.state().dialog().is_some());
+    assert!(h.render(80, 50).contains("ab"));
+    h.keys("f1");
+    assert!(h.state().help().is_some() && h.state().dialog().is_some());
+    h.keys("esc");
+    h.take_effects();
+    h.keys("ctrl-q");
+    assert_eq!(h.take_effects(), [Effect::Quit]);
+}
+
+#[test]
+fn space_types_in_a_text_field_and_picks_in_a_choice() {
+    let mut h = harness();
+    h.keys("ctrl-n");
+    let dialog = h.state_mut().dialog_mut().unwrap();
+    // The name field, then the driver choice.
+    dialog.form_mut().set_focus(0);
+    h.type_str("a b");
+    assert!(h.render(80, 50).contains("a b"));
+    let form = h.state().dialog().unwrap().form();
+    let choice = (0..form.labels().len())
+        .find(|i| {
+            !matches!(
+                form.fields()[*i],
+                crate::app::dialogs::form::Field::Text(_)
+                    | crate::app::dialogs::form::Field::Secret(_)
+            )
+        })
+        .unwrap();
+    let before = form.selected(choice);
+    h.state_mut()
+        .dialog_mut()
+        .unwrap()
+        .form_mut()
+        .set_focus(choice);
+    h.keys("space");
+    assert_ne!(h.state().dialog().unwrap().form().selected(choice), before);
+}
+
+#[test]
+fn ctrl_digit_switches_session() {
+    // Sessions come with T103; until then the chord resolves to the action
+    // and changes nothing else.
+    let keymap = &Config::embedded().keymap;
+    let contexts = [
+        crate::keymap::KeyContext::Tree,
+        crate::keymap::KeyContext::Global,
+    ];
+    assert_eq!(
+        keymap.resolve(&contexts, &crate::testing::parse_keys("ctrl-3")),
+        crate::keymap::Lookup::Match(crate::action::Action::SwitchSession(3))
+    );
+    let mut h = harness();
+    let before = h.state().clone();
+    h.keys("ctrl-3");
+    assert!(h.take_effects().is_empty());
+    let mut after = h.state().clone();
+    after.dirty = before.dirty;
+    assert_eq!(after, before);
+}
+
+#[test]
+fn tree_keys_follow_vim() {
+    let mut h = harness();
+    let mut a = StoredConnection::new("a", Driver::Sqlite);
+    a.path = Some("a.db".into());
+    let mut b = StoredConnection::new("b", Driver::Sqlite);
+    b.path = Some("b.db".into());
+    h.file(FileAnswer::ConnectionsLoaded(vec![a, b]));
+    h.keys("j");
+    assert_eq!(h.state().tree.selected, 1);
+    h.keys("k");
+    assert_eq!(h.state().tree.selected, 0);
+    h.keys("G");
+    assert_eq!(h.state().tree.selected, 1);
+    h.keys("g g");
+    assert_eq!(h.state().tree.selected, 0);
 }

@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     style::{Color, Style},
@@ -68,7 +68,7 @@ impl Tree {
     }
 
     fn press(&mut self, code: KeyCode) {
-        key(
+        super::super::keys::key(
             &mut self.state,
             KeyEvent::new(code, KeyModifiers::NONE),
             &mut self.fx,

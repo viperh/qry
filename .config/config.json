@@ -1,36 +1,73 @@
 {
+  // Built-in defaults. A user file (`config.json5`, `config.json`,
+  // `config.yaml`, `config.toml` or `config.ini` in the config directory,
+  // `$QRY_CONFIG` or `~/.config/qry/` on Linux) is layered on top of them;
+  // `qry --print-config` prints the result.
   "theme": "dark",
-  "keybindings": {
-    "Home": {
-      "<Ctrl-q>": "Quit",
-      "<Ctrl-h>": "Help",
-      "<tab>": "FocusNext",
-      "<shift-backtab>": "FocusPrev",
-      "<Ctrl-n>": { "ChangeMode": "AddConnModal" },
-      "<Ctrl-e>": { "ChangeMode":  "ExpoModal"},
-      "<Ctrl-o>": { "ChangeMode": "ImportModal" },
-      "<Ctrl-s>": { "ChangeMode": "ConnExportModal" }
-    },
-    "AddConnModal": {
-      "<esc>": { "ChangeMode": "Home" }
-    },
-    "ExpoModal": {
-      "<esc>": { "ChangeMode": "Home" }
-    },
-    "PasswordModal": {
-      "<esc>": { "ChangeMode": "Home" }
-    },
-    "ImportModal": {
-      "<esc>": { "ChangeMode": "Home" }
-    },
-    "ConnExportModal": {
-      "<esc>": { "ChangeMode": "Home" }
-    }
 
-  },
-  "panes": {
+  // Key bindings, by context: `Global` applies wherever a pane has focus,
+  // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
+  // `Jobs`), which win over it. `Dialog`, `Help` and `Palette` apply alone
+  // while one of those is open. Values are action names
+  // (crates/qry/src/action.rs).
+  //
+  // Keys (crates/qry/src/keymap.rs): `<ctrl-q>`, `<shift-tab>`, `<f5>`; a
+  // sequence is `<g><g>`. A single character keeps its case (`<G>` is
+  // shift-g); modifiers and named keys are case-insensitive. A user entry
+  // replaces the default for that key, and `null` unbinds it.
+  "keybindings": {
+    "Global": {
+      "<ctrl-q>": "Quit",
+      "<f1>": "Help",
+      "<ctrl-p>": "Palette",
+      "<tab>": "FocusNext",
+      "<shift-tab>": "FocusPrev",
+      "<ctrl-n>": "NewConnection",
+      "<ctrl-o>": "ImportConnections",
+      "<ctrl-1>": { "SwitchSession": 1 },
+      "<ctrl-2>": { "SwitchSession": 2 },
+      "<ctrl-3>": { "SwitchSession": 3 },
+      "<ctrl-4>": { "SwitchSession": 4 },
+      "<ctrl-5>": { "SwitchSession": 5 },
+      "<ctrl-6>": { "SwitchSession": 6 },
+      "<ctrl-7>": { "SwitchSession": 7 },
+      "<ctrl-8>": { "SwitchSession": 8 },
+      "<ctrl-9>": { "SwitchSession": 9 },
+      "<ctrl-pagedown>": "NextSession",
+      "<ctrl-pageup>": "PrevSession",
+      "<ctrl-z>": "Suspend"
+    },
+    "Tree": {
+      "<?>": "Help",
+      "<:>": "Palette",
+      "<j>": "Down",
+      "<down>": "Down",
+      "<k>": "Up",
+      "<up>": "Up",
+      "<h>": "Left",
+      "<left>": "Left",
+      "<l>": "Right",
+      "<right>": "Right",
+      "<g><g>": "Top",
+      "<G>": "Bottom",
+      "<home>": "Top",
+      "<end>": "Bottom",
+      "<enter>": "Open",
+      "<space>": "Toggle",
+      "<e>": "EditConnection",
+      "<delete>": "DeleteConnection",
+      "<r>": "Refresh",
+      "</>": "Filter",
+      "<ctrl-s>": "ExportConnections"
+    },
+    // `?` and `:` are not bound here, so they can be typed.
     "Editor": {
-      "<f8>": "RunQuery",
+      // Terminals that cannot send ctrl-Enter have F5.
+      "<ctrl-enter>": "RunStatement",
+      "<f5>": "RunStatement",
+      "<f8>": "RunAll",
+      "<ctrl-e>": "RunSelection",
+      "<ctrl-c>": "CancelQuery",
       "<enter>": "NewLine",
       "<left>": "Left",
       "<right>": "Right",
@@ -58,58 +95,104 @@
       "<ctrl-w>": "DeleteWordBack",
       "<alt-d>": "DeleteWordForward",
       "<ctrl-k>": "DeleteToLineEnd",
-      "<alt-c>": "Copy",
       "<ctrl-x>": "Cut",
-      "<ctrl-y>": "Paste",
-      "<ctrl-u>": "Undo",
-      "<ctrl-r>": "Redo"
+      "<ctrl-v>": "Paste",
+      "<ctrl-z>": "Undo",
+      "<ctrl-shift-z>": "Redo",
+      "<ctrl-y>": "Redo"
     },
     "Results": {
-      "<up>": "Up",
-      "<i>": "Up",
+      "<?>": "Help",
+      "<:>": "Palette",
+      "<j>": "Down",
       "<down>": "Down",
-      "<k>": "Down",
+      "<k>": "Up",
+      "<up>": "Up",
+      "<h>": "Left",
       "<left>": "Left",
-      "<j>": "Left",
-      "<right>": "Right",
       "<l>": "Right",
+      "<right>": "Right",
+      "<g><g>": "Top",
+      "<G>": "Bottom",
       "<pageup>": "PageUp",
       "<pagedown>": "PageDown",
-      "<home>": "FirstColumn",
-      "<end>": "LastColumn",
-      "<g>": "FirstRow",
-      "<shift-g>": "LastRow"
+      "<home>": "LineStart",
+      "<end>": "LineEnd",
+      "<y>": "CopyCell",
+      "<Y>": "CopyRow",
+      "</>": "Search",
+      "<i>": "ToggleInspector",
+      "<enter>": "Inspect",
+      "<ctrl-s>": "ExportResults"
     },
-    "Tree": {
-      "<up>": "Up",
-      "<i>": "Up",
+    "Inspector": {
+      "<?>": "Help",
+      "<:>": "Palette",
+      "<j>": "Down",
       "<down>": "Down",
-      "<k>": "Down",
-      "<space>": "Toggle",
-      "<enter>": "Connect",
-      "<e>": "Edit",
-      "<delete>": "Delete",
-      "<home>": "First",
-      "<end>": "Last"
+      "<k>": "Up",
+      "<up>": "Up",
+      "<h>": "Left",
+      "<left>": "Left",
+      "<l>": "Right",
+      "<right>": "Right",
+      "<g><g>": "Top",
+      "<G>": "Bottom"
     },
-    "Form": {
-      "<tab>": "NextField",
-      "<shift-backtab>": "PrevField",
+    "Jobs": {
+      "<?>": "Help",
+      "<:>": "Palette",
+      "<j>": "Down",
+      "<down>": "Down",
+      "<k>": "Up",
+      "<up>": "Up",
+      "<h>": "Left",
+      "<left>": "Left",
+      "<l>": "Right",
+      "<right>": "Right",
+      "<g><g>": "Top",
+      "<G>": "Bottom"
+    },
+    // A dialog's text field types plain characters even where they are
+    // bound, so Space types a space there.
+    "Dialog": {
       "<enter>": "Submit",
+      "<esc>": "Cancel",
+      "<tab>": "NextField",
+      "<shift-tab>": "PrevField",
       "<left>": "Left",
       "<right>": "Right",
-      "<space>": "NextChoice",
       "<home>": "LineStart",
       "<end>": "LineEnd",
       "<backspace>": "DeleteBack",
-      "<delete>": "DeleteForward"
+      "<delete>": "DeleteForward",
+      "<space>": "NextChoice",
+      "<f1>": "Help",
+      "<ctrl-q>": "Quit"
     },
     "Help": {
-      "<esc>": "Close",
-      "<up>": "ScrollUp",
-      "<down>": "ScrollDown",
+      "<j>": "Down",
+      "<down>": "Down",
+      "<k>": "Up",
+      "<up>": "Up",
       "<pageup>": "PageUp",
-      "<pagedown>": "PageDown"
+      "<pagedown>": "PageDown",
+      "<home>": "Top",
+      "<G>": "Bottom",
+      "<end>": "Bottom",
+      "<?>": "Help",
+      "<f1>": "Help",
+      "<esc>": "Cancel",
+      "<ctrl-q>": "Quit"
+    },
+    "Palette": {
+      "<enter>": "Submit",
+      "<esc>": "Cancel",
+      "<up>": "Up",
+      "<down>": "Down",
+      "<ctrl-p>": "Palette",
+      "<f1>": "Help",
+      "<ctrl-q>": "Quit"
     }
   }
 }

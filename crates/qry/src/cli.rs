@@ -19,6 +19,11 @@ pub struct Cli {
     /// Colour theme; overrides the config's "theme"
     #[arg(long, value_name = "NAME", value_parser = PossibleValuesParser::new(Theme::NAMES))]
     pub theme: Option<String>,
+
+    /// Print the config in effect (the defaults with your files over them)
+    /// in the config's format, and exit
+    #[arg(long)]
+    pub print_config: bool,
 }
 
 const VERSION_MESSAGE: &str = concat!(

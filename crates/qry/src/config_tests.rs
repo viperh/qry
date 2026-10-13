@@ -5,118 +5,17 @@
 use pretty_assertions::assert_eq;
 
 use super::*;
+use crate::keymap::Lookup;
 
-#[test]
-fn test_config() -> color_eyre::Result<()> {
-    let c = Config::new()?;
-    assert_eq!(
-        c.keybindings
-            .0
-            .get(&KeySection::Home)
-            .unwrap()
-            .get(&parse_key_sequence("<ctrl-q>").unwrap_or_default())
-            .unwrap(),
-        &Action::Quit
-    );
-    Ok(())
-}
-
-#[test]
-fn test_malformed_key_sequence_is_err() {
-    let result = json5::from_str::<KeyBindings>(r#"{"Home": {"<ctrl-notakey>": "Quit"}}"#);
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_simple_keys() {
-    assert_eq!(
-        parse_key_event("a").unwrap(),
-        KeyEvent::new(KeyCode::Char('a'), KeyModifiers::empty())
-    );
-
-    assert_eq!(
-        parse_key_event("enter").unwrap(),
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())
-    );
-
-    assert_eq!(
-        parse_key_event("esc").unwrap(),
-        KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())
-    );
-}
-
-#[test]
-fn test_with_modifiers() {
-    assert_eq!(
-        parse_key_event("ctrl-a").unwrap(),
-        KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-    );
-
-    assert_eq!(
-        parse_key_event("alt-enter").unwrap(),
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-    );
-
-    assert_eq!(
-        parse_key_event("shift-esc").unwrap(),
-        KeyEvent::new(KeyCode::Esc, KeyModifiers::SHIFT)
-    );
-}
-
-#[test]
-fn test_multiple_modifiers() {
-    assert_eq!(
-        parse_key_event("ctrl-alt-a").unwrap(),
-        KeyEvent::new(
-            KeyCode::Char('a'),
-            KeyModifiers::CONTROL | KeyModifiers::ALT
-        )
-    );
-
-    assert_eq!(
-        parse_key_event("ctrl-shift-enter").unwrap(),
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL | KeyModifiers::SHIFT)
-    );
-}
-
-#[test]
-fn test_reverse_multiple_modifiers() {
-    assert_eq!(
-        key_event_to_string(&KeyEvent::new(
-            KeyCode::Char('a'),
-            KeyModifiers::CONTROL | KeyModifiers::ALT
-        )),
-        "ctrl-alt-a".to_string()
-    );
-}
-
-#[test]
-fn test_invalid_keys() {
-    assert!(parse_key_event("invalid-key").is_err());
-    assert!(parse_key_event("ctrl-invalid-key").is_err());
-}
-
-#[test]
-fn test_case_insensitivity() {
-    assert_eq!(
-        parse_key_event("CTRL-a").unwrap(),
-        KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-    );
-
-    assert_eq!(
-        parse_key_event("AlT-eNtEr").unwrap(),
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-    );
-}
-
-/// Loads `json` the way [`Config::new`] loads a user's config file.
-fn from_user_file(json: &str) -> Config {
-    config::Config::builder()
-        .add_source(config::File::from_str(json, config::FileFormat::Json))
-        .build()
-        .unwrap()
-        .try_deserialize()
-        .unwrap()
+/// What `chord` runs in `context` alone.
+fn bound(config: &Config, context: KeyContext, chord: &str) -> Option<Action> {
+    match config
+        .keymap
+        .resolve(&[context], &parse_key_sequence(chord).unwrap())
+    {
+        Lookup::Match(action) => Some(action),
+        Lookup::Prefix | Lookup::None => None,
+    }
 }
 
 #[test]
@@ -128,16 +27,15 @@ fn the_embedded_config_names_the_dark_theme() {
 
 #[test]
 fn theme_key_is_read() {
-    assert_eq!(
-        from_user_file(r#"{"theme": "dark"}"#).theme.as_deref(),
-        Some("dark")
-    );
-    assert_eq!(from_user_file("{}").theme, None);
+    let theme = |json| Config::with_user_file("c.json", json).unwrap().theme;
+    assert_eq!(theme(r#"{"theme": "neon"}"#).as_deref(), Some("neon"));
+    // Without one, the built-in config's stays.
+    assert_eq!(theme("{}").as_deref(), Some("dark"));
 }
 
 #[test]
 fn unknown_theme_is_an_error_listing_names() {
-    let c = from_user_file(r#"{"theme": "neon"}"#);
+    let c = Config::with_user_file("c.json", r#"{"theme": "neon"}"#).unwrap();
     let err = crate::theme::resolve(
         None,
         c.theme.as_deref(),
@@ -153,18 +51,86 @@ fn unknown_theme_is_an_error_listing_names() {
 
 #[test]
 fn legacy_styles_section_warns_and_loads() {
-    let c = from_user_file(
+    let c = Config::with_user_file(
+        "c.json",
         r#"{
-            "keybindings": {"Home": {"<ctrl-q>": "Quit"}},
+            "keybindings": {"Global": {"<f2>": "Quit"}},
             "styles": {"Home": {"title": "bold red on blue"}}
         }"#,
-    );
-    assert_eq!(
-        c.keybindings.0[&KeySection::Home][&parse_key_sequence("<ctrl-q>").unwrap()],
-        Action::Quit
-    );
+    )
+    .unwrap();
+    assert_eq!(bound(&c, KeyContext::Global, "F2"), Some(Action::Quit));
     let warnings = c.warnings();
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("\"styles\""), "{}", warnings[0]);
     assert!(!warnings[0].contains('\n'), "one line: {}", warnings[0]);
+}
+
+#[test]
+fn unknown_context_is_a_load_error_listing_contexts() {
+    let err = Config::with_user_file("/home/u/c.json", r#"{"keybindings": {"Sidebar": {}}}"#)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("/home/u/c.json"), "{err}");
+    assert!(err.contains("Sidebar"), "{err}");
+    assert!(err.contains("Global, Tree, Editor"), "{err}");
+}
+
+#[test]
+fn malformed_key_is_a_load_error_with_location() {
+    let err = Config::with_user_file(
+        "/home/u/c.json",
+        r#"{"keybindings": {"Tree": {"<ctrl-notakey>": "Up"}}}"#,
+    )
+    .unwrap_err()
+    .to_string();
+    for part in ["/home/u/c.json", "Tree", "<ctrl-notakey>"] {
+        assert!(err.contains(part), "{part} missing from: {err}");
+    }
+}
+
+/// A user file as `Config::new` reads one.
+fn read(json: &str) -> RawFile {
+    config::Config::builder()
+        .add_source(config::File::from_str(json, config::FileFormat::Json))
+        .build()
+        .unwrap()
+        .try_deserialize()
+        .unwrap()
+}
+
+#[test]
+fn a_later_file_wins_and_files_layer_per_chord() {
+    let c = Config::layered(vec![
+        (
+            "a.json".into(),
+            read(r#"{"keybindings": {"Tree": {"<x>": "Refresh", "<z>": "Open"}}}"#),
+        ),
+        (
+            "b.json".into(),
+            read(r#"{"keybindings": {"Tree": {"<x>": "Toggle"}}}"#),
+        ),
+    ])
+    .unwrap();
+    assert_eq!(bound(&c, KeyContext::Tree, "x"), Some(Action::Toggle));
+    assert_eq!(bound(&c, KeyContext::Tree, "z"), Some(Action::Open));
+    assert_eq!(bound(&c, KeyContext::Tree, "j"), Some(Action::Down));
+}
+
+#[test]
+fn print_config_default() {
+    insta::assert_snapshot!(Config::embedded().effective_json());
+}
+
+#[test]
+fn printed_config_loads_back_to_the_same_keymap() {
+    let embedded = Config::embedded();
+    // Read on its own, not over the defaults, so nothing can be missing.
+    let mut again = Config::default();
+    again
+        .apply("printed.json", read(&embedded.effective_json()))
+        .unwrap();
+    assert_eq!(again.keymap, embedded.keymap);
+    assert_eq!(again.theme, embedded.theme);
+    assert!(again.warnings().is_empty(), "{:?}", again.warnings());
 }

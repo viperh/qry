@@ -39,7 +39,7 @@ fn keys_move_the_selection_and_stop_at_the_edges() {
     press(&mut results, KeyCode::Char('G'), 1);
     press(&mut results, KeyCode::Home, 1);
     assert_eq!(cell(&results), (4, 0));
-    press(&mut results, KeyCode::Char('g'), 1);
+    press(&mut results, KeyCode::Char('g'), 2);
     press(&mut results, KeyCode::End, 1);
     assert_eq!(cell(&results), (0, 2));
 }

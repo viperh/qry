@@ -18,9 +18,10 @@ use ratatui_textarea::TextArea;
 
 use super::dialogs::DialogState;
 use crate::{
-    config::{Config, KeySection},
+    config::Config,
     connections::StoredConnection,
-    theme::Theme,
+    keymap::KeyContext,
+    theme::{Pill, Theme},
 };
 
 /// One open connection's worker. There is a single session for now, so the
@@ -64,6 +65,15 @@ impl Focus {
             Focus::Tree => Focus::Results,
             Focus::Editor => Focus::Tree,
             Focus::Results => Focus::Editor,
+        }
+    }
+
+    /// The pane's own key bindings.
+    pub(crate) fn context(self) -> KeyContext {
+        match self {
+            Focus::Tree => KeyContext::Tree,
+            Focus::Editor => KeyContext::Editor,
+            Focus::Results => KeyContext::Results,
         }
     }
 }
@@ -121,16 +131,18 @@ pub struct State {
     pub(crate) overlays: Vec<Overlay>,
     /// What the open modal is waiting for the worker to answer, if anything.
     pub(crate) awaiting: Option<Awaiting>,
-    /// Whose password the worker last asked for, for the prompt's title.
-    pub(crate) asked: Option<String>,
     /// The session the editor and the tree talk to.
     pub(crate) session: SessionId,
     pub(crate) tree: TreeState,
     pub(crate) editor: EditorState,
     pub(crate) results: ResultsState,
     pub(crate) status: StatusCode,
-    /// Keys pressed since the last tick, for multi-key bindings.
+    /// The start of a multi-key binding typed so far, normalised.
     pub(crate) pending_keys: Vec<KeyEvent>,
+    /// Which `Timer::KeySequence` is the live one: each key that leaves a
+    /// sequence waiting starts a new one, and an older one that fires is
+    /// ignored.
+    pub(crate) key_timer: u64,
     pub(crate) ids: IdGen,
     /// Something changed since the runtime last drew.
     pub(crate) dirty: bool,
@@ -145,13 +157,13 @@ impl Default for State {
             focus: Focus::default(),
             overlays: Vec::new(),
             awaiting: None,
-            asked: None,
             session: SessionId::FIRST,
             tree: TreeState::default(),
             editor: EditorState::default(),
             results: ResultsState::default(),
             status: StatusCode::default(),
             pending_keys: Vec::new(),
+            key_timer: 0,
             ids: IdGen::default(),
             dirty: true,
         }
@@ -192,10 +204,28 @@ impl State {
             .retain(|overlay| !matches!(overlay, Overlay::Dialog(_)));
     }
 
-    /// The `keybindings` section the keys are looked up in: the open modal's,
-    /// or the main screen's.
-    pub fn key_section(&self) -> KeySection {
-        self.dialog().map_or(KeySection::Home, DialogState::section)
+    /// The contexts a key is looked up in, innermost first: the top
+    /// overlay's alone, or the focused pane's and then `Global`.
+    pub fn contexts(&self) -> Vec<KeyContext> {
+        match self.overlays.last() {
+            Some(Overlay::Help(_)) => vec![KeyContext::Help],
+            Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
+            None => vec![self.focus.context(), KeyContext::Global],
+        }
+    }
+
+    /// The mode pill: that of the topmost overlay that has one, else the
+    /// focused pane's. The help and the dialogs have none, so they keep
+    /// the pill of what is underneath.
+    pub fn pill(&self) -> Pill {
+        let overlays = self.overlays.iter().rev().map(|overlay| match overlay {
+            Overlay::Help(_) => KeyContext::Help,
+            Overlay::Dialog(_) => KeyContext::Dialog,
+        });
+        overlays
+            .chain([self.focus.context()])
+            .find_map(KeyContext::pill)
+            .unwrap_or(Pill::Normal)
     }
 }
 

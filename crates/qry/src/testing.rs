@@ -31,9 +31,10 @@ use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 pub use crate::{app::Effect, theme::ThemeEnv};
 use crate::{
     app::{App, DbAnswer, FileAnswer, SessionId, State, UiEvent},
-    config::{Config, KeySection, parse_key_event},
+    config::Config,
     connections::StoredConnection,
     db::{self, DbCommand},
+    keymap::{KeyContext, parse_key_event},
     theme::Theme,
     views,
 };
@@ -50,12 +51,13 @@ pub const SIZES: &[(u16, u16)] = &[
     (300, 100),
 ];
 
-/// Answers the stand-in worker will deliver once the virtual clock reaches
-/// `due`, in milliseconds since the harness was made.
+/// Events to deliver once the virtual clock reaches `due`, in milliseconds
+/// since the harness was made: the stand-in worker's answers, and timers the
+/// app asked for.
 #[derive(Debug)]
 struct Pending {
     due: u64,
-    answers: Vec<DbAnswer>,
+    events: Vec<UiEvent>,
 }
 
 /// Drives the app with scripted keys and events on a virtual clock.
@@ -75,7 +77,8 @@ pub struct AppHarness {
     ticks: u64,
     theme_env: ThemeEnv,
     database: Option<FakeDatabase>,
-    /// Worker answers not yet due, in the order they were scheduled.
+    /// Worker answers and timers not yet due, in the order they were
+    /// scheduled.
     pending: Vec<Pending>,
     /// When the stand-in worker finishes what it already has: it runs one
     /// command at a time, like the real one.
@@ -160,10 +163,17 @@ impl AppHarness {
         &self.app.state().theme
     }
 
-    /// The `keybindings` section the keys are looked up in: which modal, if
-    /// any, is open.
-    pub fn section(&self) -> KeySection {
-        self.app.state().key_section()
+    /// The contexts the next key is looked up in, innermost first.
+    pub fn contexts(&self) -> Vec<KeyContext> {
+        self.app.state().contexts()
+    }
+
+    /// The title of the open modal, if one is open.
+    pub fn dialog_title(&self) -> Option<&'static str> {
+        self.app
+            .state()
+            .dialog()
+            .map(|dialog| dialog.form().title())
     }
 
     /// How many `Tick`s [`advance`](Self::advance) has delivered so far.
@@ -231,9 +241,9 @@ impl AppHarness {
         self.send(UiEvent::Resize(w, h))
     }
 
-    /// Moves the virtual clock on by `ms`, delivering every `Tick` and every
-    /// worker answer that falls due, in time order. Nothing waits in real
-    /// time.
+    /// Moves the virtual clock on by `ms`, delivering every `Tick`, every
+    /// worker answer and every `Effect::ScheduleTimer` timer that falls due,
+    /// in time order. Nothing waits in real time.
     pub fn advance(&mut self, ms: u64) -> &mut Self {
         let target = self.now.saturating_add(ms);
         loop {
@@ -248,7 +258,7 @@ impl AppHarness {
                 Some((index, due)) if due <= target && due <= self.next_tick => {
                     self.now = due;
                     let pending = self.pending.remove(index);
-                    self.deliver(pending.answers);
+                    self.inbox.extend(pending.events);
                     self.drain();
                 }
                 _ if self.next_tick <= target => {
@@ -295,6 +305,13 @@ impl AppHarness {
                         self.answer_connect(record);
                     }
                     Effect::Db(_, DbCommand::Query(sql)) => self.answer_query(sql),
+                    Effect::ScheduleTimer { timer, after } => {
+                        let after = u64::try_from(after.as_millis()).unwrap_or(u64::MAX);
+                        self.pending.push(Pending {
+                            due: self.now.saturating_add(after),
+                            events: vec![UiEvent::Timer(*timer)],
+                        });
+                    }
                     Effect::Db(_, DbCommand::ListTables) => {
                         let answer = (self.database.as_ref())
                             .map(|db| db::tables_answer(Ok::<_, String>(db.table_names())));
@@ -368,7 +385,11 @@ impl AppHarness {
         if due <= self.now {
             self.deliver(answers);
         } else if due != u64::MAX {
-            self.pending.push(Pending { due, answers });
+            let events = answers
+                .into_iter()
+                .map(|answer| UiEvent::Db(SessionId::FIRST, answer))
+                .collect();
+            self.pending.push(Pending { due, events });
         }
     }
 }
@@ -495,11 +516,11 @@ pub fn styled(buf: &Buffer) -> String {
 }
 
 /// Reads keys written the way the help shows them, separated by spaces:
-/// `"ctrl-n esc shift-tab f8 enter j"`. Modifiers are `ctrl-`, `alt-` and
-/// `shift-`; named keys are `esc`, `enter`, `tab`, `backspace`, `delete`,
-/// `insert`, `space`, `up`/`down`/`left`/`right`, `home`/`end`,
-/// `pageup`/`pagedown` and `f1`…`f12`. `shift-tab` is the `BackTab` that
-/// terminals send, and a capital letter carries Shift.
+/// `"ctrl-n esc shift-tab f8 enter j"`, in the syntax of
+/// [`parse_key_sequence`](crate::keymap::parse_key_sequence): `Enter`, `←`
+/// and `PgDn` work as well as `enter`, `left` and `pagedown`. `shift-tab`
+/// is the `BackTab` that terminals send, and a capital letter carries
+/// Shift, as terminals report it.
 ///
 /// # Panics
 /// On a key it cannot read, naming that key.
@@ -514,21 +535,15 @@ pub fn parse_keys(spec: &str) -> Vec<KeyEvent> {
 
 /// One key of [`parse_keys`].
 fn parse_key(token: &str) -> Result<KeyEvent, String> {
-    // A lone capital is Shift plus the letter; the config parser would
-    // lower-case it first.
+    // A lone capital is Shift plus the letter, as a terminal sends it; the
+    // keymap's chord drops the Shift.
     let mut chars = token.chars();
     if let (Some(c), None) = (chars.next(), chars.next())
         && c.is_uppercase()
     {
         return Ok(KeyEvent::new(KeyCode::Char(c), KeyModifiers::SHIFT));
     }
-    let key = parse_key_event(token)?;
-    Ok(match key.code {
-        KeyCode::Tab if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            KeyEvent::new(KeyCode::BackTab, key.modifiers)
-        }
-        _ => key,
-    })
+    parse_key_event(token)
 }
 
 #[cfg(test)]

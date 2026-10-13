@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ae5561286cb37ef53ce5d15dcc1fd7a7c49eb54a75dfebb0933234875a1f2139 # shrinks to keys = [KeyEvent { code: Tab, modifiers: KeyModifiers(SHIFT), kind: Press, state: KeyEventState(0x0) }]
