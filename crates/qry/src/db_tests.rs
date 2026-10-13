@@ -181,7 +181,10 @@ async fn failures_become_error_status() {
     db.send(DbCommand::Query("SELECT 1".into())).unwrap();
     assert_eq!(
         answers.recv().await,
-        Some(DbAnswer::QueryFailed("not connected to a database".into()))
+        Some(DbAnswer::QueryFailed {
+            message: "not connected to a database".into(),
+            position: None
+        })
     );
     assert_eq!(
         answers.recv().await,
@@ -194,7 +197,7 @@ async fn failures_become_error_status() {
     db.send(DbCommand::Query("SELEC nonsense".into())).unwrap();
     assert!(matches!(
         answers.recv().await,
-        Some(DbAnswer::QueryFailed(_))
+        Some(DbAnswer::QueryFailed { .. })
     ));
     assert!(matches!(
         answers.recv().await,
@@ -271,7 +274,10 @@ async fn a_driver_error_comes_back_as_a_status_error() {
     assert_eq!(
         answers,
         [
-            DbAnswer::QueryFailed("relation \"nope\" does not exist".into()),
+            DbAnswer::QueryFailed {
+                message: "relation \"nope\" does not exist".into(),
+                position: None
+            },
             error("relation \"nope\" does not exist".into())
         ]
     );

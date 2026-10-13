@@ -4124,6 +4124,7 @@ dependencies = [
  "hex",
  "mysql_async",
  "oracledb",
+ "proptest",
  "rust_xlsxwriter",
  "rustls",
  "rustls-pki-types",

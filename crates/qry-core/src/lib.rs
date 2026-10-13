@@ -7,6 +7,7 @@ pub mod mysql;
 pub mod oracle;
 pub mod postgres;
 pub mod shared;
+pub mod sql;
 pub mod sqlite;
 /// Fakes and fixtures for tests; never in a release build.
 #[cfg(any(test, feature = "test-util"))]

@@ -72,7 +72,7 @@ async fn two_sqlite_sessions_are_independent() {
         .unwrap();
     assert!(matches!(
         next(&mut answers, b).await,
-        DbAnswer::QueryFailed(_)
+        DbAnswer::QueryFailed { .. }
     ));
 }
 

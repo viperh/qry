@@ -88,6 +88,8 @@ const EDITOR_EDITING: &[Action] = &[
     Action::Paste,
 ];
 const RESULTS_NAV: &[Action] = &[
+    Action::PrevResult,
+    Action::NextResult,
     Action::Up,
     Action::Down,
     Action::Left,

@@ -1,6 +1,6 @@
 //! The database workers' answers, each from one session.
 
-use super::{dialogs, notices, results, tree};
+use super::{dialogs, notices, run, tree};
 use crate::app::{
     effects::Effect,
     event::DbAnswer,
@@ -39,20 +39,9 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
             dialogs::need_password(state, id, connection, name);
         }
         DbAnswer::SecretNotStored(connection) => tree::secret_not_stored(state, &connection, fx),
-        DbAnswer::QueryDone(result) => {
-            if let Some(session) = state.sessions.get_mut(id) {
-                session.running = session.running.saturating_sub(1);
-                if let Some(Some(begins)) = session.tx_changes.pop_front() {
-                    session.in_transaction = begins;
-                }
-                results::show(&mut session.results, result);
-            }
-        }
-        DbAnswer::QueryFailed(_) => {
-            if let Some(session) = state.sessions.get_mut(id) {
-                session.running = session.running.saturating_sub(1);
-                session.tx_changes.pop_front();
-            }
+        DbAnswer::QueryDone(result) => run::done(state, id, result, fx),
+        DbAnswer::QueryFailed { message, position } => {
+            run::failed(state, id, message, position, fx);
         }
         DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export(id)),
         DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export(id), &message),
@@ -69,6 +58,7 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
                 session.tx_changes.clear();
                 session.in_transaction = false;
             }
+            run::stopped(state, id);
             dialogs::failed(state, Awaiting::Connect(id), "database worker has stopped");
             dialogs::failed(state, Awaiting::Export(id), "database worker has stopped");
         }

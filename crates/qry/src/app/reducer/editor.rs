@@ -1,30 +1,22 @@
 //! The query editor's keys.
 
-use ratatui::{style::Style, widgets::Block};
-use ratatui_textarea::{CursorMove, Scrolling};
+use ratatui_textarea::CursorMove;
 
-use super::execute;
+use super::run;
 use crate::{
     action::Action,
     app::{
         effects::Effect,
         state::{EditorState, State},
     },
-    theme::Theme,
 };
 
 /// What an `Editor` binding does.
 pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     match action {
-        // Until statements are split (T302), the statement is everything.
-        Action::RunStatement | Action::RunAll => {
-            let sql = state.editor().query();
-            execute(state, sql, fx);
-        }
-        Action::RunSelection => {
-            let sql = selection(state.editor()).unwrap_or_else(|| state.editor().query());
-            execute(state, sql, fx);
-        }
+        Action::RunStatement => run::statement(state, fx),
+        Action::RunAll => run::all(state, fx),
+        Action::RunSelection => run::selection(state, fx),
         // No query can be cancelled until there are jobs (T305), so it
         // always copies.
         Action::CancelQuery => apply(state.editor_mut(), Action::Copy),
@@ -32,48 +24,22 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     }
 }
 
-/// The selected text, if anything is selected.
-fn selection(editor: &EditorState) -> Option<String> {
-    let ((start_row, start_col), (end_row, end_col)) = editor.textarea.selection_range()?;
-    let lines = editor.textarea.lines();
-    let mut text = String::new();
-    for row in start_row..=end_row {
-        let line = lines.get(row)?;
-        let from = if row == start_row { start_col } else { 0 };
-        let to = if row == end_row {
-            end_col
-        } else {
-            line.chars().count()
-        };
-        text.extend(line.chars().skip(from).take(to.saturating_sub(from)));
-        if row != end_row {
-            text.push('\n');
-        }
-    }
-    Some(text)
-}
-
-/// Styles the text area for the focus and the theme. It has no box: its
-/// title row is drawn above it, and focus shows there and in the cursor.
-pub(super) fn restyle(editor: &mut EditorState, focused: bool, theme: &Theme) {
-    let textarea = &mut editor.textarea;
-    textarea.set_block(Block::new().style(theme.base()));
-    textarea.set_cursor_style(if focused {
-        theme.editor_cursor()
-    } else {
-        Style::new()
-    });
-    textarea.set_cursor_line_style(Style::new());
-    textarea.set_selection_style(theme.editor_selection());
-    textarea.set_line_number_style(theme.line_number());
-}
-
 fn apply(editor: &mut EditorState, action: Action) {
     use Action as C;
     let t = &mut editor.textarea;
     match action {
-        C::NewLine => t.insert_newline(),
+        // The new line starts as indented as the one it breaks.
+        C::NewLine => {
+            let row = t.cursor().0;
+            let indent: String = t.lines()[row]
+                .chars()
+                .take_while(|c| *c == ' ' || *c == '\t')
+                .collect();
+            t.insert_newline();
+            t.insert_str(indent);
+        }
         C::Indent => _ = t.insert_tab(),
+        C::Dedent => dedent(editor),
         C::Left => move_cursor(editor, CursorMove::Back, false),
         C::Right => move_cursor(editor, CursorMove::Forward, false),
         C::Up => move_cursor(editor, CursorMove::Up, false),
@@ -84,8 +50,18 @@ fn apply(editor: &mut EditorState, action: Action) {
         C::LineEnd => move_cursor(editor, CursorMove::End, false),
         C::Top => move_cursor(editor, CursorMove::Top, false),
         C::Bottom => move_cursor(editor, CursorMove::Bottom, false),
-        C::PageUp => t.scroll(Scrolling::PageUp),
-        C::PageDown => t.scroll(Scrolling::PageDown),
+        C::PageUp | C::PageDown => {
+            let to = if action == C::PageUp {
+                CursorMove::Up
+            } else {
+                CursorMove::Down
+            };
+            let page = editor.page.get().max(1);
+            editor.textarea.cancel_selection();
+            for _ in 0..page {
+                editor.textarea.move_cursor(to);
+            }
+        }
         C::SelectLeft => move_cursor(editor, CursorMove::Back, true),
         C::SelectRight => move_cursor(editor, CursorMove::Forward, true),
         C::SelectUp => move_cursor(editor, CursorMove::Up, true),
@@ -107,6 +83,37 @@ fn apply(editor: &mut EditorState, action: Action) {
         C::Redo => _ = t.redo(),
         _ => {}
     }
+}
+
+/// Takes up to one indent (4 spaces, or a tab) off the start of the line.
+fn dedent(editor: &mut EditorState) {
+    let t = &mut editor.textarea;
+    let cursor = t.cursor();
+    let (row, col) = (cursor.0, cursor.1);
+    let line = &t.lines()[row];
+    let n = if line.starts_with('\t') {
+        1
+    } else {
+        line.chars().take(4).take_while(|c| *c == ' ').count()
+    };
+    if n == 0 {
+        return;
+    }
+    t.cancel_selection();
+    t.move_cursor(CursorMove::Jump(u16::try_from(row).unwrap_or(u16::MAX), 0));
+    for _ in 0..n {
+        t.delete_next_char();
+    }
+    t.move_cursor(CursorMove::Jump(
+        u16::try_from(row).unwrap_or(u16::MAX),
+        u16::try_from(col.saturating_sub(n)).unwrap_or(u16::MAX),
+    ));
+}
+
+/// Pasted text, with Windows line ends made plain.
+pub(super) fn paste(editor: &mut EditorState, text: &str) {
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    editor.textarea.insert_str(text);
 }
 
 /// Moves the cursor; with `select` the selection grows, without it any

@@ -63,6 +63,9 @@ pub enum Action {
     Search,
     CopyCell,
     CopyRow,
+    /// Shows the result tab before or after this one.
+    PrevResult,
+    NextResult,
     Inspect,
     ToggleInspector,
     ToggleJobs,
@@ -87,6 +90,8 @@ pub enum Action {
     // The editor's text commands.
     NewLine,
     Indent,
+    /// Takes one indent off the start of the line.
+    Dedent,
     WordLeft,
     WordRight,
     SelectLeft,
@@ -155,6 +160,8 @@ impl Action {
             Self::Filter => "Filter",
             Self::Search => "Search",
             Self::CopyCell => "Copy the cell",
+            Self::PrevResult => "Previous result",
+            Self::NextResult => "Next result",
             Self::CopyRow => "Copy the row",
             Self::Inspect => "Inspect the value",
             Self::ToggleInspector => "Show / hide the inspector",
@@ -172,6 +179,7 @@ impl Action {
             Self::NextChoice => "Next choice",
             Self::NewLine => "New line",
             Self::Indent => "Indent",
+            Self::Dedent => "Dedent",
             Self::WordLeft => "Previous word",
             Self::WordRight => "Next word",
             Self::SelectLeft => "Select left",
@@ -226,6 +234,8 @@ impl Action {
             Self::Filter => "Filter the tree",
             Self::Search => "Search the results",
             Self::CopyCell => "Copy cell",
+            Self::PrevResult => "Previous result",
+            Self::NextResult => "Next result",
             Self::CopyRow => "Copy row",
             Self::Inspect => "Inspect value",
             Self::ToggleInspector => "Toggle inspector",
@@ -257,6 +267,8 @@ impl Action {
             | Self::Search
             | Self::CopyCell
             | Self::CopyRow
+            | Self::PrevResult
+            | Self::NextResult
             | Self::Inspect
             | Self::ToggleInspector => "results",
             Self::FocusTree
@@ -287,7 +299,12 @@ impl Action {
             Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => {
                 KeyContext::Editor
             }
-            Self::Search | Self::CopyCell | Self::CopyRow | Self::Inspect => KeyContext::Results,
+            Self::Search
+            | Self::CopyCell
+            | Self::CopyRow
+            | Self::Inspect
+            | Self::PrevResult
+            | Self::NextResult => KeyContext::Results,
             _ => KeyContext::Global,
         }
     }

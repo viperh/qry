@@ -4,9 +4,9 @@ expression: text
 ---
  qry  1 scratch                                                                            sqlite · :memory:   COMMAND  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ◌ scratch                  │ 1                                                                                       
+ ▸ ◌ scratch                  │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ ›                                                                                    42 / 42 │            
+            │ ›                                                                                    44 / 44 │            
             │ Go to the tree                                view                                           │            
             │ Go to the editor                              view                                           │            
             │ Go to the results                             view                                           │            

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use hex::encode;
 use serde::{Deserialize, Serialize};
 use shared::QueryResult;
-use tokio_rusqlite::{Connection, OpenFlags, types::ValueRef};
+use tokio_rusqlite::{Connection, OpenFlags, rusqlite, types::ValueRef};
 
 use crate::{DatabaseType, shared, shared::Database};
 
@@ -90,7 +90,8 @@ impl Database for Sqlite {
                     affected: Some(affected),
                 })
             })
-            .await?;
+            .await
+            .map_err(positioned)?;
         Ok(result)
     }
 
@@ -117,5 +118,19 @@ fn render(value: ValueRef<'_>) -> Option<String> {
         ValueRef::Real(f) => Some(f.to_string()),
         ValueRef::Text(t) => Some(String::from_utf8_lossy(t).into_owned()),
         ValueRef::Blob(b) => Some(format!("x'{}'", encode(b))),
+    }
+}
+
+/// SQLite says which token of the statement it could not take; that offset
+/// rides along in a [`QueryError`](shared::QueryError).
+fn positioned(e: tokio_rusqlite::Error<tokio_rusqlite::Error>) -> anyhow::Error {
+    match e {
+        tokio_rusqlite::Error::Error(tokio_rusqlite::Error::Error(
+            rusqlite::Error::SqlInputError { msg, offset, .. },
+        )) => anyhow::Error::new(shared::QueryError {
+            message: msg,
+            position: usize::try_from(offset).ok(),
+        }),
+        e => anyhow::Error::new(e),
     }
 }

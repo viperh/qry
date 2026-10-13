@@ -123,3 +123,22 @@ async fn state_persists_between_queries() {
     let result = driver.query("SELECT x FROM t").await.unwrap();
     assert_eq!(result.rows, [vec![Some("7".to_string())]]);
 }
+
+#[tokio::test]
+async fn sqlite_reports_where_a_statement_went_wrong() {
+    let mut driver = Driver::new();
+    driver
+        .connect(ConnectionConfig::Sqlite(sqlite::SqliteConfig::new(
+            ":memory:", false,
+        )))
+        .await
+        .unwrap();
+    let sql = "select 1 frum t";
+    let error = driver.query(sql).await.unwrap_err();
+    let positioned = error.downcast_ref::<shared::QueryError>().unwrap();
+    assert_eq!(
+        positioned.position.map(|p| &sql[p..]),
+        Some("t"),
+        "{positioned:?}"
+    );
+}

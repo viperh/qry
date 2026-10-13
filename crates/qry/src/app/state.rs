@@ -10,6 +10,7 @@ use std::{
     cell::Cell,
     collections::{BTreeMap, VecDeque},
     hash::{DefaultHasher, Hash, Hasher},
+    ops::Range,
     sync::Arc,
 };
 
@@ -67,7 +68,18 @@ pub(crate) struct SessionState {
     /// The database, schema or file, for the status line.
     pub(crate) database: Option<String>,
     pub(crate) editor: EditorState,
-    pub(crate) results: ResultsState,
+    /// One tab per statement run, the oldest first; never empty.
+    pub(crate) tabs: Vec<ResultTab>,
+    pub(crate) active_tab: usize,
+    /// How many tabs this session has made, for their numbers.
+    pub(crate) tabs_made: usize,
+    /// Statements waiting their turn: the worker gets one at a time, so a
+    /// failure can stop the rest.
+    pub(crate) queue: VecDeque<Queued>,
+    /// The statement the worker is running.
+    pub(crate) in_flight: Option<Queued>,
+    /// The statement whose last run failed, for the editor's gutter.
+    pub(crate) failed: Option<Failed>,
     /// Queries sent and not answered yet. One worker runs them in order.
     pub(crate) running: usize,
     /// What each of those does to the transaction, oldest first: `Some(true)`
@@ -94,7 +106,12 @@ impl SessionState {
                 .or_else(|| record.service.clone())
                 .or_else(|| record.path.clone()),
             editor: EditorState::default(),
-            results: ResultsState::default(),
+            tabs: vec![ResultTab::default()],
+            active_tab: 0,
+            tabs_made: 0,
+            queue: VecDeque::new(),
+            in_flight: None,
+            failed: None,
             running: 0,
             tx_changes: VecDeque::new(),
             in_transaction: false,
@@ -114,6 +131,98 @@ impl SessionState {
 
     pub(crate) fn is_open(&self) -> bool {
         matches!(self.status, SessionStatus::Open { .. })
+    }
+
+    /// Whether a statement is running or waiting.
+    pub(crate) fn busy(&self) -> bool {
+        self.running > 0 || !self.queue.is_empty()
+    }
+
+    /// The SQL dialect of its driver.
+    pub(crate) fn dialect(&self) -> qry_core::sql::Dialect {
+        use qry_core::sql::Dialect;
+        match self.driver {
+            Driver::Postgres => Dialect::Postgres,
+            Driver::Mysql | Driver::Mariadb => Dialect::MySql,
+            Driver::Sqlite => Dialect::Sqlite,
+            Driver::Oracle => Dialect::Oracle,
+        }
+    }
+
+    pub(crate) fn results(&self) -> &ResultsState {
+        &self.tabs[self.active_tab.min(self.tabs.len() - 1)].results
+    }
+
+    pub(crate) fn results_mut(&mut self) -> &mut ResultsState {
+        let tab = self.active_tab.min(self.tabs.len() - 1);
+        &mut self.tabs[tab].results
+    }
+
+    /// A tab for what a statement gave: the first, empty tab if nothing
+    /// has used it yet, else a new one at the end, which is shown. The
+    /// oldest go past [`MAX_TABS`].
+    pub(crate) fn new_tab(&mut self, label: String) -> &mut ResultTab {
+        self.tabs_made += 1;
+        let tab = ResultTab {
+            number: self.tabs_made,
+            label,
+            ..ResultTab::default()
+        };
+        if self.tabs.len() == 1 && self.tabs[0].is_empty() {
+            self.tabs[0] = tab;
+        } else {
+            self.tabs.push(tab);
+            if self.tabs.len() > MAX_TABS {
+                self.tabs.remove(0);
+            }
+        }
+        self.active_tab = self.tabs.len() - 1;
+        &mut self.tabs[self.active_tab]
+    }
+}
+
+/// The most result tabs a session keeps.
+pub(crate) const MAX_TABS: usize = 20;
+
+/// A statement to run, and where it is in the editor when it came from
+/// there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Queued {
+    pub(crate) sql: String,
+    /// Byte offsets into the editor's text.
+    pub(crate) span: Option<Range<usize>>,
+}
+
+/// The statement whose run failed, as byte offsets into the editor's text,
+/// and where the server said the problem is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Failed {
+    pub(crate) span: Range<usize>,
+    pub(crate) position: Option<usize>,
+}
+
+/// Why a statement failed, as its result tab shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TabError {
+    pub(crate) message: String,
+    /// A byte offset into `sql`.
+    pub(crate) position: Option<usize>,
+    pub(crate) sql: String,
+}
+
+/// One statement's outcome: its rows, or why it failed.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct ResultTab {
+    pub(crate) number: usize,
+    /// `users · 42`, `UPDATE · 3 rows`, `✗ error`.
+    pub(crate) label: String,
+    pub(crate) results: ResultsState,
+    pub(crate) error: Option<TabError>,
+}
+
+impl ResultTab {
+    fn is_empty(&self) -> bool {
+        self.results.result.is_none() && self.error.is_none()
     }
 }
 
@@ -471,6 +580,7 @@ impl State {
     }
 
     /// The active session's editor.
+    #[cfg(test)]
     pub(crate) fn editor(&self) -> &EditorState {
         &self.sessions.active().editor
     }
@@ -481,11 +591,11 @@ impl State {
 
     /// The active session's results.
     pub(crate) fn results(&self) -> &ResultsState {
-        &self.sessions.active().results
+        self.sessions.active().results()
     }
 
     pub(crate) fn results_mut(&mut self) -> &mut ResultsState {
-        &mut self.sessions.active_mut().results
+        self.sessions.active_mut().results_mut()
     }
 
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
@@ -624,17 +734,57 @@ impl TreeState {
     }
 }
 
-/// The query editor.
+/// The query editor. `ratatui-textarea` keeps the text, the cursor, the
+/// selection and the undo history; the view draws it itself.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct EditorState {
-    /// Styled by the reducer for the focus and theme, since drawing it must
-    /// not clone it: it keeps its own scroll position as it draws.
     pub(crate) textarea: TextArea<'static>,
+    /// The first row and display column in view; kept by the view.
+    pub(crate) scroll: Cell<(usize, usize)>,
+    /// Rows that fit, from the last draw, for PageUp/PageDown.
+    pub(crate) page: Cell<usize>,
 }
 
 impl EditorState {
     pub(crate) fn query(&self) -> String {
         self.textarea.lines().join("\n")
+    }
+
+    /// The byte offset of `(row, col)`, a char column, in [`query`](Self::query).
+    pub(crate) fn offset_of(&self, (row, col): (usize, usize)) -> usize {
+        let lines = self.textarea.lines();
+        let before: usize = lines.iter().take(row).map(|l| l.len() + 1).sum();
+        let line = lines.get(row).map_or("", String::as_str);
+        before
+            + line
+                .char_indices()
+                .nth(col)
+                .map_or(line.len(), |(byte, _)| byte)
+    }
+
+    /// The `(row, col)` of a byte offset into [`query`](Self::query).
+    pub(crate) fn position_of(&self, offset: usize) -> (usize, usize) {
+        let lines = self.textarea.lines();
+        let mut start = 0;
+        for (row, line) in lines.iter().enumerate() {
+            let end = start + line.len();
+            if offset <= end {
+                let mut byte = (offset - start).min(line.len());
+                while !line.is_char_boundary(byte) {
+                    byte -= 1;
+                }
+                return (row, line[..byte].chars().count());
+            }
+            start = end + 1;
+        }
+        let last = lines.len().saturating_sub(1);
+        (last, lines.last().map_or(0, |l| l.chars().count()))
+    }
+
+    /// The cursor's byte offset into [`query`](Self::query).
+    pub(crate) fn cursor_offset(&self) -> usize {
+        let cursor = self.textarea.cursor();
+        self.offset_of((cursor.0, cursor.1))
     }
 }
 

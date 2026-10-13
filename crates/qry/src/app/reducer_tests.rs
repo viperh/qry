@@ -596,7 +596,7 @@ fn question_mark_types_in_editor_but_opens_help_in_results() {
     assert_eq!(h.state().editor().query(), "a?b:c");
     assert!(h.state().help().is_none());
 
-    h.keys("tab ?");
+    h.keys("f6 ?");
     assert!(h.state().help().is_some());
     h.keys("?");
     assert!(h.state().help().is_none());
@@ -608,7 +608,7 @@ fn pill_follows_focus() {
     let mut h = harness();
     h.keys("tab");
     assert_eq!(h.state().pill(), Pill::Edit);
-    h.keys("tab");
+    h.keys("f6");
     assert_eq!(h.state().pill(), Pill::Normal);
     h.keys("tab");
     assert_eq!(h.state().pill(), Pill::Normal, "the tree");

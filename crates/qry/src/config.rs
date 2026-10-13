@@ -45,6 +45,8 @@ pub struct Config {
     pub(crate) keymap: Keymap,
     /// The theme's name (`--theme` wins over it); see [`crate::theme`].
     pub(crate) theme: Option<String>,
+    /// Run all keeps going after a statement fails, instead of stopping.
+    pub(crate) continue_on_error: bool,
     /// Problems that did not stop the config from loading; see
     /// [`Config::warnings`].
     warnings: Vec<String>,
@@ -55,6 +57,8 @@ pub struct Config {
 struct RawFile {
     #[serde(default)]
     theme: Option<String>,
+    #[serde(default)]
+    continue_on_error: Option<bool>,
     /// `{ context: { chord: action or null } }`.
     #[serde(default)]
     keybindings: Option<Map<String, Value>>,
@@ -132,6 +136,9 @@ impl Config {
         }
         if file.theme.is_some() {
             self.theme = file.theme;
+        }
+        if let Some(keep_going) = file.continue_on_error {
+            self.continue_on_error = keep_going;
         }
 
         let mut old = Migrated::default();
@@ -244,6 +251,10 @@ impl Config {
         if let Some(theme) = &self.theme {
             out.push_str(&format!("  \"theme\": {},\n", quote(theme)));
         }
+        out.push_str(&format!(
+            "  \"continue_on_error\": {},\n",
+            self.continue_on_error
+        ));
         out.push_str("  \"keybindings\": {");
         for (i, context) in KeyContext::iter().enumerate() {
             let mut bindings: Vec<_> = self

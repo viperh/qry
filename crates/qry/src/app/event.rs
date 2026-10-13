@@ -24,6 +24,8 @@ pub enum UiEvent {
     Key(KeyEvent),
     /// A click or the wheel, at a cell of the screen.
     Mouse(MouseEvent),
+    /// Text pasted into the terminal, whole.
+    Paste(String),
     Resize(u16, u16),
     /// The tick-rate timer, at the moment the runtime saw it.
     Tick(Instant),
@@ -99,7 +101,11 @@ pub enum DbAnswer {
     QueryDone(Arc<QueryResult>),
     /// The query did not run; the status line that follows says why in
     /// full. Either this or `QueryDone` ends every query.
-    QueryFailed(String),
+    QueryFailed {
+        message: String,
+        /// Where in the statement, as a byte offset, when the server says.
+        position: Option<usize>,
+    },
     /// The answer to an `Export`, the same way round: the path it wrote, or
     /// why it could not.
     Exported(String),
@@ -132,7 +138,11 @@ impl std::fmt::Debug for DbAnswer {
                 result.rows.len(),
                 result.columns.len()
             ),
-            Self::QueryFailed(message) => f.debug_tuple("QueryFailed").field(message).finish(),
+            Self::QueryFailed { message, position } => f
+                .debug_struct("QueryFailed")
+                .field("message", message)
+                .field("position", position)
+                .finish(),
             Self::Exported(path) => f.debug_tuple("Exported").field(path).finish(),
             Self::ExportFailed(message) => f.debug_tuple("ExportFailed").field(message).finish(),
             Self::TablesLoaded(tables) => f.debug_tuple("TablesLoaded").field(tables).finish(),

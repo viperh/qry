@@ -4,4 +4,4 @@ expression: "buffer_lines(&app.render_buffer(120, 40))[..3].join(\"\\n\")"
 ---
  qry  1 scratch                                                                               sqlite · :memory:   EDIT  
  SCHEMA                       │ QUERY  ln 1, col 27                                                                     
- ▸ ● scratch                  │ 1 select id, name from users
+ ▸ ● scratch                  │▌ 1 │ select id, name from users

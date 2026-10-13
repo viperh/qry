@@ -36,13 +36,12 @@ impl App {
     /// `seed` makes the connection ids it mints differ between runs; see
     /// [`connections::id_seed`](crate::connections::id_seed).
     pub fn new(config: Config, theme: Theme, seed: u64) -> Self {
-        let mut state = State {
+        let state = State {
             config: Arc::new(config),
             theme,
             ids: state::IdGen::new(seed),
             ..State::default()
         };
-        reducer::restyle(&mut state);
         Self { state }
     }
 
@@ -60,7 +59,6 @@ impl App {
     pub fn set_theme(&mut self, theme: Theme) {
         self.state.theme = theme;
         self.state.dirty = true;
-        reducer::restyle(&mut self.state);
     }
 
     /// Whether anything changed since the last call, for the runtime to know

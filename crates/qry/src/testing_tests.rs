@@ -149,18 +149,28 @@ fn a_fake_database_answers_queries_on_the_virtual_clock() {
     h.keys("ctrl-a backspace")
         .type_str("SELECT * FROM nope")
         .keys("f8");
-    assert_eq!(db.calls(), ["SELECT * FROM t", "SELECT * FROM nope"]);
+    // The second waits for the first, as the worker runs one at a time.
+    assert_eq!(db.calls(), ["SELECT * FROM t"]);
     assert!(
         !h.render(80, 24).contains("r1c1"),
         "answered before its delay"
     );
 
     h.advance(500);
-    let text = h.render(80, 24);
-    assert!(text.contains("r1c1"), "{text}");
-    // The second answer waited for the first, as the worker runs in order;
-    // its toast waits behind the first one's.
-    assert!(text.contains("(+1)"), "{text}");
+    assert_eq!(db.calls(), ["SELECT * FROM t", "SELECT * FROM nope"]);
+    let tabs = &h.state().sessions.active().tabs;
+    assert_eq!(tabs.len(), 2);
+    assert_eq!(tabs[0].results.result.as_ref().unwrap().rows.len(), 2);
+    assert!(
+        tabs[1]
+            .error
+            .as_ref()
+            .unwrap()
+            .message
+            .contains("no such table")
+    );
+    // Its toast waits behind the first one's.
+    assert!(h.render(80, 24).contains("(+1)"));
     h.advance(4000);
     assert!(h.render(80, 24).contains("no such table: nope"));
     assert_eq!(h.take_effects().len(), 2);

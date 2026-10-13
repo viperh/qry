@@ -1,0 +1,6 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: "buffer_lines(&drawn(&h, w, ht)).join(\"\\n\")"
+---
+  1 │ select '日 本 語  🦀 ' as name;                           
+▌ 2 │ select 1;

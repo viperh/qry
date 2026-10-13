@@ -18,7 +18,7 @@ const ELLIPSIS: &str = " … ";
 /// What a tab says: its number and title, and a mark while a query runs
 /// there.
 fn label(number: usize, session: &SessionState) -> String {
-    let running = if session.running > 0 { " ◐" } else { "" };
+    let running = if session.busy() { " ◐" } else { "" };
     format!(" {number} {}{running} ", session.title)
 }
 
@@ -111,7 +111,7 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     for (_, text, tab) in &pieces {
         let style = match tab.map(|i| order[i]) {
             Some(session) if session.id == sessions.active => theme.tab_active(),
-            Some(session) if session.running > 0 => theme.tab_running(),
+            Some(session) if session.busy() => theme.tab_running(),
             Some(_) => theme.tab(),
             None => theme.overflow_hint(),
         };

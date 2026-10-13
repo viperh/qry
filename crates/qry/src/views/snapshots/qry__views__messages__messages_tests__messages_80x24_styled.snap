@@ -4,7 +4,7 @@ expression: "styled(&h.render_buffer(80, 24))"
 ---
  qry  1 scratch                                     sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                              
-      No connections yet      │ 1                                               
+      No connections yet      │  1 │                                            
                               │                                                 
     ┌ Messages ────────────────────────────────────────────────────────────┐    
     │ 12:04:31  ✗ cannot save connections: permission denied (os error 13) │    

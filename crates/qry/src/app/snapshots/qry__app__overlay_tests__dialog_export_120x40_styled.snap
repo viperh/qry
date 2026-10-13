@@ -4,7 +4,7 @@ expression: "styled(&h.render_buffer(120, 40))"
 ---
  qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ● scratch                  │ 1                                                                                       
+ ▸ ● scratch                  │  1 │                                                                                    
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

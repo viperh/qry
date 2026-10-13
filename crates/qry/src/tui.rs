@@ -82,7 +82,6 @@ impl Tui {
         self
     }
 
-    #[allow(dead_code, reason = "part of the Tui builder API, not used by qry yet")]
     pub(crate) fn paste(mut self, paste: bool) -> Self {
         self.paste = paste;
         self

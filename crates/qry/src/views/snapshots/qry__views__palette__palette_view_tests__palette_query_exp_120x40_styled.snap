@@ -4,9 +4,9 @@ expression: "styled(&h.render_buffer(120, 40))"
 ---
  qry  1 scratch                                                                            sqlite · :memory:   COMMAND  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ◌ scratch                  │ 1                                                                                       
+ ▸ ◌ scratch                  │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › exp                                                                                 6 / 42 │            
+            │ › exp                                                                                 6 / 44 │            
             │ Export connections                            connection                              ctrl-s │            
             │ Export results                                results                                 ctrl-s │            
             │ export csv <path>                             results                                        │            

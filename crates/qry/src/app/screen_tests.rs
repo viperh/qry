@@ -25,7 +25,7 @@ fn screen() -> AppHarness {
         &["id", "name"],
         &[&[Some("1"), Some("alice")], &[Some("2"), None]],
     ))));
-    h.keys("shift-tab");
+    h.state_mut().focus = Focus::Tree;
     h
 }
 
@@ -96,7 +96,12 @@ fn screen_focus_moves_title_accent() {
             format!("screen_focus_{step}_120x40"),
             buffer_lines(&app.render_buffer(120, 40))[..3].join("\n")
         );
-        app.keys("tab");
+        // Tab indents in the editor; F6 moves on from there.
+        app.keys(if app.state().focus == Focus::Editor {
+            "f6"
+        } else {
+            "tab"
+        });
     }
 }
 
@@ -159,7 +164,7 @@ fn f11_maximises_the_focused_region_and_restores() {
         None,
         "the tree is not maximised"
     );
-    app.keys("tab tab f11");
+    app.keys("tab f6 f11");
     assert_eq!(app.state().chrome.maximised, Some(Region::Results));
     let text = app.render(120, 40);
     assert!(!text.contains("QUERY"), "{text}");

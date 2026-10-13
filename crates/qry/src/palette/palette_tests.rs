@@ -40,6 +40,7 @@ const KEY_ONLY: &[Action] = &[
     Action::NextChoice,
     Action::NewLine,
     Action::Indent,
+    Action::Dedent,
     Action::WordLeft,
     Action::WordRight,
     Action::SelectLeft,

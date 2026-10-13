@@ -152,16 +152,16 @@ SQL formatting, multi-cursor, vim mode, LSP, files on disk (open/save `.sql`; a 
 
 ## Acceptance criteria
 
-- [ ] `qry_core::sql::{lex, split, statement_at, is_ddl}` exist, are documented, and have no terminal dependencies.
+- [x] `qry_core::sql::{lex, split, statement_at, is_ddl}` exist, are documented, and have no terminal dependencies.
 - [ ] The lexer is total: it never panics and its spans tile the whole input with no gaps or overlaps (property-tested and fuzzed).
-- [ ] The splitter handles semicolons inside strings, comments, dollar-quoted bodies, Oracle q-quotes and PL/SQL blocks; the Oracle `/` terminator; and MySQL `DELIMITER`.
-- [ ] Highlighting uses only `Theme` helpers: keyword teal, string green, number purple, comment dim italic, error coral underline.
-- [ ] An amber `▌` marks the statement under the cursor and moves as the cursor moves.
-- [ ] Run statement, run selection and run all each produce one job and one result set per statement. Two `SELECT`s on Postgres yield two correct result tabs, not a merged grid.
-- [ ] A server error with a position underlines the right token in coral, and the gutter shows a coral `▌` on the failed statement.
-- [ ] Each session has its own buffer, cursor and undo history. Switching sessions keeps them.
-- [ ] Bracket matching and auto-indent work as described.
-- [ ] Every existing `editor.rs` test still passes, or is ported to a sibling `editor_tests.rs` with the same assertions.
+- [x] The splitter handles semicolons inside strings, comments, dollar-quoted bodies, Oracle q-quotes and PL/SQL blocks; the Oracle `/` terminator; and MySQL `DELIMITER`.
+- [x] Highlighting uses only `Theme` helpers: keyword teal, string green, number purple, comment dim italic, error coral underline.
+- [x] An amber `▌` marks the statement under the cursor and moves as the cursor moves.
+- [x] Run statement, run selection and run all each produce one job and one result set per statement. Two `SELECT`s on Postgres yield two correct result tabs, not a merged grid.
+- [x] A server error with a position underlines the right token in coral, and the gutter shows a coral `▌` on the failed statement.
+- [x] Each session has its own buffer, cursor and undo history. Switching sessions keeps them.
+- [x] Bracket matching and auto-indent work as described.
+- [x] Every existing `editor.rs` test still passes, or is ported to a sibling `editor_tests.rs` with the same assertions.
 - [ ] Typing in a 10 000-line buffer stays under the T006 budget (bench `editor_render_10k_lines`).
 
 ## Tests
@@ -222,3 +222,15 @@ Seeds go in `fuzz/seed-corpus.sh` from `crates/qry-core/tests/fixtures/sql/*.sql
 **AppHarness flow:** type `select 1; select 2;`, then `h.keys("f8")`. The results tabs show ` 1 · 1 row ` and ` 2 · 1 row `. Snapshot `run_all_two_tabs_120x40`.
 
 **DB integration tests** (T004 `db_or_skip!`): `two_selects_produce_two_results` for every backend, and `error_position_reported` for Postgres, SQLite and Oracle.
+
+## Implementation notes
+
+- **Two boxes stay unticked.** The lexer and splitter are property-tested (`prop_lex_never_panics_and_tiles`, `prop_lex_tiles_sql_shaped_text`, `prop_split_concat_covers_all_non_trivia`, `prop_split_is_stable_under_trailing_whitespace`, `prop_split_never_panics`), but the `sql_lex`/`sql_split` cargo-fuzz targets and the seed corpus belong with T005's fuzz setup, which has not landed. Likewise the `editor_render_10k_lines` bench waits for T006's benchmark harness. The editor lexes the whole buffer on each draw; T006 will show whether the visible-range lexing the spec suggests is needed.
+- **qry-core.** `sql/{mod,lex,split,keywords}.rs`: `Dialect` (Postgres, MySql for MySQL and MariaDB, Sqlite, Oracle), `lex`, `Token`/`TokenKind`, `split`/`Statement`, `statement_at` and `is_ddl`. Keywords are sorted per-dialect lists searched with a binary search (a test checks the order). Statement spans leave out the terminator and surrounding trivia; an `Unterminated` token's trailing blanks are not part of a statement. `statement_at` also picks the statement whose `;` the cursor is right after. `QueryError { message, position }` (in `shared.rs`) rides inside the `anyhow::Error`: Postgres fills it from the server's position (a 1-based character index, mapped to bytes), SQLite from rusqlite's `SqlInputError` offset; Oracle and MySQL report no position yet. Postgres still uses `simple_query`, now with one statement at a time, so two `SELECT`s give two results; the extended protocol (for column types) is T303's.
+- **Running.** `reducer/run.rs`: Run statement takes the statement under the cursor, Run all every statement, Run selection the selected text split into statements (spans shifted into the buffer). They go into `SessionState::queue`, and the worker gets one at a time (`in_flight`): each answer sends the next. A failure records `SessionState::failed` (the statement's span and the server's position, shifted into the buffer) and drops the rest of the run unless the new `continue_on_error` config key (default `false`) is set. A new run clears the failure. T305 turns these into jobs with a drawer and cancellation.
+- **Result tabs** (the foundation T303 builds on): `SessionState::tabs` (never empty, at most 20, the oldest dropped), `active_tab`, `tabs_made` for numbering. Each answer opens a tab labelled `users · 42` (the first table after `FROM`), `UPDATE · 3 rows`, or `✗ error`. With more than one tab the results title shows them (` 1 users · 42 `, the active one underlined, failed ones coral). `[` and `]` (new `PrevResult`/`NextResult`) switch tabs. A failed statement's tab shows the message and, with a position, the statement's line with `^~~~` under the token.
+- **Drawing.** `views/editor.rs` draws the text area's lines itself; `ratatui-textarea` still keeps the text, cursor, selection and undo. `EditorState` gained `scroll`/`page` cells (the view keeps the cursor in view, horizontally too) and `offset_of`/`position_of`/`cursor_offset`. Gutter: `▌` (amber `gutter_selected` on the statement under the cursor, coral on the failed one), the line number (amber on the cursor's line) and `│`. Token styles come from the theme's `sql_*` helpers; the server's error position underlines that token with `sql_error`; matching brackets are amber bold (`hint_key`), an unmatched one coral; the selection uses `editor_selection` and the block cursor `editor_cursor` while focused. Tabs draw as 4 spaces; wide characters use their display width. The title row reads `ln 4, col 12 · 3 statements`. `reducer::restyle` and the text area's block styling are gone.
+- **Keys.** Enter keeps the line's indentation. In the editor Tab indents (`Indent`, 4 spaces), shift-Tab dedents (new `Dedent`) and `F6` moves to the next pane (ctrl-Tab is rarely sent by terminals, so only F6 is bound). PageUp/PageDown move the cursor by the drawn height. Bracketed paste is on: `UiEvent::Paste` goes to the editor (CRLF and CR become LF), a dialog's text field, or the palette's query. Completion (T302b) is not done.
+- **Tests.** `qry-core/src/sql/lex_tests.rs` and `split_tests.rs` (every listed test plus `keyword_lists_are_sorted_for_the_binary_search` and the proptests above), `lib_tests::sqlite_reports_where_a_statement_went_wrong`, the listed editor tests in `app/reducer/editor_tests.rs` (`f5_runs_the_statement_and_ctrl_e_the_selection` now expects the statement under the cursor), and `views/editor_tests.rs` (colours, the marker following the cursor, the failed statement and its underline, brackets, wide characters, horizontal scrolling, the seven listed snapshots plain and styled, and `run_all_two_tabs_120x40`). Tests that tabbed through the editor to the results now press F6. The DB integration tests (`two_selects_produce_two_results`, `error_position_reported`) wait for T004's harness.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (403 `qry` unit tests, 66 in `qry-core`) and the CI docs command.
+

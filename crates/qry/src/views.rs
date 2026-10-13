@@ -76,6 +76,7 @@ pub fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
             frame,
             screen.results_title,
         );
+        results::draw_tabs(state, theme, frame, screen.results_title);
         results::draw(state, theme, frame, screen.results);
     }
     if let (Some(divider_area), Some(inspector)) = (screen.inspector_divider, screen.inspector) {

@@ -248,7 +248,7 @@ fn close_with_running_job_asks_first() {
     let mut s = FakeSessions::new();
     let prod = s.open(1);
     s.keys("tab").h.type_str("select pg_sleep(60)");
-    s.keys("f8 tab");
+    s.keys("f8 f6");
     s.effects();
 
     s.keys("ctrl-w");

@@ -1,0 +1,11 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: "buffer_lines(&drawn(&h, w, ht)).join(\"\\n\")"
+---
+  1 │ -- active users                                                           
+  2 │ SELECT id, name                                                           
+  3 │   FROM users                                                              
+  4 │  WHERE created_at > now() - interval '7 days';                            
+  5 │                                                                           
+▌ 6 │ SELECT count(*) FROM orders WHERE total > 100.5;                          
+  7 │ /* nested /* ok */ comment */

@@ -91,3 +91,29 @@ pub struct QueryResult {
     pub rows: Vec<Vec<Option<String>>>,
     pub affected: Option<u64>,
 }
+
+/// A statement the server refused, and where in it, when the server says:
+/// a byte offset into the statement's text. Backends return it inside the
+/// `anyhow::Error`, so callers that only print the error see the message.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryError {
+    pub message: String,
+    pub position: Option<usize>,
+}
+
+impl std::fmt::Display for QueryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for QueryError {}
+
+impl QueryError {
+    /// The position a backend reported as a 1-based character index into
+    /// `sql`, as a byte offset; `None` if it is past the end.
+    pub fn char_position(sql: &str, one_based: usize) -> Option<usize> {
+        let index = one_based.checked_sub(1)?;
+        sql.char_indices().nth(index).map(|(byte, _)| byte)
+    }
+}

@@ -6,6 +6,7 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 use crate::{
     Database, DatabaseType,
+    shared::QueryError,
     shared::{QueryResult, SslMode},
 };
 
@@ -104,7 +105,21 @@ impl Database for Postgres {
         )
     }
     async fn query(&self, sql: &str) -> Result<QueryResult> {
-        let messages = self.client.simple_query(sql).await?;
+        let messages = self.client.simple_query(sql).await.map_err(|e| {
+            let Some(db) = e.as_db_error() else {
+                return anyhow::Error::new(e);
+            };
+            let position = match db.position() {
+                Some(tokio_postgres::error::ErrorPosition::Original(p)) => {
+                    QueryError::char_position(sql, *p as usize)
+                }
+                _ => None,
+            };
+            anyhow::Error::new(QueryError {
+                message: db.message().to_string(),
+                position,
+            })
+        })?;
 
         let mut columns = Vec::new();
         let mut rows = Vec::new();
@@ -135,7 +150,21 @@ impl Database for Postgres {
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
-        let messages = self.client.simple_query(sql).await?;
+        let messages = self.client.simple_query(sql).await.map_err(|e| {
+            let Some(db) = e.as_db_error() else {
+                return anyhow::Error::new(e);
+            };
+            let position = match db.position() {
+                Some(tokio_postgres::error::ErrorPosition::Original(p)) => {
+                    QueryError::char_position(sql, *p as usize)
+                }
+                _ => None,
+            };
+            anyhow::Error::new(QueryError {
+                message: db.message().to_string(),
+                position,
+            })
+        })?;
         let mut affected = 0;
         for message in messages {
             if let SimpleQueryMessage::CommandComplete(n) = message {

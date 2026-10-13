@@ -89,7 +89,8 @@ fn tree_is_focused_and_highlighted_at_startup() {
     assert_ne!(buf[(1, 1)].fg, focused);
     assert_eq!(buf[(32, 1)].fg, focused);
 
-    h.keys("tab");
+    // Tab indents in the editor; F6 moves on.
+    h.keys("f6");
     assert_eq!(h.state().focus, Focus::Results);
     h.keys("tab");
     assert_eq!(h.state().focus, Focus::Tree);

@@ -4,7 +4,7 @@ expression: "styled(&app.render_buffer(w, h))"
 ---
  qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
  SCHEMA                                 │ QUERY  ln 1, col 27                                                                                                   
- ▸ ● scratch                            │ 1 select id, name from users                                                                                          
+ ▸ ● scratch                            │▌ 1 │ select id, name from users                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
@@ -66,8 +66,13 @@ expression: "styled(&app.render_buffer(w, h))"
 5,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
 12,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,2 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
-41,2 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-44,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+41,2 Rgb(242, 176, 74) Rgb(14, 17, 22) NONE
+45,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+46,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+47,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+53,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+63,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+67,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 0,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,3 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
 41,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE

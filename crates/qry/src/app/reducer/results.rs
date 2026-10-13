@@ -25,6 +25,19 @@ pub(super) fn show(results: &mut ResultsState, result: Arc<QueryResult>) {
 /// What a `Results` binding does. Copying, searching and inspecting come
 /// with the grid's redesign (T303, T304).
 pub(super) fn run(state: &mut State, action: Action) {
+    // `[` and `]` show the result before or after this one.
+    let session = state.sessions.active_mut();
+    match action {
+        Action::PrevResult => {
+            session.active_tab = session.active_tab.saturating_sub(1);
+            return;
+        }
+        Action::NextResult => {
+            session.active_tab = (session.active_tab + 1).min(session.tabs.len() - 1);
+            return;
+        }
+        _ => {}
+    }
     let results = state.results_mut();
     let Some((rows, cols)) = results
         .result

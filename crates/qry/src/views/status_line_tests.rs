@@ -87,10 +87,13 @@ fn in_transaction_is_coral() {
     assert_eq!(h.theme().status_warning().fg, Some(h.theme().coral));
 
     // A failed COMMIT leaves it open; one that works ends it.
-    h.type_str("; commit").keys("f8");
-    h.db(DbAnswer::QueryFailed("nope".into()));
+    h.keys("ctrl-a backspace").type_str("commit").keys("f5");
+    h.db(DbAnswer::QueryFailed {
+        message: "nope".into(),
+        position: None,
+    });
     assert!(line(&h, 80).contains("in transaction"));
-    h.keys("f8");
+    h.keys("f5");
     h.db(DbAnswer::QueryDone(Arc::new(grid(0, 0))));
     assert!(line(&h, 80).contains("auto-commit"));
 }

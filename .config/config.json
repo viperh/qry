@@ -5,6 +5,10 @@
   // `qry --print-config` prints the result.
   "theme": "dark",
 
+  // Run all (F8) stops at the first statement that fails, unless this is
+  // true.
+  "continue_on_error": false,
+
   // Key bindings, by context: `Global` applies wherever a pane has focus,
   // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
   // `Jobs`), which win over it. `Dialog`, `Help` and `Palette` apply alone
@@ -80,6 +84,10 @@
       "<ctrl-e>": "RunSelection",
       "<ctrl-c>": "CancelQuery",
       "<enter>": "NewLine",
+      "<tab>": "Indent",
+      // Tab and shift-Tab indent here, so F6 moves on.
+      "<shift-tab>": "Dedent",
+      "<f6>": "FocusNext",
       "<left>": "Left",
       "<right>": "Right",
       "<up>": "Up",
@@ -129,6 +137,8 @@
       "<pagedown>": "PageDown",
       "<home>": "LineStart",
       "<end>": "LineEnd",
+      "<[>": "PrevResult",
+      "<]>": "NextResult",
       "<y>": "CopyCell",
       "<Y>": "CopyRow",
       "</>": "Search",

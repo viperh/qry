@@ -403,7 +403,7 @@ impl AppHarness {
                 }
             }
         };
-        let answer = db::query_answer(outcome, Duration::from_millis(after));
+        let answer = db::query_answer(outcome, Duration::from_millis(after), None);
         self.schedule(id, after, answer);
     }
 

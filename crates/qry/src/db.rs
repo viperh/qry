@@ -80,7 +80,14 @@ impl Worker {
             },
             DbCommand::Query(sql) => {
                 let started = Instant::now();
-                let answers = query_answer(self.driver.query(&sql).await, started.elapsed());
+                let outcome = self.driver.query(&sql).await;
+                // Where in the statement the server stopped, when it says.
+                let position = outcome
+                    .as_ref()
+                    .err()
+                    .and_then(|e| e.downcast_ref::<qry_core::shared::QueryError>())
+                    .and_then(|e| e.position);
+                let answers = query_answer(outcome, started.elapsed(), position);
                 if let Some(DbAnswer::QueryDone(result)) = answers.first() {
                     self.last = Some(result.clone());
                 }
@@ -204,6 +211,7 @@ impl Worker {
 pub(crate) fn query_answer<E: std::fmt::Display>(
     outcome: Result<QueryResult, E>,
     elapsed: Duration,
+    position: Option<usize>,
 ) -> Vec<DbAnswer> {
     match outcome {
         Ok(result) => {
@@ -217,7 +225,10 @@ pub(crate) fn query_answer<E: std::fmt::Display>(
             vec![DbAnswer::QueryDone(Arc::new(result)), success(summary)]
         }
         Err(e) => vec![
-            DbAnswer::QueryFailed(e.to_string()),
+            DbAnswer::QueryFailed {
+                message: e.to_string(),
+                position,
+            },
             error(format!("{e:#}")),
         ],
     }

@@ -22,7 +22,7 @@ fn hints_follow_the_focused_context() {
     let tree = line(&h, 120);
     h.keys("tab");
     let editor = line(&h, 120);
-    h.keys("tab");
+    h.keys("f6");
     let results = line(&h, 120);
     assert!(tree.contains("Enter open"), "{tree}");
     assert!(

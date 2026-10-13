@@ -76,6 +76,7 @@ impl Runtime {
     pub async fn run(&mut self) -> color_eyre::Result<()> {
         let mut tui = Tui::new()?
             .mouse(true)
+            .paste(true)
             .tick_rate(self.tick_rate)
             .frame_rate(self.frame_rate);
         tui.enter()?;
@@ -109,6 +110,7 @@ impl Runtime {
                         Incoming::Answer(id, answer) => UiEvent::Db(id, answer),
                         Incoming::Terminal(Some(Event::Key(key))) => UiEvent::Key(key),
                         Incoming::Terminal(Some(Event::Mouse(mouse))) => UiEvent::Mouse(mouse),
+                        Incoming::Terminal(Some(Event::Paste(text))) => UiEvent::Paste(text),
                         Incoming::Terminal(Some(Event::Tick)) => {
                             let now = time_of_day();
                             if now != clock {

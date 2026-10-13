@@ -12,15 +12,17 @@ mod mouse;
 pub(crate) mod notices;
 pub(crate) mod palette;
 mod results;
+mod run;
 mod sessions;
 mod tree;
 
 use super::{
     effects::Effect,
     event::{Timer, UiEvent},
+    state,
     state::{Focus, SessionId, State, scratch_record},
 };
-use crate::{action::Action, connections::StoredConnection, db::DbCommand, keymap::KeyContext};
+use crate::{action::Action, connections::StoredConnection, keymap::KeyContext};
 
 pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     let mut fx = Vec::new();
@@ -30,6 +32,7 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Started => start(state, &mut fx),
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
+        UiEvent::Paste(text) => paste(state, &text),
         UiEvent::Resize(w, h) => state.size = (w, h),
         UiEvent::Tick(_) => {}
         UiEvent::Clock(now) => state.clock = now,
@@ -44,7 +47,6 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Db(..) => {}
         UiEvent::File(answer) => files::answer(state, answer, &mut fx),
     }
-    restyle(state);
     fx
 }
 
@@ -111,16 +113,6 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
     }
 }
 
-/// Runs `sql` on the active session, unless there is nothing to run.
-fn execute(state: &mut State, sql: String, fx: &mut Vec<Effect>) {
-    if !sql.trim().is_empty() {
-        let session = state.sessions.active_mut();
-        session.running += 1;
-        session.tx_changes.push_back(tx_change(&sql));
-        fx.push(Effect::Db(session.id, DbCommand::Query(sql)));
-    }
-}
-
 /// What `sql` does to the transaction, judged by its last statement:
 /// `Some(true)` begins one, `Some(false)` ends it, `None` leaves it be.
 pub(crate) fn tx_change(sql: &str) -> Option<bool> {
@@ -154,11 +146,29 @@ fn connect(state: &mut State, record: StoredConnection, fx: &mut Vec<Effect>) ->
     }
 }
 
-/// Styles the editor for the focus and the theme. The text area keeps its
-/// own scroll position as it draws, so the view draws it as it is, and its
-/// styling is set here.
-pub(super) fn restyle(state: &mut State) {
-    let focused = state.focus == Focus::Editor;
-    let theme = state.theme;
-    editor::restyle(state.editor_mut(), focused, &theme);
+/// Pasted text goes where typing would: the open dialog's text field, the
+/// palette's query, or the editor.
+fn paste(state: &mut State, text: &str) {
+    match state.overlays.last() {
+        Some(state::Overlay::Dialog(_)) => {
+            if let Some(dialog) = state.dialog_mut()
+                && dialog.form().is_typing()
+            {
+                for c in text.chars().filter(|c| !c.is_control()) {
+                    dialog.form_mut().handle_key(
+                        crossterm::event::KeyEvent::from(crossterm::event::KeyCode::Char(c)),
+                        None,
+                    );
+                }
+            }
+        }
+        Some(state::Overlay::Palette(_)) => {
+            for c in text.chars().filter(|c| !c.is_control()) {
+                palette::type_char(state, c);
+            }
+        }
+        Some(_) => {}
+        None if state.focus == Focus::Editor => editor::paste(state.editor_mut(), text),
+        None => {}
+    }
 }

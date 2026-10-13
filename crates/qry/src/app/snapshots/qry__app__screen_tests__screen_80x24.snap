@@ -4,7 +4,7 @@ expression: "app.render(w, h)"
 ---
  qry  1 scratch                                     sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 27                             
- ▸ ● scratch                  │ 1 select id, name from users                    
+ ▸ ● scratch                  │▌ 1 │ select id, name from users                 
                               │                                                 
                               │                                                 
                               │                                                 

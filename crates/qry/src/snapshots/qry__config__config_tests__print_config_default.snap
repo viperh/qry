@@ -4,6 +4,7 @@ expression: "Config::embedded().effective_json()"
 ---
 {
   "theme": "dark",
+  "continue_on_error": false,
   "keybindings": {
     "Global": {
       "ctrl-q": "Quit",
@@ -58,6 +59,7 @@ expression: "Config::embedded().effective_json()"
       "/": "Filter"
     },
     "Editor": {
+      "F6": "FocusNext",
       "F5": "RunStatement",
       "ctrl-Enter": "RunStatement",
       "F8": "RunAll",
@@ -74,6 +76,8 @@ expression: "Config::embedded().effective_json()"
       "Home": "LineStart",
       "End": "LineEnd",
       "Enter": "NewLine",
+      "Tab": "Indent",
+      "shift-Tab": "Dedent",
       "ctrl-←": "WordLeft",
       "ctrl-→": "WordRight",
       "shift-←": "SelectLeft",
@@ -117,6 +121,8 @@ expression: "Config::embedded().effective_json()"
       "/": "Search",
       "y": "CopyCell",
       "Y": "CopyRow",
+      "[": "PrevResult",
+      "]": "NextResult",
       "Enter": "Inspect",
       "i": "ToggleInspector"
     },

@@ -25,7 +25,7 @@ expression: "styled(&h.render_buffer(80, 24))"
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 138–155 of 155 ─┘
+└───────────────────────────────────────────────────────────── 144–161 of 161 ─┘
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,0 Rgb(79, 193, 201) Rgb(30, 38, 50) BOLD
