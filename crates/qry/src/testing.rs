@@ -60,6 +60,11 @@ struct Pending {
     events: Vec<UiEvent>,
 }
 
+/// One stand-in worker per session: when it finishes what it already has.
+/// Like the real ones, each runs one command at a time, and sessions do not
+/// wait for each other.
+type Busy = std::collections::HashMap<SessionId, u64>;
+
 /// Drives the app with scripted keys and events on a virtual clock.
 #[derive(Debug)]
 pub struct AppHarness {
@@ -80,9 +85,8 @@ pub struct AppHarness {
     /// Worker answers and timers not yet due, in the order they were
     /// scheduled.
     pending: Vec<Pending>,
-    /// When the stand-in worker finishes what it already has: it runs one
-    /// command at a time, like the real one.
-    worker_free_at: u64,
+    /// When each session's stand-in worker finishes what it already has.
+    worker_free_at: Busy,
 }
 
 /// The tick rate the binary uses by default (`--tick-rate 4`).
@@ -107,7 +111,7 @@ impl AppHarness {
             theme_env,
             database: None,
             pending: Vec::new(),
-            worker_free_at: 0,
+            worker_free_at: Busy::new(),
         }
     }
 
@@ -225,9 +229,25 @@ impl AppHarness {
         self
     }
 
-    /// Delivers an answer from the session's database worker.
+    /// Delivers an answer from the active session's database worker.
     pub fn db(&mut self, answer: DbAnswer) -> &mut Self {
-        self.send(UiEvent::Db(SessionId::FIRST, answer))
+        let id = self.app.state().sessions.active;
+        self.send(UiEvent::Db(id, answer))
+    }
+
+    /// Delivers an answer from session `id`'s worker, open or not.
+    pub fn db_for(&mut self, id: SessionId, answer: DbAnswer) -> &mut Self {
+        self.send(UiEvent::Db(id, answer))
+    }
+
+    /// The active session, as the top bar shows it.
+    pub fn active_session(&self) -> SessionId {
+        self.app.state().sessions.active
+    }
+
+    /// The open sessions, in tab order.
+    pub fn sessions(&self) -> Vec<SessionId> {
+        self.app.state().sessions.order.clone()
     }
 
     /// Delivers the outcome of a file the runtime read or wrote.
@@ -301,10 +321,11 @@ impl AppHarness {
         while let Some(event) = self.inbox.pop_front() {
             for effect in self.app.handle(event) {
                 match &effect {
-                    Effect::Db(_, DbCommand::Connect(record)) | Effect::OpenSession(_, record) => {
-                        self.answer_connect(record);
+                    Effect::Db(id, DbCommand::Connect(record))
+                    | Effect::OpenSession(id, record) => {
+                        self.answer_connect(*id, record);
                     }
-                    Effect::Db(_, DbCommand::Query(sql)) => self.answer_query(sql),
+                    Effect::Db(id, DbCommand::Query(sql)) => self.answer_query(*id, sql),
                     Effect::ScheduleTimer { timer, after } => {
                         let after = u64::try_from(after.as_millis()).unwrap_or(u64::MAX);
                         self.pending.push(Pending {
@@ -312,11 +333,22 @@ impl AppHarness {
                             events: vec![UiEvent::Timer(*timer)],
                         });
                     }
-                    Effect::Db(_, DbCommand::ListTables) => {
+                    Effect::Db(id, DbCommand::ListTables) => {
                         let answer = (self.database.as_ref())
                             .map(|db| db::tables_answer(Ok::<_, String>(db.table_names())));
                         if let Some(answer) = answer {
-                            self.schedule(0, answer);
+                            self.schedule(*id, 0, answer);
+                        }
+                    }
+                    // A closed session's worker is dropped with whatever it
+                    // still had to do.
+                    Effect::CloseSession(id) => {
+                        self.worker_free_at.remove(id);
+                        let id = *id;
+                        for pending in &mut self.pending {
+                            pending
+                                .events
+                                .retain(|event| !matches!(event, UiEvent::Db(s, _) if *s == id));
                         }
                     }
                     _ => {}
@@ -326,24 +358,16 @@ impl AppHarness {
         }
     }
 
-    fn deliver(&mut self, answers: Vec<DbAnswer>) {
-        self.inbox.extend(
-            answers
-                .into_iter()
-                .map(|answer| UiEvent::Db(SessionId::FIRST, answer)),
-        );
-    }
-
     /// Answers a connection from the fake database, if there is one.
-    fn answer_connect(&mut self, record: &StoredConnection) {
+    fn answer_connect(&mut self, id: SessionId, record: &StoredConnection) {
         let answer = (self.database.as_ref()).map(|db| db::connected_answer(record, db.name()));
         if let Some(answer) = answer {
-            self.schedule(0, answer);
+            self.schedule(id, 0, answer);
         }
     }
 
     /// Answers a query from the fake database, if there is one.
-    fn answer_query(&mut self, sql: &str) {
+    fn answer_query(&mut self, id: SessionId, sql: &str) {
         let Some(db) = &self.database else {
             return;
         };
@@ -366,30 +390,32 @@ impl AppHarness {
                 }
                 // The worker stays busy for good, as the real one would.
                 Reply::Hang => {
-                    self.worker_free_at = u64::MAX;
+                    self.worker_free_at.insert(id, u64::MAX);
                     return;
                 }
             }
         };
         let answer = db::query_answer(outcome, Duration::from_millis(after));
-        self.schedule(after, answer);
+        self.schedule(id, after, answer);
     }
 
-    /// Delivers `answers` once the stand-in worker has finished what it
-    /// already had and then spent `after` ms on this. With nothing to wait
-    /// for they arrive straight away, after the event being handled.
-    fn schedule(&mut self, after: u64, answers: Vec<DbAnswer>) {
-        let start = self.worker_free_at.max(self.now);
+    /// Delivers `answers` from session `id` once its stand-in worker has
+    /// finished what it already had and then spent `after` ms on this. With
+    /// nothing to wait for they arrive straight away, after the event being
+    /// handled.
+    fn schedule(&mut self, id: SessionId, after: u64, answers: Vec<DbAnswer>) {
+        let free = self.worker_free_at.get(&id).copied().unwrap_or(0);
+        let start = free.max(self.now);
         let due = start.saturating_add(after);
-        self.worker_free_at = due;
+        self.worker_free_at.insert(id, due);
+        let events = answers.into_iter().map(|answer| UiEvent::Db(id, answer));
         if due <= self.now {
-            self.deliver(answers);
+            self.inbox.extend(events);
         } else if due != u64::MAX {
-            let events = answers
-                .into_iter()
-                .map(|answer| UiEvent::Db(SessionId::FIRST, answer))
-                .collect();
-            self.pending.push(Pending { due, events });
+            self.pending.push(Pending {
+                due,
+                events: events.collect(),
+            });
         }
     }
 }

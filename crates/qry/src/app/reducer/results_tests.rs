@@ -22,7 +22,7 @@ fn columns_are_as_wide_as_their_widest_value_up_to_a_cap() {
 
 /// The selected row and column.
 fn cell(app: &App) -> (usize, usize) {
-    (app.state().results.row, app.state().results.col)
+    (app.state().results().row, app.state().results().col)
 }
 
 #[test]
@@ -49,11 +49,11 @@ fn a_new_result_resets_the_selection() {
     let mut app = grid(5, 3);
     press(&mut app, KeyCode::Down, 3);
     press(&mut app, KeyCode::Right, 2);
-    app.state.results.row_offset.set(2);
-    app.state.results.col_offset.set(1);
-    let next = grid(2, 2).state().results.result.clone().unwrap();
-    show(&mut app.state.results, next);
-    let results = &app.state().results;
+    app.state.results().row_offset.set(2);
+    app.state.results().col_offset.set(1);
+    let next = grid(2, 2).state().results().result.clone().unwrap();
+    show(app.state.results_mut(), next);
+    let results = app.state().results();
     assert_eq!(
         (
             results.row,
@@ -70,5 +70,5 @@ fn keys_do_nothing_without_a_result() {
     let mut app = App::embedded();
     app.state.focus = crate::app::state::Focus::Results;
     press(&mut app, KeyCode::Down, 3);
-    assert_eq!(app.state().results.row, 0);
+    assert_eq!(app.state().results().row, 0);
 }

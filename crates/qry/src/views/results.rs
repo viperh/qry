@@ -16,7 +16,7 @@ use crate::{
 const COLUMN_SPACING: u16 = 1;
 
 pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
-    let results = &state.results;
+    let results = state.results();
     let focused = state.focus == Focus::Results;
     let (border, title) = if focused {
         (theme.focused_border(), theme.pane_title_focused())

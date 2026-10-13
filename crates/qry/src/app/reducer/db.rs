@@ -1,34 +1,72 @@
-//! The database worker's answers.
+//! The database workers' answers, each from one session.
 
 use super::{dialogs, results, tree};
 use crate::app::{
     effects::Effect,
     event::DbAnswer,
-    state::{Awaiting, State, StatusCode},
+    state::{Awaiting, SessionId, SessionStatus, State},
 };
 
-pub(super) fn answer(state: &mut State, answer: DbAnswer, fx: &mut Vec<Effect>) {
+/// Handles an answer from session `id`, which the caller has checked is
+/// still open.
+pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mut Vec<Effect>) {
     match answer {
         DbAnswer::Connected(label) => {
-            dialogs::done(state, Awaiting::Connect);
-            tree::connected(state, label, fx);
+            set_status(
+                state,
+                id,
+                SessionStatus::Open {
+                    label: label.clone(),
+                },
+            );
+            dialogs::done(state, Awaiting::Connect(id));
+            tree::connected(state, id, label, fx);
         }
         DbAnswer::ConnectFailed(message) => {
-            dialogs::failed(state, Awaiting::Connect, &message);
-            tree::connect_failed(state);
+            set_status(state, id, SessionStatus::Failed(message.clone()));
+            dialogs::failed(state, Awaiting::Connect(id), &message);
+            tree::connect_failed(state, id, fx);
         }
         // The worker cannot prompt, so it asks here.
-        DbAnswer::NeedPassword { id, name } => dialogs::need_password(state, id, name),
-        DbAnswer::SecretNotStored(id) => tree::secret_not_stored(state, &id, fx),
-        DbAnswer::QueryDone(result) => results::show(&mut state.results, result),
-        DbAnswer::QueryFailed(_) => {}
-        DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export),
-        DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export, &message),
-        DbAnswer::TablesLoaded(tables) => tree::tables_loaded(state, tables),
-        DbAnswer::TablesFailed(_) => tree::tables_failed(state),
-        DbAnswer::Status(status) => state.status = status,
-        DbAnswer::WorkerStopped => {
-            state.status = StatusCode::Error("database worker has stopped".into());
+        DbAnswer::NeedPassword {
+            id: connection,
+            name,
+        } => {
+            dialogs::need_password(state, id, connection, name);
         }
+        DbAnswer::SecretNotStored(connection) => tree::secret_not_stored(state, &connection, fx),
+        DbAnswer::QueryDone(result) => {
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.running = session.running.saturating_sub(1);
+                results::show(&mut session.results, result);
+            }
+        }
+        DbAnswer::QueryFailed(_) => {
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.running = session.running.saturating_sub(1);
+            }
+        }
+        DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export(id)),
+        DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export(id), &message),
+        DbAnswer::TablesLoaded(tables) => tree::tables_loaded(state, id, tables),
+        DbAnswer::TablesFailed(_) => tree::tables_failed(state, id),
+        DbAnswer::Status(status) => state.status = status,
+        // Nothing sent to it will be answered, so nothing is running there
+        // any more; the status line says why.
+        DbAnswer::WorkerStopped => {
+            let failed = SessionStatus::Failed("database worker has stopped".into());
+            set_status(state, id, failed);
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.running = 0;
+            }
+            dialogs::failed(state, Awaiting::Connect(id), "database worker has stopped");
+            dialogs::failed(state, Awaiting::Export(id), "database worker has stopped");
+        }
+    }
+}
+
+fn set_status(state: &mut State, id: SessionId, status: SessionStatus) {
+    if let Some(session) = state.sessions.get_mut(id) {
+        session.status = status;
     }
 }

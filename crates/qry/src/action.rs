@@ -7,7 +7,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 /// them around as messages. The help lists them in declaration order.
 ///
 /// Some have no effect yet and are bound already so the defaults do not
-/// change under users later: the palette (T206), sessions (T103), filtering
+/// change under users later: the palette (T206), filtering
 /// the tree (T301), the results' copy, search and inspector (T303, T304) and
 /// the jobs drawer (T305).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, EnumIter)]
@@ -55,6 +55,9 @@ pub enum Action {
 
     Toggle,
     Open,
+    /// Opens another session on the selected connection, even if one is
+    /// open already.
+    OpenNewSession,
     Refresh,
     Filter,
     Search,
@@ -138,6 +141,7 @@ impl Action {
             Self::LineEnd => "End of the line",
             Self::Toggle => "Expand or collapse",
             Self::Open => "Open",
+            Self::OpenNewSession => "Open another session on it",
             Self::Refresh => "Refresh",
             Self::Filter => "Filter",
             Self::Search => "Search",

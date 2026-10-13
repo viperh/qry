@@ -2,9 +2,9 @@
 source: crates/qry/src/views/views_tests.rs
 expression: "h.render(80, 24)"
 ---
-┌ Conne┌ Help ──────────────────────────────────────────────────────────┐──────┐
-│No con│ Global:                                                        │      │
-│      │ ctrl-q                : Quit                                   │      │
+ 1 scra┌ Help ──────────────────────────────────────────────────────────┐       
+┌ Conne│ Global:                                                        │──────┐
+│No con│ ctrl-q                : Quit                                   │      │
 │      │ ctrl-z                : Suspend to the shell                   │      │
 │      │ F1                    : Show / hide the help                   │      │
 │      │ ctrl-p                : Command palette                        │      │
@@ -15,6 +15,7 @@ expression: "h.render(80, 24)"
 │      │ ctrl-1 … ctrl-9       : Switch to session N                    │──────┐
 │      │ ctrl-PgDn             : Next session                           │      │
 │      │ ctrl-PgUp             : Previous session                       │      │
+│      │ ctrl-w                : Close this session                     │      │
 │      │                                                                │      │
 │      │ Connection tree:                                               │      │
 │      │ ?                     : Show / hide the help                   │      │
@@ -23,6 +24,5 @@ expression: "h.render(80, 24)"
 │      │ Del                   : Forget this connection                 │      │
 │      │ ctrl-s                : Export connections                     │      │
 │      │ k / ↑                 : Up                                     │      │
-│      │ j / ↓                 : Down                                   │      │
-│      │ h / ←                 : Left                                   │      │
-└──────└─────────────────────────────────────────────────── 1-22 of 113 ┘──────┘
+└──────│ j / ↓                 : Down                                   │──────┘
+ connec└─────────────────────────────────────────────────── 1-22 of 115 ┘

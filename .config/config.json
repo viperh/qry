@@ -35,6 +35,8 @@
       "<ctrl-9>": { "SwitchSession": 9 },
       "<ctrl-pagedown>": "NextSession",
       "<ctrl-pageup>": "PrevSession",
+      // The editor's own ctrl-w deletes a word instead.
+      "<ctrl-w>": "CloseSession",
       "<ctrl-z>": "Suspend"
     },
     "Tree": {
@@ -53,6 +55,7 @@
       "<home>": "Top",
       "<end>": "Bottom",
       "<enter>": "Open",
+      "<shift-enter>": "OpenNewSession",
       "<space>": "Toggle",
       "<e>": "EditConnection",
       "<delete>": "DeleteConnection",

@@ -13,7 +13,7 @@ use ratatui::{
 use super::*;
 use crate::{
     app::{
-        SessionId,
+        DbAnswer, SessionId,
         dialogs::{DialogState, connexportform::ConnExportForm, form::Form},
         state::Focus,
     },
@@ -35,6 +35,8 @@ fn record(name: &str, path: &str) -> StoredConnection {
 struct Tree {
     state: State,
     fx: Vec<Effect>,
+    /// The session the last connection was opened in.
+    session: SessionId,
 }
 
 impl Tree {
@@ -46,6 +48,7 @@ impl Tree {
                 ..State::default()
             },
             fx: Vec::new(),
+            session: SessionId::FIRST,
         }
     }
 
@@ -54,13 +57,34 @@ impl Tree {
         std::mem::take(&mut self.fx)
     }
 
-    /// A connection about to be opened, as the app announces it.
+    /// A connection submitted from the New Connection modal, as the app
+    /// opens it: in the session already on it, or a new one.
     fn attempt(&mut self, record: &StoredConnection) {
-        attempt(&mut self.state, record, &mut self.fx);
+        self.session = super::super::connect(&mut self.state, record.clone(), &mut self.fx);
+    }
+
+    /// An answer from the last session opened.
+    fn answer(&mut self, answer: DbAnswer) {
+        super::super::db::answer(&mut self.state, self.session, answer, &mut self.fx);
     }
 
     fn connected(&mut self, label: &str) {
-        connected(&mut self.state, label.into(), &mut self.fx);
+        self.answer(DbAnswer::Connected(label.into()));
+    }
+
+    fn failed(&mut self) {
+        self.answer(DbAnswer::ConnectFailed("no such file".into()));
+    }
+
+    fn tables(&mut self, tables: &[&str]) {
+        let tables = tables.iter().map(ToString::to_string).collect();
+        self.answer(DbAnswer::TablesLoaded(tables));
+    }
+
+    /// The connection the active session is on, if the tree lists it.
+    fn active(&self) -> Option<usize> {
+        let session = self.state.sessions.active();
+        self.state.tree.position(&session.connection_id)
     }
 
     fn loaded(&mut self, records: Vec<StoredConnection>) {
@@ -181,6 +205,7 @@ fn an_export_hands_the_saved_list_to_the_runtime() {
     scratch.ephemeral = true;
     tree.attempt(&scratch);
     tree.connected(":memory:");
+    tree.take();
 
     export_connections(&mut tree.state, "b.json".into(), &mut tree.fx);
     assert_eq!(
@@ -200,8 +225,8 @@ fn a_connection_joins_the_tree_once_it_opens() {
 
     connect(&mut tree, "prod", "app.db");
     let shown = tree.lines(30, 8);
-    assert!(shown.contains("▸ prod"), "{shown}");
-    assert_eq!(tree.state.tree.active, Some(0));
+    assert!(shown.contains("▸ ● prod"), "{shown}");
+    assert_eq!(tree.active(), Some(0));
 
     // The same connection again is not added twice: the id is what
     // counts, not the name.
@@ -222,14 +247,15 @@ fn a_connection_that_never_opens_is_not_kept() {
         2,
         "added while it is being tried"
     );
-    connect_failed(&mut tree.state);
+    let typo = tree.session;
+    tree.failed();
 
     assert_eq!(tree.state.tree.connections.len(), 1);
-    assert_eq!(
-        tree.state.tree.active,
-        Some(0),
-        "the working one is still active"
+    assert!(
+        tree.state.sessions.get(typo).is_none(),
+        "its session is closed too"
     );
+    assert_eq!(tree.active(), Some(0), "the working one is active again");
     assert!(!tree.lines(30, 8).contains("typo"));
 }
 
@@ -260,7 +286,10 @@ fn a_connection_that_opens_is_saved_but_the_scratch_one_is_not() {
     tree.attempt(&scratch);
     tree.connected(":memory:");
     assert!(
-        tree.take().is_empty(),
+        !tree
+            .take()
+            .iter()
+            .any(|e| matches!(e, Effect::SaveConnections(_))),
         "the scratch database is never written"
     );
 
@@ -381,7 +410,7 @@ fn an_edit_that_stops_using_the_keychain_forgets_the_password() {
 
     let mut edited = saved_one.clone();
     edited.secret = Secret::Prompt;
-    tree.attempt(&edited);
+    attempt(&mut tree.state, &edited, &mut tree.fx);
     assert_eq!(tree.take(), [Effect::ForgetSecret(id)]);
 }
 
@@ -394,10 +423,10 @@ fn a_saved_connection_survives_a_failed_connect() {
     // It has never opened in this session, which is not the same as
     // never having existed.
     tree.attempt(&saved_one);
-    connect_failed(&mut tree.state);
+    tree.failed();
 
     assert_eq!(tree.state.tree.connections.len(), 1);
-    assert!(tree.lines(30, 8).contains("prod"));
+    assert!(tree.lines(30, 8).contains("▸ ✗ prod"));
 }
 
 #[test]
@@ -419,20 +448,21 @@ fn arrows_move_the_selection_and_stop_at_the_ends() {
 }
 
 #[test]
-fn enter_connects_to_the_selected_connection() {
+fn enter_opens_a_session_on_the_selected_connection() {
     let mut tree = Tree::new();
     connect(&mut tree, "one", "one.db");
-    connect(&mut tree, "two", "two.db");
+    tree.loaded(vec![record("two", "two.db")]);
     tree.take();
 
     tree.press(KeyCode::Down);
     tree.press(KeyCode::Enter);
     let effects = tree.take();
-    let [Effect::Db(_, DbCommand::Connect(sent))] = effects.as_slice() else {
-        panic!("expected a connection, got {effects:?}");
+    let [Effect::OpenSession(id, sent)] = effects.as_slice() else {
+        panic!("expected a session, got {effects:?}");
     };
     assert_eq!(sent.name, "two");
-    assert_eq!(tree.state.tree.attempting, Some(1));
+    assert_eq!(tree.state.sessions.active, *id);
+    assert!(tree.lines(30, 8).contains("▸ ◌ two"), "connecting");
 }
 
 #[test]
@@ -444,15 +474,15 @@ fn space_expands_the_active_connection_and_shows_its_tables() {
     tree.press(KeyCode::Char(' '));
     assert_eq!(
         tree.take(),
-        [Effect::Db(SessionId::FIRST, DbCommand::ListTables)]
+        [Effect::Db(tree.session, DbCommand::ListTables)]
     );
     let shown = tree.lines(30, 8);
     assert!(
-        shown.contains("▾ prod") && shown.contains("loading"),
+        shown.contains("▾ ● prod") && shown.contains("loading"),
         "{shown}"
     );
 
-    tables_loaded(&mut tree.state, vec!["users".into(), "orders".into()]);
+    tree.tables(&["users", "orders"]);
     let shown = tree.lines(30, 8);
     assert!(
         shown.contains("users") && shown.contains("orders"),
@@ -472,28 +502,26 @@ fn space_expands_the_active_connection_and_shows_its_tables() {
 #[test]
 fn expanding_another_connection_opens_it_first() {
     let mut tree = Tree::new();
-    connect(&mut tree, "one", "one.db");
+    tree.loaded(vec![record("one", "one.db")]);
     connect(&mut tree, "two", "two.db");
-    tables_loaded(&mut tree.state, vec!["t".into()]);
+    tree.tables(&["t"]);
     tree.take();
 
-    // "one" is not the active connection, so Space connects to it first.
+    // "one" has no session, so Space opens one first.
     tree.press(KeyCode::Home);
     tree.press(KeyCode::Char(' '));
     let effects = tree.take();
-    let [Effect::Db(_, DbCommand::Connect(asked))] = effects.as_slice() else {
-        panic!("expected only a connection, got {effects:?}: tables come after it is connected");
+    let [Effect::OpenSession(id, asked)] = effects.as_slice() else {
+        panic!("expected only a session, got {effects:?}: tables come after it is connected");
     };
     assert_eq!(asked.name, "one");
+    tree.session = *id;
 
     tree.connected("one.db");
-    assert_eq!(
-        tree.take(),
-        [Effect::Db(SessionId::FIRST, DbCommand::ListTables)]
-    );
-    assert_eq!(tree.state.tree.active, Some(0));
+    assert_eq!(tree.take(), [Effect::Db(*id, DbCommand::ListTables)]);
+    assert_eq!(tree.active(), Some(0));
 
-    tables_loaded(&mut tree.state, vec!["people".into()]);
+    tree.tables(&["people"]);
     assert!(tree.lines(30, 8).contains("people"));
 }
 
@@ -504,15 +532,15 @@ fn a_failed_table_list_closes_the_branch_so_it_can_be_tried_again() {
     tree.press(KeyCode::Char(' '));
     tree.take();
 
-    tables_failed(&mut tree.state);
+    tree.answer(DbAnswer::TablesFailed("gone".into()));
     let shown = tree.lines(30, 8);
-    assert!(shown.contains("▸ prod"), "{shown}");
+    assert!(shown.contains("▸ ● prod"), "{shown}");
     assert!(!shown.contains("loading"), "{shown}");
 
     tree.press(KeyCode::Char(' '));
     assert_eq!(
         tree.take(),
-        [Effect::Db(SessionId::FIRST, DbCommand::ListTables)]
+        [Effect::Db(tree.session, DbCommand::ListTables)]
     );
 }
 
@@ -538,17 +566,35 @@ fn deleting_a_connection_being_opened_drops_its_late_answer() {
     tree.attempt(&two);
     tree.take();
 
-    // Deleted while it opens, and then the answer arrives.
+    // Deleted while it opens, and then the answers arrive: they find no
+    // connection and change nothing.
     tree.press(KeyCode::End);
     tree.press(KeyCode::Delete);
     tree.connected("two.db");
+    tree.tables(&["t"]);
     assert_eq!(tree.state.tree.connections.len(), 1);
-    assert_eq!(tree.state.tree.active, Some(0), "still the first one");
     assert!(!tree.lines(30, 8).contains("two"));
+    assert!(tree.state.tree.connections[0].tables.is_none());
+}
 
-    // Deleting the active one leaves nothing active.
-    tree.press(KeyCode::Home);
-    tree.press(KeyCode::Delete);
-    assert_eq!(tree.state.tree.active, None);
-    tables_loaded(&mut tree.state, vec!["t".into()]);
+#[test]
+fn the_tree_marks_each_connection_by_its_sessions() {
+    let mut tree = Tree::new();
+    tree.loaded(vec![record("idle", "idle.db")]);
+    connect(&mut tree, "open", "open.db");
+    let mut down = record("down", "down.db");
+    down.id = "down".into();
+    tree.loaded(vec![down.clone()]);
+    tree.attempt(&down);
+    let shown = tree.lines(30, 8);
+    assert!(shown.contains("▸   idle"), "no session: {shown}");
+    assert!(shown.contains("▸ ● open"), "{shown}");
+    assert!(shown.contains("▸ ◌ down"), "{shown}");
+
+    tree.failed();
+    assert!(tree.lines(30, 8).contains("▸ ✗ down"));
+    let t = Theme::DARK;
+    let row = tree.drawn(30, 8);
+    let dot = (0..30).find(|x| row[(*x, 3)].symbol() == "✗").unwrap();
+    assert_eq!(row[(dot, 3)].fg, t.value_error().fg.unwrap());
 }

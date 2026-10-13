@@ -102,6 +102,6 @@ fn unbound(state: &mut State, context: KeyContext, key: KeyEvent) {
     if context == KeyContext::Editor
         && let Some(c) = typed_char(key)
     {
-        state.editor.textarea.insert_char(c);
+        state.editor_mut().textarea.insert_char(c);
     }
 }

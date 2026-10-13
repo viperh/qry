@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::{
-    app::state::{Focus, Row, State, TreeState},
+    app::state::{Focus, Row, State},
     theme::Theme,
 };
 
@@ -51,14 +51,17 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
         .enumerate()
         .skip(offset)
         .take(page)
-        .map(|(i, row)| line(tree, row, i == selected, theme))
+        .map(|(i, row)| line(state, row, i == selected, theme))
         .collect();
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-/// One row of the tree; `selected` is the row the keys act on.
-fn line(tree: &TreeState, row: &Row, selected: bool, theme: &Theme) -> Line<'static> {
+/// One row of the tree; `selected` is the row the keys act on. A
+/// connection with a session shows how it stands: `●` open, `◌` connecting,
+/// `✗` failed.
+fn line(state: &State, row: &Row, selected: bool, theme: &Theme) -> Line<'static> {
+    let tree = &state.tree;
     let line = match row {
         Row::Connection(i) => {
             let connection = &tree.connections[*i];
@@ -68,10 +71,22 @@ fn line(tree: &TreeState, row: &Row, selected: bool, theme: &Theme) -> Line<'sta
             } else {
                 theme.tree_connection()
             };
-            let line = Line::styled(format!("{marker} {}", connection.title()), style);
-            // The one the worker is on stands out without taking the
-            // colour, which belongs to the selection.
-            if tree.active == Some(*i) {
+            let dot = match state.sessions.connection_status(&connection.record.id) {
+                Some(status) => {
+                    let (dot_style, glyph) = theme.session_dot(status);
+                    Span::styled(format!("{glyph} "), dot_style)
+                }
+                None => Span::raw("  "),
+            };
+            let line = Line::from(vec![
+                Span::raw(format!("{marker} ")),
+                dot,
+                Span::raw(connection.title().to_string()),
+            ])
+            .style(style);
+            // The active session's connection stands out without taking
+            // the colour, which belongs to the selection.
+            if state.sessions.active().connection_id == connection.record.id {
                 line.bold()
             } else {
                 line

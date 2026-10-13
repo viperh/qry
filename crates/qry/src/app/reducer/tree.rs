@@ -1,12 +1,12 @@
 //! The connection tree: what it lists, its keys, and what the worker's
 //! answers mean for it.
 
-use super::{connect, dialogs};
+use super::{dialogs, sessions};
 use crate::{
     action::Action,
     app::{
         effects::Effect,
-        state::{Awaiting, Node, Row, State, StatusCode},
+        state::{Awaiting, Node, Row, SessionId, SessionStatus, State, StatusCode},
     },
     connections::{Secret, StoredConnection},
     db::DbCommand,
@@ -18,18 +18,12 @@ use crate::{
 /// once it has connected.
 pub(super) fn attempt(state: &mut State, record: &StoredConnection, fx: &mut Vec<Effect>) {
     let tree = &mut state.tree;
-    let known = tree
-        .connections
-        .iter()
-        .position(|n| n.record.id == record.id);
-    let Some(i) = known else {
+    let Some(i) = tree.position(&record.id) else {
         tree.connections
             .push(Node::new(record.clone(), !record.ephemeral));
-        tree.attempting = Some(tree.connections.len() - 1);
         return;
     };
 
-    tree.attempting = Some(i);
     let previous = std::mem::replace(&mut tree.connections[i].record, record.clone());
     if previous == *record {
         return;
@@ -99,10 +93,26 @@ fn save(state: &State, fx: &mut Vec<Effect>) {
     fx.push(Effect::SaveConnections(to_save(state)));
 }
 
-/// Asks the worker for the tables of whatever is connected.
-fn load_tables(state: &mut State, connection: usize, fx: &mut Vec<Effect>) {
+/// Asks session `session`, which is open on it, for a connection's tables.
+fn load_tables(state: &mut State, connection: usize, session: SessionId, fx: &mut Vec<Effect>) {
     state.tree.connections[connection].loading = true;
-    fx.push(Effect::Db(state.session, DbCommand::ListTables));
+    fx.push(Effect::Db(session, DbCommand::ListTables));
+}
+
+/// The open session on connection `i`, if there is one.
+fn open_session(state: &State, i: usize) -> Option<SessionId> {
+    let connection = &state.tree.connections[i].record.id;
+    let id = state.sessions.for_connection(connection)?;
+    let open = state.sessions.get(id).is_some_and(|s| s.is_open());
+    if open {
+        return Some(id);
+    }
+    // Another session on it may be open while the preferred one is not.
+    state
+        .sessions
+        .iter()
+        .find(|s| s.connection_id == *connection && s.is_open())
+        .map(|s| s.id)
 }
 
 /// What a `Tree` binding does. Filtering comes with the schema browser
@@ -146,21 +156,23 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
                 node.expanded = !node.expanded;
                 let needs_tables = node.expanded && node.tables.is_none() && !node.loading;
                 if needs_tables {
-                    if tree.active == Some(i) {
-                        load_tables(state, i, fx);
-                    } else {
-                        // Its tables can only be read once it is open.
-                        tree.expand_when_connected = Some(i);
-                        let record = tree.connections[i].record.clone();
-                        connect(state, record, fx);
-                    }
+                    expand(state, i, fx);
                 }
             }
         }
+        // A connection with a session switches to it; one without opens one.
         Action::Open => {
             if let Some(i) = selected {
                 let record = tree.connections[i].record.clone();
-                connect(state, record, fx);
+                sessions::open_or_switch(state, &record, fx);
+            }
+        }
+        // Another session on the same connection, such as for a second
+        // transaction.
+        Action::OpenNewSession => {
+            if let Some(i) = selected {
+                let record = tree.connections[i].record.clone();
+                sessions::open(state, &record, fx);
             }
         }
         Action::EditConnection => {
@@ -189,46 +201,65 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
                 Some(Row::Connection(i) | Row::Table(i, _)) => Some(*i),
                 _ => None,
             };
-            if let Some(i) = open.filter(|i| tree.active == Some(*i)) {
-                tree.connections[i].expanded = true;
-                load_tables(state, i, fx);
+            let session = open.and_then(|i| Some((i, open_session(state, i)?)));
+            if let Some((i, session)) = session {
+                state.tree.connections[i].expanded = true;
+                load_tables(state, i, session, fx);
             }
         }
         _ => {}
     }
 }
 
-/// Drops a connection, keeping the other indexes right. An index that
-/// pointed at it points at nothing now, so a late answer about it is
-/// dropped rather than landing on its neighbour.
+/// Reads the tables of connection `i`, which was just expanded. They can
+/// only be read once it is open, so one that is not is opened first, and
+/// expanded once it is.
+fn expand(state: &mut State, i: usize, fx: &mut Vec<Effect>) {
+    if let Some(session) = open_session(state, i) {
+        load_tables(state, i, session, fx);
+        return;
+    }
+    let record = state.tree.connections[i].record.clone();
+    let session = match state.sessions.for_connection(&record.id) {
+        Some(id)
+            if state.sessions.get(id).map(|s| &s.status) == Some(&SessionStatus::Connecting) =>
+        {
+            id
+        }
+        _ => sessions::open_or_switch(state, &record, fx),
+    };
+    if let Some(session) = state.sessions.get_mut(session) {
+        session.expand_when_connected = true;
+    }
+}
+
+/// Drops a connection. Its sessions stay open; what they answer about it
+/// finds no connection and changes nothing.
 fn forget_node(state: &mut State, connection: usize) {
     let tree = &mut state.tree;
     tree.connections.remove(connection);
-    let shift = |index: &mut Option<usize>| match *index {
-        Some(i) if i == connection => *index = None,
-        Some(i) if i > connection => *index = Some(i - 1),
-        _ => {}
-    };
-    shift(&mut tree.active);
-    shift(&mut tree.attempting);
-    shift(&mut tree.expand_when_connected);
     tree.selected = tree.selected.min(tree.rows().len().saturating_sub(1));
 }
 
-pub(super) fn connected(state: &mut State, label: String, fx: &mut Vec<Effect>) {
-    let Some(i) = state.tree.attempting.take() else {
+/// Session `id` is open as `label`.
+pub(super) fn connected(state: &mut State, id: SessionId, label: String, fx: &mut Vec<Effect>) {
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    let expand = std::mem::take(&mut session.expand_when_connected);
+    let Some(i) = state.tree.position(&session.connection_id) else {
         return;
     };
     let tree = &mut state.tree;
     tree.connections[i].label = Some(label);
-    tree.active = Some(i);
     // Its tables are stale, or were never read.
     tree.connections[i].tables = None;
-    if tree.expand_when_connected.take() == Some(i) {
+    tree.connections[i].loading = false;
+    if expand {
         tree.connections[i].expanded = true;
     }
     if tree.connections[i].expanded {
-        load_tables(state, i, fx);
+        load_tables(state, i, id, fx);
     }
     // It works, so it is worth keeping.
     if state.tree.connections[i].unsaved {
@@ -237,15 +268,21 @@ pub(super) fn connected(state: &mut State, label: String, fx: &mut Vec<Effect>) 
     }
 }
 
-pub(super) fn connect_failed(state: &mut State) {
-    if let Some(i) = state.tree.attempting.take()
-        // Only one added this session and never written: a saved
-        // connection stays, whatever the database says today.
-        && state.tree.connections[i].unsaved
-    {
+/// Session `id` could not connect. A connection added this session and
+/// never written goes, and its session with it; a saved one stays, whatever
+/// the database says today, with its session marked failed.
+pub(super) fn connect_failed(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    session.expand_when_connected = false;
+    let Some(i) = state.tree.position(&session.connection_id) else {
+        return;
+    };
+    if state.tree.connections[i].unsaved {
         forget_node(state, i);
+        sessions::close(state, id, fx);
     }
-    state.tree.expand_when_connected = None;
 }
 
 /// Whatever is already here was opened during startup; the file fills in
@@ -291,15 +328,21 @@ pub(super) fn secret_not_stored(state: &mut State, id: &str, fx: &mut Vec<Effect
     }
 }
 
-pub(super) fn tables_loaded(state: &mut State, tables: Vec<String>) {
-    if let Some(i) = state.tree.active {
+/// The connection session `id` is on.
+fn connection_of(state: &State, id: SessionId) -> Option<usize> {
+    let session = state.sessions.get(id)?;
+    state.tree.position(&session.connection_id)
+}
+
+pub(super) fn tables_loaded(state: &mut State, id: SessionId, tables: Vec<String>) {
+    if let Some(i) = connection_of(state, id) {
         state.tree.connections[i].tables = Some(tables);
         state.tree.connections[i].loading = false;
     }
 }
 
-pub(super) fn tables_failed(state: &mut State) {
-    if let Some(i) = state.tree.active {
+pub(super) fn tables_failed(state: &mut State, id: SessionId) {
+    if let Some(i) = connection_of(state, id) {
         // Left unread, so Space can try again; the status bar says why.
         state.tree.connections[i].loading = false;
         state.tree.connections[i].expanded = false;

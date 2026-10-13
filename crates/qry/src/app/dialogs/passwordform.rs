@@ -2,7 +2,7 @@ use super::{
     Submission,
     form::{Field, Form},
 };
-use crate::secrets::Password;
+use crate::{app::state::SessionId, secrets::Password};
 
 const LABELS: [&str; 1] = ["Password"];
 const PASSWORD: usize = 0;
@@ -16,6 +16,8 @@ pub(crate) struct PasswordForm {
     fields: [Field; 1],
     error: Option<String>,
     pending: Option<&'static str>,
+    /// The session whose worker asked, which the answer goes back to.
+    session: SessionId,
     /// The id of the connection asking, which the stash keys the password
     /// by.
     connection: String,
@@ -24,14 +26,23 @@ pub(crate) struct PasswordForm {
 }
 
 impl PasswordForm {
-    pub(crate) fn new(connection: impl Into<String>, name: impl Into<String>) -> Self {
+    pub(crate) fn new(
+        session: SessionId,
+        connection: impl Into<String>,
+        name: impl Into<String>,
+    ) -> Self {
         Self {
             fields: [Field::masked()],
             error: None,
             pending: None,
+            session,
             connection: connection.into(),
             name: name.into(),
         }
+    }
+
+    pub(crate) fn session(&self) -> SessionId {
+        self.session
     }
 }
 
@@ -89,6 +100,7 @@ impl Form for PasswordForm {
         // Not trimmed: spaces can be part of a password.
         let typed = self.secret(PASSWORD).map(Password::duplicate);
         Ok(Submission::PasswordEntered {
+            session: self.session,
             connection: self.connection.clone(),
             password: typed.unwrap_or_default(),
         })

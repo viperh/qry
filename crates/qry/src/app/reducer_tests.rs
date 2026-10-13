@@ -237,14 +237,13 @@ fn answer_for_other_modal_is_ignored() {
     h.db(DbAnswer::ConnectFailed("nope".into()));
 
     let text = h.render(80, 50);
+    let dialog = h.state().dialog();
     assert!(
-        h.state().dialog().is_some(),
+        dialog.is_some(),
         "the export modal was closed by a connection"
     );
-    assert!(
-        text.contains("Exporting") && !text.contains("nope"),
-        "{text}"
-    );
+    assert_eq!(dialog.unwrap().form().error(), None);
+    assert!(text.contains("Exporting"), "{text}");
 }
 
 #[test]
@@ -271,11 +270,12 @@ fn connect_modal_waits_for_answer() {
     fill_connection(&mut h);
     let focus = h.state().focus;
 
-    // Submitting sends the connection but leaves the modal waiting.
+    // Submitting opens a session on the connection but leaves the modal
+    // waiting.
     h.keys("enter");
     let effects = h.take_effects();
-    let [Effect::Db(_, DbCommand::Connect(record))] = effects.as_slice() else {
-        panic!("expected a connection and nothing else, got {effects:?}");
+    let [Effect::OpenSession(_, record)] = effects.as_slice() else {
+        panic!("expected a session and nothing else, got {effects:?}");
     };
     assert_eq!(record.host.as_deref(), Some("db.local"));
     assert_eq!(h.dialog_title(), Some("New Connection"), "still open");
@@ -315,11 +315,12 @@ fn connect_failure_keeps_fields_and_shows_error() {
     );
     assert!(!text.contains("Connecting"), "{text}");
 
-    // Correcting and submitting again sends a second attempt.
+    // Its session went with it, so correcting and submitting again opens
+    // a new one.
     h.keys("x enter");
     assert!(matches!(
         h.take_effects().as_slice(),
-        [Effect::Db(_, DbCommand::Connect(..))]
+        [Effect::CloseSession(_), Effect::OpenSession(..)]
     ));
 }
 
@@ -332,7 +333,7 @@ fn a_working_connection_closes_the_modal() {
     h.keys("enter");
     assert!(matches!(
         h.take_effects().as_slice(),
-        [Effect::Db(_, DbCommand::Connect(..))]
+        [Effect::OpenSession(..)]
     ));
 
     h.db(DbAnswer::Connected("alice@db.local:5432/app".into()));
@@ -352,8 +353,8 @@ fn a_connect_answer_without_a_waiting_modal_is_ignored() {
     // An export modal is not touched by a connection's answer either.
     open_export(&mut h);
     h.db(DbAnswer::ConnectFailed("nope".into()));
-    let text = h.render(80, 50);
-    assert!(text.contains("Export") && !text.contains("nope"), "{text}");
+    assert_eq!(h.dialog_title(), Some("Export"));
+    assert_eq!(h.state().dialog().unwrap().form().error(), None);
 }
 
 #[test]
@@ -423,10 +424,7 @@ fn password_text_never_in_effects() {
     let effects = h.take_effects();
     assert!(matches!(
         effects.as_slice(),
-        [
-            Effect::StashPassword { .. },
-            Effect::Db(_, DbCommand::Connect(_))
-        ]
+        [Effect::StashPassword { .. }, Effect::OpenSession(..)]
     ));
     for effect in &effects {
         let shown = format!("{effect:?}");
@@ -509,7 +507,7 @@ fn results_on_row_3() -> AppHarness {
     )));
     h.state_mut().focus = Focus::Results;
     h.keys("j j j");
-    assert_eq!(h.state().results.row, 3);
+    assert_eq!(h.state().results().row, 3);
     h
 }
 
@@ -528,14 +526,14 @@ fn sequence_times_out_after_one_second() {
     h.advance(1001);
     assert!(h.state().pending_keys.is_empty());
     h.keys("g");
-    assert_eq!(h.state().results.row, 3, "a lone g after the timeout");
+    assert_eq!(h.state().results().row, 3, "a lone g after the timeout");
 
     // Within the second, g g goes to the top.
     let mut h = results_on_row_3();
     h.keys("g");
     h.advance(999);
     h.keys("g");
-    assert_eq!(h.state().results.row, 0);
+    assert_eq!(h.state().results().row, 0);
     assert!(h.state().pending_keys.is_empty());
 }
 
@@ -548,7 +546,7 @@ fn ticks_leave_a_half_typed_sequence_alone() {
     assert_eq!(h.ticks(), 3);
     assert_eq!(h.state().pending_keys.len(), 1);
     h.keys("g");
-    assert_eq!(h.state().results.row, 0);
+    assert_eq!(h.state().results().row, 0);
 }
 
 #[test]
@@ -556,7 +554,7 @@ fn a_broken_sequence_hands_on_the_key() {
     let mut h = results_on_row_3();
     // `g` waits, `k` is no second `g`: it moves up as usual.
     h.keys("g k");
-    assert_eq!(h.state().results.row, 2);
+    assert_eq!(h.state().results().row, 2);
     assert!(h.state().pending_keys.is_empty());
 }
 
@@ -573,27 +571,27 @@ fn a_prefix_binding_runs_once_the_sequence_times_out() {
     )));
     h.state_mut().focus = Focus::Results;
     h.keys("g");
-    assert_eq!(h.state().results.row, 0, "waits for a second g");
+    assert_eq!(h.state().results().row, 0, "waits for a second g");
     h.advance(1000);
-    assert_eq!(h.state().results.row, 4);
+    assert_eq!(h.state().results().row, 4);
 
     // A stale timer does nothing: the second wait is still on.
     h.keys("k k g");
     h.advance(500);
     h.keys("g");
-    assert_eq!(h.state().results.row, 0, "g g");
+    assert_eq!(h.state().results().row, 0, "g g");
     h.keys("j g");
     h.advance(600);
-    assert_eq!(h.state().results.row, 1, "only 600 ms into the new wait");
+    assert_eq!(h.state().results().row, 1, "only 600 ms into the new wait");
     h.advance(400);
-    assert_eq!(h.state().results.row, 4);
+    assert_eq!(h.state().results().row, 4);
 }
 
 #[test]
 fn question_mark_types_in_editor_but_opens_help_in_results() {
     let mut h = harness();
     h.keys("tab").type_str("a?b:c");
-    assert_eq!(h.state().editor.query(), "a?b:c");
+    assert_eq!(h.state().editor().query(), "a?b:c");
     assert!(h.state().help().is_none());
 
     h.keys("tab ?");

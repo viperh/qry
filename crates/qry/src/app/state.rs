@@ -8,6 +8,7 @@
 
 use std::{
     cell::Cell,
+    collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
 };
@@ -17,20 +18,188 @@ use qry_core::QueryResult;
 use ratatui_textarea::TextArea;
 
 use super::dialogs::DialogState;
+pub use crate::theme::SessionStatus;
 use crate::{
     config::Config,
-    connections::StoredConnection,
+    connections::{Driver, Secret, StoredConnection},
     keymap::KeyContext,
     theme::{Pill, Theme},
 };
 
-/// One open connection's worker. There is a single session for now, so the
-/// id is always [`SessionId::FIRST`]; several come with multiple sessions.
+/// One open session. Ids are handed out in order and never reused within a
+/// run, so an answer from a closed session's worker cannot land on a newer
+/// one.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SessionId(pub u32);
 
 impl SessionId {
-    pub const FIRST: Self = Self(0);
+    /// The scratch session every run starts with.
+    pub const FIRST: Self = Self(1);
+}
+
+/// The id of the in-memory database every run starts on. It is never saved,
+/// so a fixed id cannot clash with a stored one's keychain entry.
+pub(crate) const SCRATCH_ID: &str = "scratch";
+
+/// The scratch database: an empty in-memory SQLite, listed in the tree like
+/// any other connection but never saved.
+pub(crate) fn scratch_record() -> StoredConnection {
+    let mut scratch = StoredConnection::with_id(SCRATCH_ID, "scratch", Driver::Sqlite);
+    scratch.path = Some(":memory:".to_string());
+    scratch.secret = Secret::None;
+    scratch.ephemeral = true;
+    scratch
+}
+
+/// One open connection and everything bound to it. Its worker lives on the
+/// runtime's side, in [`SessionManager`](crate::sessions::SessionManager).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct SessionState {
+    pub(crate) id: SessionId,
+    /// The `StoredConnection::id` it was opened on.
+    pub(crate) connection_id: String,
+    pub(crate) title: String,
+    pub(crate) status: SessionStatus,
+    pub(crate) editor: EditorState,
+    pub(crate) results: ResultsState,
+    /// Queries sent and not answered yet. One worker runs them in order.
+    pub(crate) running: usize,
+    /// Expand its connection in the tree once it is open.
+    pub(crate) expand_when_connected: bool,
+}
+
+impl SessionState {
+    pub(crate) fn new(id: SessionId, record: &StoredConnection) -> Self {
+        Self {
+            id,
+            connection_id: record.id.clone(),
+            title: record.title().to_string(),
+            status: SessionStatus::Connecting,
+            editor: EditorState::default(),
+            results: ResultsState::default(),
+            running: 0,
+            expand_when_connected: false,
+        }
+    }
+
+    pub(crate) fn is_open(&self) -> bool {
+        matches!(self.status, SessionStatus::Open { .. })
+    }
+}
+
+/// The open sessions, in tab order, and the one the editor and the results
+/// show. There is always at least one: closing the last opens a fresh
+/// scratch.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Sessions {
+    pub(crate) order: Vec<SessionId>,
+    pub(crate) active: SessionId,
+    pub(crate) by_id: BTreeMap<SessionId, SessionState>,
+    /// The id the next session gets.
+    next: u32,
+}
+
+/// The scratch session alone, as session 1. Its worker is started by
+/// `UiEvent::Started`.
+impl Default for Sessions {
+    fn default() -> Self {
+        let scratch = SessionState::new(SessionId::FIRST, &scratch_record());
+        Self {
+            order: vec![SessionId::FIRST],
+            active: SessionId::FIRST,
+            by_id: BTreeMap::from([(SessionId::FIRST, scratch)]),
+            next: SessionId::FIRST.0 + 1,
+        }
+    }
+}
+
+impl Sessions {
+    #[allow(
+        clippy::expect_used,
+        reason = "`active` always names an open session: closing it moves it on"
+    )]
+    pub(crate) fn active(&self) -> &SessionState {
+        self.by_id.get(&self.active).expect("the active session")
+    }
+
+    #[allow(
+        clippy::expect_used,
+        reason = "`active` always names an open session: closing it moves it on"
+    )]
+    pub(crate) fn active_mut(&mut self) -> &mut SessionState {
+        self.by_id
+            .get_mut(&self.active)
+            .expect("the active session")
+    }
+
+    pub(crate) fn get(&self, id: SessionId) -> Option<&SessionState> {
+        self.by_id.get(&id)
+    }
+
+    pub(crate) fn get_mut(&mut self, id: SessionId) -> Option<&mut SessionState> {
+        self.by_id.get_mut(&id)
+    }
+
+    /// The sessions in tab order.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &SessionState> + '_ {
+        self.order.iter().filter_map(|id| self.by_id.get(id))
+    }
+
+    /// Adds a session on `record` at the end of the tabs, without switching
+    /// to it.
+    pub(crate) fn add(&mut self, record: &StoredConnection) -> SessionId {
+        let id = SessionId(self.next);
+        self.next += 1;
+        self.order.push(id);
+        self.by_id.insert(id, SessionState::new(id, record));
+        id
+    }
+
+    /// Takes a session out. The active one moves to its right-hand
+    /// neighbour, or the left-hand one if it was last. The caller makes sure
+    /// another is left.
+    pub(crate) fn remove(&mut self, id: SessionId) -> Option<SessionState> {
+        let index = self.order.iter().position(|s| *s == id)?;
+        self.order.remove(index);
+        if self.active == id
+            && let Some(next) = self
+                .order
+                .get(index)
+                .or_else(|| self.order.get(index.wrapping_sub(1)))
+        {
+            self.active = *next;
+        }
+        self.by_id.remove(&id)
+    }
+
+    /// The session to use for `connection`: the active one if it is on it,
+    /// else the first in tab order.
+    pub(crate) fn for_connection(&self, connection: &str) -> Option<SessionId> {
+        let active = self.active();
+        if active.connection_id == connection {
+            return Some(active.id);
+        }
+        self.iter()
+            .find(|s| s.connection_id == connection)
+            .map(|s| s.id)
+    }
+
+    /// What the tree shows for `connection`: open if any session on it is,
+    /// else connecting, else failed; `None` without a session.
+    pub(crate) fn connection_status(&self, connection: &str) -> Option<&SessionStatus> {
+        let mut statuses: Vec<_> = self
+            .iter()
+            .filter(|s| s.connection_id == connection)
+            .map(|s| &s.status)
+            .collect();
+        statuses.sort_by_key(|status| match status {
+            SessionStatus::Open { .. } => 0,
+            SessionStatus::Connecting => 1,
+            SessionStatus::Failed(_) => 2,
+            SessionStatus::Closed => 3,
+        });
+        statuses.first().copied()
+    }
 }
 
 /// The status bar's line.
@@ -87,13 +256,22 @@ pub(crate) enum Overlay {
 }
 
 /// An answer a modal is waiting for, so a late one meant for a modal that has
-/// since been closed cannot act on whatever is open now.
+/// since been closed, or from another session, cannot act on whatever is
+/// open now.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Awaiting {
-    Connect,
-    Export,
+    Connect(SessionId),
+    Export(SessionId),
     Import,
     ExportConnections,
+}
+
+/// A password a session's worker asked for while another prompt was open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PasswordRequest {
+    pub(crate) session: SessionId,
+    pub(crate) connection: String,
+    pub(crate) name: String,
 }
 
 /// Mints connection ids without reading the clock: the runtime hands in a
@@ -131,11 +309,12 @@ pub struct State {
     pub(crate) overlays: Vec<Overlay>,
     /// What the open modal is waiting for the worker to answer, if anything.
     pub(crate) awaiting: Option<Awaiting>,
-    /// The session the editor and the tree talk to.
-    pub(crate) session: SessionId,
+    /// The open sessions; the editor and the results are the active one's.
+    pub(crate) sessions: Sessions,
+    /// Password prompts waiting for the one on screen to close, oldest
+    /// first.
+    pub(crate) password_queue: Vec<PasswordRequest>,
     pub(crate) tree: TreeState,
-    pub(crate) editor: EditorState,
-    pub(crate) results: ResultsState,
     pub(crate) status: StatusCode,
     /// The start of a multi-key binding typed so far, normalised.
     pub(crate) pending_keys: Vec<KeyEvent>,
@@ -157,10 +336,9 @@ impl Default for State {
             focus: Focus::default(),
             overlays: Vec::new(),
             awaiting: None,
-            session: SessionId::FIRST,
+            sessions: Sessions::default(),
+            password_queue: Vec::new(),
             tree: TreeState::default(),
-            editor: EditorState::default(),
-            results: ResultsState::default(),
             status: StatusCode::default(),
             pending_keys: Vec::new(),
             key_timer: 0,
@@ -171,6 +349,24 @@ impl Default for State {
 }
 
 impl State {
+    /// The active session's editor.
+    pub(crate) fn editor(&self) -> &EditorState {
+        &self.sessions.active().editor
+    }
+
+    pub(crate) fn editor_mut(&mut self) -> &mut EditorState {
+        &mut self.sessions.active_mut().editor
+    }
+
+    /// The active session's results.
+    pub(crate) fn results(&self) -> &ResultsState {
+        &self.sessions.active().results
+    }
+
+    pub(crate) fn results_mut(&mut self) -> &mut ResultsState {
+        &mut self.sessions.active_mut().results
+    }
+
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
@@ -268,22 +464,24 @@ pub(crate) enum Row {
     Note(&'static str),
 }
 
-/// The connection tree.
+/// The connection tree: the stored records and what is expanded. Which of
+/// them are open is the sessions' business.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct TreeState {
     pub(crate) connections: Vec<Node>,
-    /// The connection the worker is on.
-    pub(crate) active: Option<usize>,
-    /// The connection whose `Connect` was sent and has not been answered.
-    pub(crate) attempting: Option<usize>,
-    /// Expand this one as soon as it is connected.
-    pub(crate) expand_when_connected: Option<usize>,
     pub(crate) selected: usize,
     /// First row in view; kept by the view.
     pub(crate) offset: Cell<usize>,
 }
 
 impl TreeState {
+    /// The index of the connection with this id.
+    pub(crate) fn position(&self, connection: &str) -> Option<usize> {
+        self.connections
+            .iter()
+            .position(|n| n.record.id == connection)
+    }
+
     pub(crate) fn rows(&self) -> Vec<Row> {
         let mut rows = Vec::new();
         for (i, connection) in self.connections.iter().enumerate() {

@@ -18,17 +18,17 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     match action {
         // Until statements are split (T302), the statement is everything.
         Action::RunStatement | Action::RunAll => {
-            let sql = state.editor.query();
+            let sql = state.editor().query();
             execute(state, sql, fx);
         }
         Action::RunSelection => {
-            let sql = selection(&state.editor).unwrap_or_else(|| state.editor.query());
+            let sql = selection(state.editor()).unwrap_or_else(|| state.editor().query());
             execute(state, sql, fx);
         }
         // No query can be cancelled until there are jobs (T305), so it
         // always copies.
-        Action::CancelQuery => apply(&mut state.editor, Action::Copy),
-        action => apply(&mut state.editor, action),
+        Action::CancelQuery => apply(state.editor_mut(), Action::Copy),
+        action => apply(state.editor_mut(), action),
     }
 }
 

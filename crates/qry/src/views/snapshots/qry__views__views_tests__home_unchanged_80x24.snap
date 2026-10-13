@@ -2,8 +2,10 @@
 source: crates/qry/src/views/views_tests.rs
 expression: "h.render(80, 24)"
 ---
+ 1 scratch                                                                      
 ┌ Connection Tree ─┐┌Query─────────────────────────────────────────────────────┐
-│▸ scratch         ││ 1                                                        │
+│▸ ● scratch       ││ 1                                                        │
+│                  ││                                                          │
 │                  ││                                                          │
 │                  ││                                                          │
 │                  ││                                                          │
@@ -23,4 +25,4 @@ expression: "h.render(80, 24)"
 │                  ││                                                          │
 │                  ││                                                          │
 └──────────────────┘└──────────────────────────────────────────────────────────┘
-                         Connected to scratch (:memory:)
+ :memory:  Connected to scratch (:memory:)

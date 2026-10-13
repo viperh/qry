@@ -7,7 +7,7 @@
 //! records which answer that is, so a late one meant for a modal that has
 //! since closed, or for a different one, changes nothing.
 
-use super::{connect, tree};
+use super::{connect, sessions, tree};
 use crate::{
     action::Action,
     app::{
@@ -16,7 +16,7 @@ use crate::{
             exportform::ExportForm, importform::ImportForm, passwordform::PasswordForm,
         },
         effects::Effect,
-        state::{Awaiting, State},
+        state::{Awaiting, PasswordRequest, SessionId, State},
     },
     connections::StoredConnection,
     db::DbCommand,
@@ -36,10 +36,15 @@ pub(super) fn open(state: &mut State, action: Action) {
     state.awaiting = None;
 }
 
-/// Closes the modal, and stops waiting for its answer.
+/// Closes the modal, and stops waiting for its answer. A password prompt
+/// that was waiting its turn comes up next.
 fn close(state: &mut State) {
     state.close_dialog();
     state.awaiting = None;
+    if !state.password_queue.is_empty() {
+        let next = state.password_queue.remove(0);
+        prompt(state, next);
+    }
 }
 
 /// What a `Dialog` binding does: submit, close, or move about the form.
@@ -61,9 +66,26 @@ pub(super) fn edit_connection(state: &mut State, record: &StoredConnection) {
     state.awaiting = None;
 }
 
-/// The worker wants a password typed for connection `id`, called `name`.
-pub(super) fn need_password(state: &mut State, id: String, name: String) {
-    state.open_dialog(DialogState::Password(PasswordForm::new(id, name)));
+/// Session `session`'s worker wants a password typed for connection `id`,
+/// called `name`. While another session's prompt is open, this one waits
+/// its turn, so each typed password goes back to the worker that asked.
+pub(super) fn need_password(state: &mut State, session: SessionId, id: String, name: String) {
+    let request = PasswordRequest {
+        session,
+        connection: id,
+        name,
+    };
+    match state.dialog() {
+        Some(DialogState::Password(form)) if form.session() != session => {
+            state.password_queue.push(request);
+        }
+        _ => prompt(state, request),
+    }
+}
+
+fn prompt(state: &mut State, request: PasswordRequest) {
+    let form = PasswordForm::new(request.session, request.connection, request.name);
+    state.open_dialog(DialogState::Password(form));
     state.awaiting = None;
 }
 
@@ -84,21 +106,18 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             return;
         }
     };
-    let (awaiting, pending) = match &submission {
+    let pending = match &submission {
         // A typed password is the rest of a connection attempt, so the
         // prompt waits for the same answer.
-        Submission::Connect { .. } | Submission::PasswordEntered { .. } => {
-            (Awaiting::Connect, "Connecting…")
-        }
-        Submission::Export(_) => (Awaiting::Export, "Exporting…"),
-        Submission::Import { .. } => (Awaiting::Import, "Importing…"),
-        Submission::ExportConnections(_) => (Awaiting::ExportConnections, "Exporting…"),
+        Submission::Connect { .. } | Submission::PasswordEntered { .. } => Some("Connecting…"),
+        Submission::Export(_) | Submission::ExportConnections(_) => Some("Exporting…"),
+        Submission::Import { .. } => Some("Importing…"),
+        Submission::CloseSession(_) => None,
     };
     dialog.form_mut().set_error(None);
-    dialog.form_mut().set_pending(Some(pending));
-    state.awaiting = Some(awaiting);
+    dialog.form_mut().set_pending(pending);
 
-    match submission {
+    let awaiting = match submission {
         Submission::Connect { record, password } => {
             if let Some(password) = password {
                 fx.push(Effect::StashPassword {
@@ -106,9 +125,10 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
                     password,
                 });
             }
-            connect(state, *record, fx);
+            Awaiting::Connect(connect(state, *record, fx))
         }
         Submission::PasswordEntered {
+            session,
             connection,
             password,
         } => {
@@ -116,13 +136,32 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
                 connection,
                 password,
             });
-            fx.push(Effect::Db(state.session, DbCommand::PasswordEntered));
+            fx.push(Effect::Db(session, DbCommand::PasswordEntered));
+            Awaiting::Connect(session)
         }
-        Submission::Export(config) => fx.push(Effect::Db(state.session, DbCommand::Export(config))),
-        Submission::Import { path, format } => fx.push(Effect::Import { path, format }),
+        Submission::Export(config) => {
+            let session = state.sessions.active;
+            fx.push(Effect::Db(session, DbCommand::Export(config)));
+            Awaiting::Export(session)
+        }
+        Submission::Import { path, format } => {
+            fx.push(Effect::Import { path, format });
+            Awaiting::Import
+        }
         // The tree holds the list to write.
-        Submission::ExportConnections(path) => tree::export_connections(state, path, fx),
-    }
+        Submission::ExportConnections(path) => {
+            state.awaiting = Some(Awaiting::ExportConnections);
+            tree::export_connections(state, path, fx);
+            return;
+        }
+        // Nothing to wait for: it closes now.
+        Submission::CloseSession(session) => {
+            close(state);
+            sessions::close(state, session, fx);
+            return;
+        }
+    };
+    state.awaiting = Some(awaiting);
 }
 
 /// The answer the modal waited for came: it is done, so close it.

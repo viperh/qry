@@ -24,7 +24,8 @@ expression: "Config::embedded().effective_json()"
       "ctrl-8": {"SwitchSession":8},
       "ctrl-9": {"SwitchSession":9},
       "ctrl-PgDn": "NextSession",
-      "ctrl-PgUp": "PrevSession"
+      "ctrl-PgUp": "PrevSession",
+      "ctrl-w": "CloseSession"
     },
     "Tree": {
       "?": "Help",
@@ -46,6 +47,7 @@ expression: "Config::embedded().effective_json()"
       "End": "Bottom",
       "Space": "Toggle",
       "Enter": "Open",
+      "shift-Enter": "OpenNewSession",
       "r": "Refresh",
       "/": "Filter"
     },

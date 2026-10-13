@@ -23,7 +23,7 @@ fn press(editor: &mut App, code: KeyCode, modifiers: KeyModifiers) -> Vec<Effect
 
 /// What has been typed.
 fn query(editor: &App) -> String {
-    editor.state().editor.query()
+    editor.state().editor().query()
 }
 
 fn type_str(editor: &mut App, text: &str) {

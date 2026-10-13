@@ -2,6 +2,7 @@
 //! They are plain data in [`State`](super::state::State); the reducer opens,
 //! submits and closes them, and [`crate::views::form`] draws them.
 
+pub(crate) mod confirmform;
 pub(crate) mod connexportform;
 pub(crate) mod connform;
 pub(crate) mod exportform;
@@ -13,9 +14,10 @@ pub(crate) mod textinput;
 use qry_core::ExportConfig;
 
 use self::{
-    connexportform::ConnExportForm, connform::ConnForm, exportform::ExportForm, form::Form,
-    importform::ImportForm, passwordform::PasswordForm,
+    confirmform::ConfirmForm, connexportform::ConnExportForm, connform::ConnForm,
+    exportform::ExportForm, form::Form, importform::ImportForm, passwordform::PasswordForm,
 };
+use super::state::SessionId;
 use crate::{connections::StoredConnection, import::Format, secrets::Password};
 
 /// The open modal.
@@ -26,6 +28,7 @@ pub(crate) enum DialogState {
     Password(PasswordForm),
     Import(ImportForm),
     ConnExport(ConnExportForm),
+    Confirm(ConfirmForm),
 }
 
 impl DialogState {
@@ -36,6 +39,7 @@ impl DialogState {
             Self::Password(form) => form,
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
+            Self::Confirm(form) => form,
         }
     }
 
@@ -46,6 +50,7 @@ impl DialogState {
             Self::Password(form) => form,
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
+            Self::Confirm(form) => form,
         }
     }
 }
@@ -61,8 +66,9 @@ pub(crate) enum Submission {
         password: Option<Password>,
     },
     /// The password prompt's answer, for the connection the worker asked
-    /// about (its id).
+    /// about (its id) and the session whose worker asked.
     PasswordEntered {
+        session: SessionId,
         connection: String,
         password: Password,
     },
@@ -72,6 +78,8 @@ pub(crate) enum Submission {
     Import { path: String, format: Format },
     /// Write a backup of the saved connections to this file.
     ExportConnections(String),
+    /// Close this session, though a query is running there.
+    CloseSession(SessionId),
 }
 
 /// The form helpers (`key`, `press`, `type_str`, `render`), shared by every

@@ -1,31 +1,41 @@
-//! The status panel under the panes.
+//! The status line under the panes: the active session, then the last
+//! message.
 
 use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::{
-    app::state::{State, StatusCode},
+    app::state::{SessionStatus, State, StatusCode},
     theme::Theme,
 };
 
-/// Whether there is nothing to show, so the panel takes no room.
-pub(crate) fn is_empty(state: &State) -> bool {
-    state.status == StatusCode::None
-}
-
 pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
+    let session = state.sessions.active();
+    let mut spans = match &session.status {
+        SessionStatus::Open { label } => {
+            vec![Span::styled(format!(" {label} "), theme.status_session())]
+        }
+        SessionStatus::Connecting => vec![Span::styled(
+            format!(" connecting to {}… ", session.title),
+            theme.status_dim(),
+        )],
+        SessionStatus::Failed(message) => vec![Span::styled(
+            format!(" {}: {message} ", session.title),
+            theme.status_warning(),
+        )],
+        SessionStatus::Closed => Vec::new(),
+    };
     match &state.status {
-        StatusCode::Error(err) => frame.render_widget(
-            Paragraph::new(format!("Error: {err}"))
-                .style(theme.status_warning())
-                .centered(),
-            area,
-        ),
-        StatusCode::Success(msg) => frame.render_widget(
-            Paragraph::new(msg.as_str())
-                .style(theme.status_ok())
-                .centered(),
-            area,
-        ),
+        StatusCode::Error(err) => {
+            spans.push(Span::styled(
+                format!(" Error: {err}"),
+                theme.status_warning(),
+            ));
+        }
+        StatusCode::Success(msg) => spans.push(Span::styled(format!(" {msg}"), theme.status_ok())),
         StatusCode::None => {}
     }
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(theme.status_line()),
+        area,
+    );
 }
