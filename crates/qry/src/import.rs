@@ -20,7 +20,7 @@ use crate::connections::{self, Driver, StoredConnection};
 
 /// Where a file came from. `Auto` looks at its shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) enum Format {
+pub enum Format {
     #[default]
     Auto,
     Qry,
@@ -51,14 +51,14 @@ impl fmt::Display for Format {
 
 /// A connection in the file that qry could not turn into one of its own.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Skipped {
+pub struct Skipped {
     pub name: String,
     pub reason: String,
 }
 
 /// What a file held.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Imported {
+pub struct Imported {
     /// The format it was read as, after detection.
     pub format: Format,
     pub connections: Vec<StoredConnection>,

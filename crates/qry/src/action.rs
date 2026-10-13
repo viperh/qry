@@ -16,7 +16,7 @@ use crate::{
 /// Add your own variants here; components return them from `update` /
 /// `handle_key_event` and `App::handle_actions` dispatches them.
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
-pub(crate) enum Action {
+pub enum Action {
     Tick,
     Render,
     Resize(u16, u16),
@@ -97,7 +97,7 @@ pub(crate) enum Action {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Display, Serialize, Deserialize)]
-pub(crate) enum StatusCode {
+pub enum StatusCode {
     #[default]
     None,
     Success(String),

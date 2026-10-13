@@ -18,14 +18,14 @@ const APP_QUALIFIER: &str = "dev";
 const APP_ORGANIZATION: &str = "viperh";
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub(crate) struct Config {
+pub struct Config {
     #[serde(default)]
-    pub keybindings: KeyBindings,
+    pub(crate) keybindings: KeyBindings,
     /// Keys that act inside one pane; see [`crate::keymap`].
     #[serde(default)]
-    pub panes: PaneKeys,
+    pub(crate) panes: PaneKeys,
     #[serde(default)]
-    pub styles: Styles,
+    pub(crate) styles: Styles,
 }
 
 /// Upper-cased crate name, used as the prefix for the `*_DATA`, `*_CONFIG`
@@ -108,12 +108,12 @@ impl Config {
 
     /// Only the built-in config, ignoring any user files. Keeps tests
     /// independent of the machine they run on.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     #[allow(
         clippy::expect_used,
         reason = "the embedded config is a constant that every test parses"
     )]
-    pub(crate) fn embedded() -> Self {
+    pub fn embedded() -> Self {
         json5::from_str(CONFIG).expect("the embedded config is valid")
     }
 }
@@ -175,7 +175,7 @@ impl<'de> Deserialize<'de> for KeyBindings {
     }
 }
 
-fn parse_key_event(raw: &str) -> color_eyre::Result<KeyEvent, String> {
+pub(crate) fn parse_key_event(raw: &str) -> color_eyre::Result<KeyEvent, String> {
     let raw_lower = raw.to_ascii_lowercase();
     let (remaining, modifiers) = extract_modifiers(&raw_lower);
     parse_key_code_with_modifiers(remaining, modifiers)

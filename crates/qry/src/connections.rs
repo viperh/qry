@@ -29,7 +29,7 @@ const TEMP: &str = "connections.json.tmp";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum Driver {
+pub enum Driver {
     Postgres,
     Mariadb,
     Mysql,
@@ -57,7 +57,7 @@ impl Driver {
 /// assumes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
-pub(crate) enum Secret {
+pub enum Secret {
     /// The OS keychain, under the connection's id.
     Keyring,
     /// An environment variable, read at connect time.
@@ -70,7 +70,7 @@ pub(crate) enum Secret {
 
 /// One connection, as it is written to disk.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct StoredConnection {
+pub struct StoredConnection {
     /// Minted once and never changed: the keyring account and the tree's
     /// identity, so renaming cannot orphan a secret.
     pub id: String,

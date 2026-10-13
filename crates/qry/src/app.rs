@@ -45,7 +45,7 @@ impl std::fmt::Debug for App {
 /// Input modes. Keybindings and styles in `.config/config.json` are keyed by
 /// these names, so adding a variant here means adding a section there too.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
-pub(crate) enum Mode {
+pub enum Mode {
     #[default]
     Home,
     AddConnModal,

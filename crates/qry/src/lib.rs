@@ -20,6 +20,12 @@ pub mod logging;
 pub mod secrets;
 pub mod tui;
 
+/// Drives the app without a terminal, for tests. Compiled for this crate's
+/// own tests and, through the `test-util` feature, for other crates'
+/// dev-dependencies; a release build never contains it.
+#[cfg(any(test, feature = "test-util"))]
+pub mod testing;
+
 /// Runs the TUI until the user quits.
 pub async fn run(cli: cli::Cli) -> color_eyre::Result<()> {
     let mut app = app::App::new(cli.tick_rate, cli.frame_rate)?;
