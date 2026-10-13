@@ -18,7 +18,7 @@ workspace = true
 [features]
 # Compiles `qry::testing` (the app harness) for other crates' tests. Never
 # enabled in a release build.
-test-util = []
+test-util = ["qry-core/test-util"]
 
 [dependencies]
 qry-core = { workspace = true }
@@ -58,5 +58,14 @@ vergen-gix = { workspace = true }
 winresource = { workspace = true }
 
 [dev-dependencies]
+# A self dev-dependency, so integration tests see `qry::testing` and
+# `qry_core::testing` without anyone passing `--features test-util`.
+qry = { path = ".", features = ["test-util"] }
+
 cargo_metadata = { workspace = true }
+insta = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+# `start_paused` and `time::advance` for tests on a virtual clock.
+tokio = { workspace = true, features = ["test-util"] }

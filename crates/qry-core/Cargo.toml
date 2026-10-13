@@ -11,6 +11,11 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Compiles `qry_core::testing` (`FakeDatabase` and result builders) for other
+# crates' tests. Never enabled in a release build.
+test-util = []
+
 # Keep this crate UI-agnostic: no ratatui, no crossterm, no clap.
 # Everything here should be testable without a terminal.
 [dependencies]
@@ -31,3 +36,5 @@ tokio-rusqlite = { workspace = true }
 [dev-dependencies]
 # A TLS server for the Oracle tests.
 rustls = { workspace = true }
+# `start_paused` and `time::advance` for tests on a virtual clock.
+tokio = { workspace = true, features = ["test-util"] }

@@ -105,9 +105,14 @@ winresource = "0.1.31"
 # --- dev ---
 # Loads the workspace for the structural tests in crates/qry/tests/.
 cargo_metadata = "0.23.1"
+# Snapshot tests: `cargo insta review` accepts or rejects changed snapshots.
+insta = "1.49.0"
 pretty_assertions = "1.4.1"
+proptest = "1.11.0"
 # A TLS server for the Oracle tests; already in the tree through oracledb.
 rustls = "0.23.45"
+# Scratch directories that clean themselves up.
+tempfile = "3.27.0"
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]
