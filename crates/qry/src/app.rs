@@ -14,7 +14,7 @@ use crate::{
     tui::{Event, Tui},
 };
 
-pub struct App {
+pub(crate) struct App {
     db: mpsc::UnboundedSender<DbCommand>,
     config: Config,
     tick_rate: f64,
@@ -31,7 +31,7 @@ pub struct App {
 /// Input modes. Keybindings and styles in `.config/config.json` are keyed by
 /// these names, so adding a variant here means adding a section there too.
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
-pub enum Mode {
+pub(crate) enum Mode {
     #[default]
     Home,
     AddConnModal,
@@ -42,7 +42,7 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
+    pub(crate) fn new(tick_rate: f64, frame_rate: f64) -> color_eyre::Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             db: crate::db::spawn(action_tx.clone()),
@@ -59,7 +59,7 @@ impl App {
         })
     }
 
-    pub async fn run(&mut self) -> color_eyre::Result<()> {
+    pub(crate) async fn run(&mut self) -> color_eyre::Result<()> {
         let mut tui = Tui::new()?
             // .mouse(true) // uncomment this line to enable mouse support
             .tick_rate(self.tick_rate)

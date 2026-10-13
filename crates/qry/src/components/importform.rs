@@ -12,7 +12,7 @@ const FORMAT: usize = 1;
 const FORMATS: [&str; 4] = ["DETECT", "QRY BACKUP", "SQL DEVELOPER", "DBEAVER"];
 
 /// The Import Connections form: a file, and what wrote it.
-pub struct ImportForm {
+pub(super) struct ImportForm {
     fields: [Field; 2],
     focus: usize,
     error: Option<String>,

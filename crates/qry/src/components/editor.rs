@@ -7,7 +7,7 @@ use super::{Component, textinput::typed_char};
 use crate::{action::Action, config::Config, keymap::EditorCommand};
 
 #[derive(Default)]
-pub struct Editor {
+pub(super) struct Editor {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 
@@ -17,7 +17,7 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn query(&self) -> String {
+    pub(super) fn query(&self) -> String {
         self.textarea.lines().join("\n")
     }
 

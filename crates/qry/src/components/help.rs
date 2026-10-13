@@ -14,7 +14,7 @@ use crate::{
 /// The help popup. Built from the config, so it always lists the keys that
 /// are actually bound, including a user's own.
 #[derive(Default)]
-pub struct Help {
+pub(super) struct Help {
     /// `(title, [(keys, description)])`, in display order.
     sections: Vec<(String, Vec<(String, String)>)>,
     /// First line in view.
@@ -25,7 +25,7 @@ pub struct Help {
 }
 
 impl Help {
-    pub fn from_config(config: &Config) -> Self {
+    pub(super) fn from_config(config: &Config) -> Self {
         let panes = &config.panes;
         let sections = [
             ("Global", mode_bindings(config, Mode::Home)),
@@ -54,11 +54,11 @@ impl Help {
         }
     }
 
-    pub fn scroll_to_top(&mut self) {
+    pub(super) fn scroll_to_top(&mut self) {
         self.scroll = 0;
     }
 
-    pub fn scroll(&mut self, command: HelpCommand) {
+    pub(super) fn scroll(&mut self, command: HelpCommand) {
         let page = self.page.max(1);
         self.scroll = match command {
             HelpCommand::ScrollUp => self.scroll.saturating_sub(1),
@@ -92,7 +92,7 @@ impl Help {
         lines
     }
 
-    pub fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
+    pub(super) fn draw(&mut self, frame: &mut Frame, area: Rect) -> color_eyre::Result<()> {
         let lines = self.lines();
         let total = lines.len();
 

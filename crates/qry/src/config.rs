@@ -18,7 +18,7 @@ const APP_QUALIFIER: &str = "dev";
 const APP_ORGANIZATION: &str = "viperh";
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct Config {
+pub(crate) struct Config {
     #[serde(default)]
     pub keybindings: KeyBindings,
     /// Keys that act inside one pane; see [`crate::keymap`].
@@ -30,28 +30,39 @@ pub struct Config {
 
 /// Upper-cased crate name, used as the prefix for the `*_DATA`, `*_CONFIG`
 /// and `*_LOG_LEVEL` environment variables (see `.envrc`).
-pub static PROJECT_NAME: LazyLock<String> =
+pub(crate) static PROJECT_NAME: LazyLock<String> =
     LazyLock::new(|| env!("CARGO_CRATE_NAME").to_uppercase().to_string());
-pub static DATA_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+pub(crate) static DATA_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
     env::var(format!("{}_DATA", PROJECT_NAME.clone()))
         .ok()
         .map(PathBuf::from)
 });
-pub static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+pub(crate) static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
     env::var(format!("{}_CONFIG", PROJECT_NAME.clone()))
         .ok()
         .map(PathBuf::from)
 });
 
+/// The directory as a string for the `config` crate, which only stores UTF-8.
+/// A non-UTF-8 path is an error rather than a silently mangled path.
+fn utf8_dir<'a>(kind: &str, dir: &'a std::path::Path) -> Result<&'a str, config::ConfigError> {
+    dir.to_str().ok_or_else(|| {
+        config::ConfigError::Message(format!(
+            "the {kind} directory {} is not valid UTF-8",
+            dir.display()
+        ))
+    })
+}
+
 impl Config {
-    pub fn new() -> color_eyre::Result<Self, config::ConfigError> {
+    pub(crate) fn new() -> color_eyre::Result<Self, config::ConfigError> {
         let default_config: Config =
             json5::from_str(CONFIG).map_err(|e| config::ConfigError::Foreign(Box::new(e)))?;
         let data_dir = get_data_dir();
         let config_dir = get_config_dir();
         let mut builder = config::Config::builder()
-            .set_default("data_dir", data_dir.to_str().unwrap())?
-            .set_default("config_dir", config_dir.to_str().unwrap())?;
+            .set_default("data_dir", utf8_dir("data", &data_dir)?)?
+            .set_default("config_dir", utf8_dir("config", &config_dir)?)?;
 
         let config_files = [
             ("config.json5", config::FileFormat::Json5),
@@ -98,12 +109,16 @@ impl Config {
     /// Only the built-in config, ignoring any user files. Keeps tests
     /// independent of the machine they run on.
     #[cfg(test)]
-    pub fn embedded() -> Self {
+    #[allow(
+        clippy::expect_used,
+        reason = "the embedded config is a constant that every test parses"
+    )]
+    pub(crate) fn embedded() -> Self {
         json5::from_str(CONFIG).expect("the embedded config is valid")
     }
 }
 
-pub fn get_data_dir() -> PathBuf {
+pub(crate) fn get_data_dir() -> PathBuf {
     if let Some(s) = DATA_FOLDER.clone() {
         s
     } else if let Some(proj_dirs) = project_directory() {
@@ -113,7 +128,7 @@ pub fn get_data_dir() -> PathBuf {
     }
 }
 
-pub fn get_config_dir() -> PathBuf {
+pub(crate) fn get_config_dir() -> PathBuf {
     if let Some(s) = CONFIG_FOLDER.clone() {
         s
     } else if let Some(proj_dirs) = project_directory() {
@@ -128,7 +143,7 @@ fn project_directory() -> Option<ProjectDirs> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct KeyBindings(pub HashMap<Mode, HashMap<Vec<KeyEvent>, Action>>);
+pub(crate) struct KeyBindings(pub HashMap<Mode, HashMap<Vec<KeyEvent>, Action>>);
 
 impl<'de> Deserialize<'de> for KeyBindings {
     fn deserialize<D>(deserializer: D) -> color_eyre::Result<Self, D::Error>
@@ -230,6 +245,7 @@ fn parse_key_code_with_modifiers(
         "minus" => KeyCode::Char('-'),
         "tab" => KeyCode::Tab,
         c if c.len() == 1 => {
+            #[allow(clippy::unwrap_used, reason = "the guard checked there is one char")]
             let mut c = c.chars().next().unwrap();
             if modifiers.contains(KeyModifiers::SHIFT) {
                 c = c.to_ascii_uppercase();
@@ -242,7 +258,7 @@ fn parse_key_code_with_modifiers(
 }
 
 #[cfg(test)]
-pub fn key_event_to_string(key_event: &KeyEvent) -> String {
+pub(crate) fn key_event_to_string(key_event: &KeyEvent) -> String {
     let char;
     let key_code = match key_event.code {
         KeyCode::Backspace => "backspace",
@@ -305,7 +321,7 @@ pub fn key_event_to_string(key_event: &KeyEvent) -> String {
     key
 }
 
-pub fn parse_key_sequence(raw: &str) -> color_eyre::Result<Vec<KeyEvent>, String> {
+pub(crate) fn parse_key_sequence(raw: &str) -> color_eyre::Result<Vec<KeyEvent>, String> {
     if raw.chars().filter(|c| *c == '>').count() != raw.chars().filter(|c| *c == '<').count() {
         return Err(format!("Unable to parse `{raw}`"));
     }
@@ -332,7 +348,7 @@ pub fn parse_key_sequence(raw: &str) -> color_eyre::Result<Vec<KeyEvent>, String
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Styles(pub HashMap<Mode, HashMap<String, Style>>);
+pub(crate) struct Styles(pub HashMap<Mode, HashMap<String, Style>>);
 
 impl<'de> Deserialize<'de> for Styles {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -356,7 +372,7 @@ impl<'de> Deserialize<'de> for Styles {
     }
 }
 
-pub fn parse_style(line: &str) -> Style {
+pub(crate) fn parse_style(line: &str) -> Style {
     let (foreground, background) =
         line.split_at(line.to_lowercase().find("on ").unwrap_or(line.len()));
     let foreground = process_color_string(foreground);

@@ -22,14 +22,14 @@ use crate::config::get_data_dir;
 
 /// The format this build writes. A file numbered higher is refused rather
 /// than parsed hopefully.
-pub const VERSION: u64 = 1;
+pub(crate) const VERSION: u64 = 1;
 
 const FILE: &str = "connections.json";
 const TEMP: &str = "connections.json.tmp";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Driver {
+pub(crate) enum Driver {
     Postgres,
     Mariadb,
     Mysql,
@@ -38,7 +38,7 @@ pub enum Driver {
 }
 
 impl Driver {
-    pub fn default_port(self) -> u16 {
+    pub(crate) fn default_port(self) -> u16 {
         match self {
             Driver::Postgres => 5432,
             Driver::Mariadb | Driver::Mysql => 3306,
@@ -48,7 +48,7 @@ impl Driver {
     }
 
     /// Whether a connection of this kind needs a password at all.
-    pub fn needs_password(self) -> bool {
+    pub(crate) fn needs_password(self) -> bool {
         !matches!(self, Driver::Sqlite)
     }
 }
@@ -57,7 +57,7 @@ impl Driver {
 /// assumes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "mode", rename_all = "lowercase")]
-pub enum Secret {
+pub(crate) enum Secret {
     /// The OS keychain, under the connection's id.
     Keyring,
     /// An environment variable, read at connect time.
@@ -70,7 +70,7 @@ pub enum Secret {
 
 /// One connection, as it is written to disk.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StoredConnection {
+pub(crate) struct StoredConnection {
     /// Minted once and never changed: the keyring account and the tree's
     /// identity, so renaming cannot orphan a secret.
     pub id: String,
@@ -117,7 +117,7 @@ pub struct StoredConnection {
 
 impl StoredConnection {
     /// A new record with a fresh id and nothing filled in.
-    pub fn new(name: impl Into<String>, driver: Driver) -> Self {
+    pub(crate) fn new(name: impl Into<String>, driver: Driver) -> Self {
         Self {
             id: mint_id(),
             name: name.into(),
@@ -145,7 +145,7 @@ impl StoredConnection {
 
     /// Whether both open the same database as the same user, whatever they
     /// are called. How an import tells a connection it already has.
-    pub fn same_target(&self, other: &Self) -> bool {
+    pub(crate) fn same_target(&self, other: &Self) -> bool {
         let port = |c: &Self| c.port.unwrap_or(c.driver.default_port());
         self.driver == other.driver
             && self.host == other.host
@@ -157,7 +157,7 @@ impl StoredConnection {
     }
 
     /// What the tree shows.
-    pub fn title(&self) -> &str {
+    pub(crate) fn title(&self) -> &str {
         if self.name.is_empty() {
             &self.id
         } else {
@@ -167,7 +167,7 @@ impl StoredConnection {
 
     /// Builds what the driver needs, given the password from wherever this
     /// record says it lives. The password is never kept here.
-    pub fn to_config(&self, password: &str) -> color_eyre::Result<ConnectionConfig> {
+    pub(crate) fn to_config(&self, password: &str) -> color_eyre::Result<ConnectionConfig> {
         if self.dsn.is_some() {
             bail!("DSN connections are not supported yet");
         }
@@ -239,7 +239,7 @@ impl StoredConnection {
     /// Oracle's SSL mode and wallet. Before qry spoke TLS to Oracle, `tls`
     /// held a wallet directory rather than a mode; such a record still means
     /// "TCPS with this wallet", and saving it again writes the new shape.
-    pub fn oracle_tls(&self) -> color_eyre::Result<(SslMode, Option<String>)> {
+    pub(crate) fn oracle_tls(&self) -> color_eyre::Result<(SslMode, Option<String>)> {
         match &self.tls {
             Some(tls) if !SslMode::ALL.iter().any(|mode| mode.to_string() == *tls) => {
                 Ok((SslMode::VerifyFull, Some(tls.clone())))
@@ -272,11 +272,11 @@ struct ConnectionFile {
 
 /// Reads the connections. A missing file is not an error: it means a first
 /// run. A malformed one is, and the bad file is left untouched.
-pub fn load() -> color_eyre::Result<Vec<StoredConnection>> {
+pub(crate) fn load() -> color_eyre::Result<Vec<StoredConnection>> {
     load_from(&get_data_dir())
 }
 
-pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let file = dir.join(FILE);
     let text = match fs::read_to_string(&file) {
         Ok(text) => text,
@@ -288,7 +288,7 @@ pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
 
 /// The connections in the text of a connection file, which `file` names in
 /// errors. Also how a copy of the file is imported as a backup.
-pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let parsed: ConnectionFile = serde_json::from_str(text).wrap_err_with(|| {
         format!(
             "{} is not a connection file qry understands",
@@ -307,11 +307,11 @@ pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection
 
 /// Writes the connections whole, and atomically: a crash mid-save leaves the
 /// previous file intact.
-pub fn save(connections: &[StoredConnection]) -> color_eyre::Result<()> {
+pub(crate) fn save(connections: &[StoredConnection]) -> color_eyre::Result<()> {
     save_to(&get_data_dir(), connections)
 }
 
-pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
+pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
     fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     restrict(dir, 0o700)?;
 
@@ -328,7 +328,7 @@ pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Resu
 /// path that has no extension. An existing file is replaced only if it is
 /// already a connection file, so a mistyped path cannot clobber anything
 /// else. Holds no password, since a record has nowhere to keep one.
-pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
+pub(crate) fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
     let path = match path.extension() {
         Some(_) => path.to_path_buf(),
         None => path.with_extension("json"),

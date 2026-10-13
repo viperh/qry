@@ -20,7 +20,7 @@ use crate::connections::{self, Driver, StoredConnection};
 
 /// Where a file came from. `Auto` looks at its shape.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Format {
+pub(crate) enum Format {
     #[default]
     Auto,
     Qry,
@@ -30,7 +30,7 @@ pub enum Format {
 
 impl Format {
     /// In the order the import form offers them.
-    pub const ALL: [Format; 4] = [
+    pub(crate) const ALL: [Format; 4] = [
         Format::Auto,
         Format::Qry,
         Format::SqlDeveloper,
@@ -51,14 +51,14 @@ impl fmt::Display for Format {
 
 /// A connection in the file that qry could not turn into one of its own.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Skipped {
+pub(crate) struct Skipped {
     pub name: String,
     pub reason: String,
 }
 
 /// What a file held.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Imported {
+pub(crate) struct Imported {
     /// The format it was read as, after detection.
     pub format: Format,
     pub connections: Vec<StoredConnection>,
@@ -69,7 +69,7 @@ pub struct Imported {
 }
 
 /// Reads and converts a file. Blocking: call it from `spawn_blocking`.
-pub fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
+pub(crate) fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
     let path = expand_home(path);
     let bytes = std::fs::read(&path).wrap_err_with(|| format!("cannot read {}", path.display()))?;
     if bytes.starts_with(b"PK") {
@@ -85,7 +85,7 @@ pub fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
 }
 
 /// Converts the text of a file, which `path` names in errors.
-pub fn from_text(text: &str, format: Format, path: &Path) -> color_eyre::Result<Imported> {
+pub(crate) fn from_text(text: &str, format: Format, path: &Path) -> color_eyre::Result<Imported> {
     let shown = path.display();
     if text.trim_start().starts_with('<') {
         bail!(
@@ -144,7 +144,7 @@ fn detect(value: &Value) -> Option<Format> {
 }
 
 /// `~/x` is the home directory's `x`, as a shell would read it.
-pub fn expand_home(path: &str) -> PathBuf {
+pub(crate) fn expand_home(path: &str) -> PathBuf {
     let path = path.trim();
     if let Some(rest) = path.strip_prefix("~/")
         && let Some(dirs) = directories::BaseDirs::new()

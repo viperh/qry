@@ -12,6 +12,25 @@ license = "MIT"
 repository = "https://github.com/viperh/qry"
 rust-version = "1.96"
 
+# Lints every crate inherits with `[lints] workspace = true`.
+[workspace.lints.rust]
+# `deny`, not `forbid`: `forbid` cannot be lifted by an inner `allow`, and the
+# one audited exception (the test-only environment helper in
+# `crates/qry/src/secrets_tests.rs`) needs one.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+todo = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+# A std mutex must never be held across `.await`.
+await_holding_lock = "deny"
+large_futures = "warn"
+
 # Central dependency versions. Crates reference these with
 # `some-dep = { workspace = true }` so versions stay in lockstep.
 [workspace.dependencies]

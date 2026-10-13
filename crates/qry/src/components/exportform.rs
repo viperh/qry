@@ -27,7 +27,7 @@ const OTHER: usize = SEPARATOR_VALUES.len();
 
 /// The Export form. Its fields depend on the type: only CSV and Text have a
 /// separator, and only OTHER has the Custom field.
-pub struct ExportForm {
+pub(super) struct ExportForm {
     fields: Vec<Field>,
     focus: usize,
     error: Option<String>,

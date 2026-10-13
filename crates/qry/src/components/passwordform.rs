@@ -10,7 +10,7 @@ const PASSWORD: usize = 0;
 /// Asked for when a connection's password is not stored, or the keychain
 /// could not be reached. What is typed goes to the stash, never into an
 /// action, and the worker takes it from there.
-pub struct PasswordForm {
+pub(super) struct PasswordForm {
     fields: [Field; 1],
     error: Option<String>,
     pending: Option<&'static str>,
@@ -19,7 +19,7 @@ pub struct PasswordForm {
 }
 
 impl PasswordForm {
-    pub fn new(name: impl Into<String>) -> Self {
+    pub(super) fn new(name: impl Into<String>) -> Self {
         Self {
             fields: [Field::masked()],
             error: None,

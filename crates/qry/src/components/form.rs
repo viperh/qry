@@ -21,9 +21,9 @@ use crate::{
 const FIELD_HEIGHT: u16 = 3;
 const FIELD_GAP: u16 = 1;
 const LABEL_WIDTH: u16 = 14;
-pub const MODAL_WIDTH: u16 = 60;
+pub(super) const MODAL_WIDTH: u16 = 60;
 
-pub enum Field {
+pub(crate) enum Field {
     Text(TextInput),
     /// Cycled with ← / → (or Space) instead of typed.
     Choice {
@@ -33,26 +33,26 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn text() -> Self {
+    pub(crate) fn text() -> Self {
         Field::Text(TextInput::default())
     }
 
     /// A text field that shows `hint`, greyed, while it is empty.
-    pub fn text_with_placeholder(hint: &'static str) -> Self {
+    pub(crate) fn text_with_placeholder(hint: &'static str) -> Self {
         Field::Text(TextInput {
             placeholder: Some(hint),
             ..TextInput::default()
         })
     }
 
-    pub fn masked() -> Self {
+    pub(crate) fn masked() -> Self {
         Field::Text(TextInput {
             masked: true,
             ..TextInput::default()
         })
     }
 
-    pub fn choice(options: &'static [&'static str], selected: usize) -> Self {
+    pub(crate) fn choice(options: &'static [&'static str], selected: usize) -> Self {
         Field::Choice { options, selected }
     }
 
@@ -93,7 +93,7 @@ impl Field {
     }
 }
 
-pub trait Form {
+pub(crate) trait Form {
     fn title(&self) -> &'static str;
     /// Shown in the popup's bottom border while there is no error.
     fn hint(&self) -> &'static str;

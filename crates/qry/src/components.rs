@@ -13,7 +13,7 @@ mod editor;
 mod exportform;
 mod form;
 mod help;
-pub mod home;
+pub(crate) mod home;
 mod importform;
 mod passwordform;
 mod results;
@@ -29,7 +29,7 @@ pub(crate) use form::form_tests;
 ///
 /// Implementors of this trait can be registered with the main application loop and will be able to
 /// receive events, update state, and be rendered on the screen.
-pub trait Component {
+pub(crate) trait Component {
     /// Register an action handler that can send actions for processing if necessary.
     ///
     /// # Arguments

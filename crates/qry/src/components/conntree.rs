@@ -40,7 +40,7 @@ enum Row {
 }
 
 #[derive(Default)]
-pub struct ConnTree {
+pub(super) struct ConnTree {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     focus: bool,
@@ -278,6 +278,10 @@ impl ConnTree {
                 }
             }
             Row::Table(i, t) => {
+                #[allow(
+                    clippy::expect_used,
+                    reason = "table rows are only built for connections whose tables are loaded"
+                )]
                 let table = &self.connections[*i].tables.as_ref().expect("expanded")[*t];
                 Line::from(format!("    {table}"))
             }

@@ -15,7 +15,7 @@ pub(crate) struct TextInput {
 /// Windows reports AltGr as Ctrl+Alt, and on many layouts AltGr is how you
 /// type `\`, `@` or `{`. So only a lone Ctrl or Alt makes a shortcut; both
 /// together is someone typing.
-pub fn typed_char(key: KeyEvent) -> Option<char> {
+pub(super) fn typed_char(key: KeyEvent) -> Option<char> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
     match key.code {
@@ -27,13 +27,13 @@ pub fn typed_char(key: KeyEvent) -> Option<char> {
 // Editing operations. Which key runs which is decided by the config (see
 // `crate::keymap::FormCommand`), not here.
 impl TextInput {
-    pub fn insert(&mut self, c: char) {
+    pub(crate) fn insert(&mut self, c: char) {
         let at = self.byte_index();
         self.value.insert(at, c);
         self.cursor += 1;
     }
 
-    pub fn delete_back(&mut self) {
+    pub(crate) fn delete_back(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
             let at = self.byte_index();
@@ -41,34 +41,34 @@ impl TextInput {
         }
     }
 
-    pub fn delete_forward(&mut self) {
+    pub(crate) fn delete_forward(&mut self) {
         if self.cursor < self.len() {
             let at = self.byte_index();
             self.value.remove(at);
         }
     }
 
-    pub fn move_left(&mut self) {
+    pub(crate) fn move_left(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }
 
-    pub fn move_right(&mut self) {
+    pub(crate) fn move_right(&mut self) {
         self.cursor = (self.cursor + 1).min(self.len());
     }
 
-    pub fn move_home(&mut self) {
+    pub(crate) fn move_home(&mut self) {
         self.cursor = 0;
     }
 
-    pub fn move_end(&mut self) {
+    pub(crate) fn move_end(&mut self) {
         self.cursor = self.len();
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.value.chars().count()
     }
 
-    pub fn byte_index(&self) -> usize {
+    pub(crate) fn byte_index(&self) -> usize {
         self.value
             .char_indices()
             .nth(self.cursor)
@@ -77,7 +77,7 @@ impl TextInput {
 
     /// Draws the input, scrolled so the cursor stays visible. The terminal
     /// cursor is only placed on the focused input.
-    pub fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
+    pub(crate) fn render(&self, frame: &mut Frame, area: Rect, focused: bool) {
         let width = usize::from(area.width).max(1);
         let offset = (self.cursor + 1).saturating_sub(width);
         let visible: String = if self.masked {

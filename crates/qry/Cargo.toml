@@ -12,6 +12,9 @@ build = "build.rs"
 # `errors.rs` reads CARGO_PKG_REPOSITORY at compile time for the panic message,
 # so `repository` above must stay set.
 
+[lints]
+workspace = true
+
 [dependencies]
 qry-core = { workspace = true }
 

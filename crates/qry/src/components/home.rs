@@ -53,7 +53,7 @@ enum Awaiting {
 
 /// The main screen: the panes, and whatever is on top of them.
 #[derive(Default)]
-pub struct Home {
+pub(crate) struct Home {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 
@@ -76,13 +76,13 @@ pub struct Home {
 }
 
 impl Home {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut home = Self::default();
         home.sync_focus();
         home
     }
 
-    pub fn sync_focus(&mut self) {
+    pub(crate) fn sync_focus(&mut self) {
         self.conntree.set_focus(self.focus == Pane::Tree);
         self.editor.set_focus(self.focus == Pane::Editor);
         self.results.set_focus(self.focus == Pane::Results);

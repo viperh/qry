@@ -8,7 +8,7 @@ const FILE: usize = 0;
 
 /// The Export Connections form: where to write a backup that Import
 /// Connections can read back.
-pub struct ConnExportForm {
+pub(super) struct ConnExportForm {
     fields: [Field; 1],
     error: Option<String>,
     /// Set while the file is being written.

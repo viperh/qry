@@ -8,14 +8,14 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct Statuspanel {
+pub(super) struct Statuspanel {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     statuscode: StatusCode,
 }
 
 impl Statuspanel {
-    pub fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.statuscode == StatusCode::None
     }
 }

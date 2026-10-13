@@ -17,7 +17,7 @@ use crate::{
     secrets::{self, Password},
 };
 
-pub enum DbCommand {
+pub(crate) enum DbCommand {
     /// Open this connection. The record holds no password: the worker
     /// resolves the secret from the keychain, the environment, or a prompt.
     Connect(Box<StoredConnection>),
@@ -42,7 +42,7 @@ struct Worker {
 
 /// Starts the worker and returns the sender used to reach it. Commands run one
 /// at a time, in order. The worker stops once every sender has been dropped.
-pub fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
+pub(crate) fn spawn(action_tx: UnboundedSender<Action>) -> UnboundedSender<DbCommand> {
     let (tx, mut rx) = mpsc::unbounded_channel();
     tokio::spawn(async move {
         let mut worker = Worker::default();

@@ -19,7 +19,7 @@ const MAX_COLUMN_WIDTH: u16 = 40;
 const COLUMN_SPACING: u16 = 1;
 
 #[derive(Default)]
-pub struct Results {
+pub(super) struct Results {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
     focus: bool,

@@ -15,13 +15,13 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::config::parse_key_sequence;
 
 /// Something a pane can do. The help lists commands in declaration order.
-pub trait Command: Copy + Eq + Hash + IntoEnumIterator {
+pub(crate) trait Command: Copy + Eq + Hash + IntoEnumIterator {
     fn description(self) -> &'static str;
 }
 
 /// Which key runs which command. Pane keys are single keys, not sequences.
 #[derive(Clone, Debug)]
-pub struct Keymap<C>(HashMap<KeyEvent, C>);
+pub(crate) struct Keymap<C>(HashMap<KeyEvent, C>);
 
 impl<C> Default for Keymap<C> {
     fn default() -> Self {
@@ -30,7 +30,7 @@ impl<C> Default for Keymap<C> {
 }
 
 impl<C: Command> Keymap<C> {
-    pub fn get(&self, key: KeyEvent) -> Option<C> {
+    pub(crate) fn get(&self, key: KeyEvent) -> Option<C> {
         // Compare code and modifiers only; kind and state vary by terminal.
         // BackTab *is* Shift-Tab, but not every terminal reports the Shift.
         let mut modifiers = key.modifiers;
@@ -42,7 +42,7 @@ impl<C: Command> Keymap<C> {
 
     /// One `(keys, description)` line per bound command, in declaration
     /// order. Several keys for the same command share a line.
-    pub fn describe(&self) -> Vec<(String, &'static str)> {
+    pub(crate) fn describe(&self) -> Vec<(String, &'static str)> {
         C::iter()
             .filter_map(|command| {
                 let mut keys: Vec<String> = self
@@ -59,7 +59,7 @@ impl<C: Command> Keymap<C> {
     }
 
     /// Adds every default binding whose key the user's config left unbound.
-    pub fn merge_defaults(&mut self, defaults: &Self) {
+    pub(crate) fn merge_defaults(&mut self, defaults: &Self) {
         for (key, command) in &defaults.0 {
             self.0.entry(*key).or_insert(*command);
         }
@@ -88,7 +88,7 @@ impl<'de, C: Deserialize<'de>> Deserialize<'de> for Keymap<C> {
 /// The `panes` section of the config.
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-pub struct PaneKeys {
+pub(crate) struct PaneKeys {
     #[serde(default)]
     pub editor: Keymap<EditorCommand>,
     #[serde(default)]
@@ -103,7 +103,7 @@ pub struct PaneKeys {
 }
 
 impl PaneKeys {
-    pub fn merge_defaults(&mut self, defaults: &Self) {
+    pub(crate) fn merge_defaults(&mut self, defaults: &Self) {
         self.editor.merge_defaults(&defaults.editor);
         self.results.merge_defaults(&defaults.results);
         self.tree.merge_defaults(&defaults.tree);
@@ -113,7 +113,7 @@ impl PaneKeys {
 }
 
 /// How a key is written in the help, e.g. `Ctrl-u`, `Shift-Tab`, `↑`, `G`.
-pub fn display_key(key: &KeyEvent) -> String {
+pub(crate) fn display_key(key: &KeyEvent) -> String {
     let code = match key.code {
         KeyCode::Up => "↑".to_string(),
         KeyCode::Down => "↓".to_string(),
@@ -143,7 +143,7 @@ pub fn display_key(key: &KeyEvent) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum EditorCommand {
+pub(crate) enum EditorCommand {
     RunQuery,
     NewLine,
     Left,
@@ -220,7 +220,7 @@ impl Command for EditorCommand {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum ResultsCommand {
+pub(crate) enum ResultsCommand {
     Up,
     Down,
     Left,
@@ -251,7 +251,7 @@ impl Command for ResultsCommand {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum TreeCommand {
+pub(crate) enum TreeCommand {
     Up,
     Down,
     /// Opens or closes the selected connection, loading its tables the first
@@ -283,7 +283,7 @@ impl Command for TreeCommand {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum FormCommand {
+pub(crate) enum FormCommand {
     NextField,
     PrevField,
     Submit,
@@ -317,7 +317,7 @@ impl Command for FormCommand {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum HelpCommand {
+pub(crate) enum HelpCommand {
     ScrollUp,
     ScrollDown,
     PageUp,

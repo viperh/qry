@@ -74,7 +74,7 @@ const ASK: usize = 1;
 const ENVIRONMENT: usize = 2;
 
 /// The New Connection form.
-pub struct ConnForm {
+pub(super) struct ConnForm {
     fields: Vec<Field>,
     focus: usize,
     error: Option<String>,
@@ -120,7 +120,7 @@ impl Default for ConnForm {
 impl ConnForm {
     /// Opens an existing connection for changing. The password field starts
     /// empty: leaving it be keeps whatever the connection already used.
-    pub fn editing(record: &StoredConnection) -> Self {
+    pub(super) fn editing(record: &StoredConnection) -> Self {
         let mut form = Self {
             id: record.id.clone(),
             editing: true,
