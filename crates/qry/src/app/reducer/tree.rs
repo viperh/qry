@@ -176,18 +176,19 @@ fn run(state: &mut State, command: TreeCommand, fx: &mut Vec<Effect>) {
     }
 }
 
-/// Drops a connection, keeping the other indexes right.
+/// Drops a connection, keeping the other indexes right. An index that
+/// pointed at it points at nothing now, so a late answer about it is
+/// dropped rather than landing on its neighbour.
 fn forget_node(state: &mut State, connection: usize) {
     let tree = &mut state.tree;
     tree.connections.remove(connection);
-    let shift = |index: &mut Option<usize>| {
-        if let Some(i) = index
-            && *i > connection
-        {
-            *index = Some(*i - 1);
-        }
+    let shift = |index: &mut Option<usize>| match *index {
+        Some(i) if i == connection => *index = None,
+        Some(i) if i > connection => *index = Some(i - 1),
+        _ => {}
     };
     shift(&mut tree.active);
+    shift(&mut tree.attempting);
     shift(&mut tree.expand_when_connected);
     tree.selected = tree.selected.min(tree.rows().len().saturating_sub(1));
 }

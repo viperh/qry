@@ -529,3 +529,26 @@ fn long_trees_scroll_to_keep_the_selection_in_view() {
     assert!(shown.contains("c19"), "{shown}");
     assert!(!shown.contains("c0 ") && !shown.contains("▸ c0"), "{shown}");
 }
+
+#[test]
+fn deleting_a_connection_being_opened_drops_its_late_answer() {
+    let mut tree = Tree::new();
+    connect(&mut tree, "one", "one.db");
+    let two = record("two", "two.db");
+    tree.attempt(&two);
+    tree.take();
+
+    // Deleted while it opens, and then the answer arrives.
+    tree.press(KeyCode::End);
+    tree.press(KeyCode::Delete);
+    tree.connected("two.db");
+    assert_eq!(tree.state.tree.connections.len(), 1);
+    assert_eq!(tree.state.tree.active, Some(0), "still the first one");
+    assert!(!tree.lines(30, 8).contains("two"));
+
+    // Deleting the active one leaves nothing active.
+    tree.press(KeyCode::Home);
+    tree.press(KeyCode::Delete);
+    assert_eq!(tree.state.tree.active, None);
+    tables_loaded(&mut tree.state, vec!["t".into()]);
+}
