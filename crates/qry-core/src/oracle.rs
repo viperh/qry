@@ -392,26 +392,40 @@ impl Database for Oracle {
             .await
     }
 
-    /// Oracle keeps no `information_schema`. This follows `CURRENT_SCHEMA`,
-    /// so it answers for the schema the config asked for rather than only
-    /// for what the connected user owns, and it includes views as the other
-    /// backends do.
-    async fn tables(&self) -> Result<Vec<String>> {
-        let result = self
-            .query(
-                "SELECT table_name AS name FROM all_tables \
-                 WHERE owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') \
-                 UNION ALL \
-                 SELECT view_name FROM all_views \
-                 WHERE owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') \
-                 ORDER BY 1",
-            )
-            .await?;
-        Ok(result
-            .rows
-            .iter()
-            .filter_map(|row| row.first().cloned().flatten())
-            .collect())
+    /// Binds each value to `:1`, `:2`, … by position. The catalog queries
+    /// return only character columns.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let sql = sql.to_string();
+        let params = params.to_vec();
+        self.with_conn(move |conn| {
+            let binds: Vec<&dyn oracledb::ToDbValue> = params
+                .iter()
+                .map(|p| p as &dyn oracledb::ToDbValue)
+                .collect();
+            let cursor = conn.query(&sql, &binds).ora()?;
+            let columns: Vec<ColumnMeta> = cursor
+                .columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
+                .collect();
+            let mut rows = Vec::new();
+            for row in cursor {
+                let row = row.ora()?;
+                let mut cells = Vec::with_capacity(columns.len());
+                for i in 0..columns.len() {
+                    cells.push(cell(&row, i)?);
+                }
+                rows.push(cells);
+            }
+            Ok(QueryResult {
+                columns,
+                rows,
+                affected: None,
+                elapsed: std::time::Duration::ZERO,
+                truncated: false,
+            })
+        })
+        .await
     }
 }
 

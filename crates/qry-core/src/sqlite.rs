@@ -52,17 +52,9 @@ impl Sqlite {
     }
 }
 
-#[async_trait]
-impl Database for Sqlite {
-    fn kind(&self) -> DatabaseType {
-        DatabaseType::Sqlite
-    }
-
-    fn label(&self) -> String {
-        self.config.path.display().to_string()
-    }
-
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+impl Sqlite {
+    /// Runs `sql` with `params` bound to its placeholders, in order.
+    async fn run(&self, sql: &str, params: Vec<String>) -> Result<QueryResult> {
         let sql = sql.to_string();
 
         let result = self
@@ -76,7 +68,7 @@ impl Database for Sqlite {
                 let mut types: Vec<&'static str> = vec![""; names.len()];
 
                 let mut rows = Vec::new();
-                let mut cursor = stmt.query([])?;
+                let mut cursor = stmt.query(rusqlite::params_from_iter(params.iter()))?;
 
                 while let Some(row) = cursor.next()? {
                     let mut cells = Vec::with_capacity(names.len());
@@ -113,6 +105,25 @@ impl Database for Sqlite {
             .await
             .map_err(positioned)?;
         Ok(result)
+    }
+}
+
+#[async_trait]
+impl Database for Sqlite {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Sqlite
+    }
+
+    fn label(&self) -> String {
+        self.config.path.display().to_string()
+    }
+
+    async fn query(&self, sql: &str) -> Result<QueryResult> {
+        self.run(sql, Vec::new()).await
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        self.run(sql, params.to_vec()).await
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {

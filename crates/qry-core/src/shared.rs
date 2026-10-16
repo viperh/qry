@@ -4,7 +4,10 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::DatabaseType;
+use crate::{
+    DatabaseType, schema,
+    schema::{Catalog, Column, DbObject, Index},
+};
 
 /// When to use TLS. Same names and meaning as libpq's `sslmode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,30 +60,52 @@ pub trait Database: Send + Sync {
     async fn query(&self, query: &str) -> Result<QueryResult>;
     async fn execute(&self, query: &str) -> Result<u64>;
 
-    /// The tables and views this connection can see, for the tree. Each
-    /// backend keeps its list somewhere else, so the query differs; a
-    /// backend with a cheaper way of its own can override this.
+    /// Runs a query with these values bound to its placeholders (`$1`,
+    /// `?`, `?1` or `:1`, as the backend writes them). The catalog queries
+    /// of [`schema`] go through here, so no name is ever
+    /// written into SQL text. A backend that cannot bind refuses.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let _ = (sql, params);
+        bail!("this database cannot run a query with bound parameters")
+    }
+
+    /// The catalogs (schemas, databases, owners), the connection's own
+    /// first.
+    async fn catalogs(&self) -> Result<Vec<Catalog>> {
+        schema::load_catalogs(self).await
+    }
+
+    /// The tables and views of `catalog`, by name.
+    async fn objects(&self, catalog: &str) -> Result<Vec<DbObject>> {
+        schema::load_objects(self, catalog).await
+    }
+
+    /// The columns of `catalog.object`, in table order.
+    async fn columns(&self, catalog: &str, object: &str) -> Result<Vec<Column>> {
+        schema::load_columns(self, catalog, object).await
+    }
+
+    /// The indexes of `catalog.object`.
+    async fn indexes(&self, catalog: &str, object: &str) -> Result<Vec<Index>> {
+        schema::load_indexes(self, catalog, object).await
+    }
+
+    /// The names of the tables and views in the connection's own catalog: a
+    /// thin wrapper over [`objects`](Self::objects).
     async fn tables(&self) -> Result<Vec<String>> {
-        let sql = match self.kind() {
-            DatabaseType::Sqlite => {
-                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') \
-                 AND name NOT LIKE 'sqlite_%' ORDER BY name"
-            }
-            DatabaseType::Postgres => {
-                "SELECT table_name FROM information_schema.tables \
-                 WHERE table_schema = current_schema() ORDER BY table_name"
-            }
-            DatabaseType::Mysql | DatabaseType::MariaDb => {
-                "SELECT table_name FROM information_schema.tables \
-                 WHERE table_schema = DATABASE() ORDER BY table_name"
-            }
-            DatabaseType::Oracle => bail!("listing tables is not supported for this database"),
-        };
-        let result = self.query(sql).await?;
-        Ok(result
-            .rows
+        let catalogs = self.catalogs().await?;
+        let Some(own) = catalogs
             .iter()
-            .filter_map(|row| row.first().cloned().flatten())
+            .find(|c| c.is_default)
+            .or_else(|| catalogs.first())
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .objects(&own.name)
+            .await?
+            .into_iter()
+            .map(|o| o.name)
             .collect())
     }
 }

@@ -14,7 +14,7 @@
 //! ```
 
 use std::{
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, Mutex, MutexGuard},
     time::Duration,
 };
@@ -22,7 +22,14 @@ use std::{
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 
-use crate::{ColumnMeta, DatabaseType, QueryResult, shared::Database};
+use crate::{
+    ColumnMeta, DatabaseType, QueryResult,
+    schema::{Catalog, Children, Column, DbObject, Details, Index, ObjectKind, SchemaPath},
+    shared::Database,
+};
+
+/// One `query_bound` call: the SQL and the values bound to it.
+pub type BoundCall = (String, Vec<String>);
 
 /// One scripted answer from a [`FakeDatabase`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +59,10 @@ pub struct FakeDatabase {
     label: String,
     script: Arc<Mutex<VecDeque<Reply>>>,
     calls: Arc<Mutex<Vec<String>>>,
+    /// Every `query_bound` call: its SQL and the values bound to it.
+    bound: Arc<Mutex<Vec<BoundCall>>>,
     tables: Vec<String>,
+    schema: Option<FakeSchema>,
 }
 
 /// A SQLite-flavoured fake with an empty script.
@@ -78,7 +88,9 @@ impl FakeDatabase {
             label: "fake".to_string(),
             script: Arc::default(),
             calls: Arc::default(),
+            bound: Arc::default(),
             tables: Vec::new(),
+            schema: None,
         }
     }
 
@@ -96,6 +108,46 @@ impl FakeDatabase {
     pub fn tables(mut self, names: &[&str]) -> Self {
         self.tables = names.iter().map(|name| name.to_string()).collect();
         self
+    }
+
+    /// Answers the schema methods ([`Database::catalogs`] and the rest)
+    /// from `schema` instead of running catalog queries. Without one they
+    /// run the backend's catalog query through
+    /// [`query_bound`](Database::query_bound), answered from the script.
+    #[must_use]
+    pub fn schema(mut self, schema: FakeSchema) -> Self {
+        self.schema = Some(schema);
+        self
+    }
+
+    /// The schema this fake describes: the one given to
+    /// [`schema`](Self::schema), else a `main` catalog holding the
+    /// [`tables`](Self::tables).
+    pub fn fake_schema(&self) -> FakeSchema {
+        match &self.schema {
+            Some(schema) => schema.clone(),
+            None => {
+                let mut schema = FakeSchema::new().catalog("main", true, false);
+                for table in &self.tables {
+                    schema = schema.table("main", table);
+                }
+                schema
+            }
+        }
+    }
+
+    /// What loading `path` gives, from [`fake_schema`](Self::fake_schema),
+    /// and how many milliseconds it takes (`u64::MAX` never answers). The
+    /// app harness answers schema loads with this on its virtual clock.
+    pub fn schema_answer(&self, path: &SchemaPath) -> (Result<Children, String>, u64) {
+        let schema = self.fake_schema();
+        let delay = schema.delays.get(path).copied().unwrap_or(0);
+        (schema.load(path), delay)
+    }
+
+    /// Every `query_bound` call so far: the SQL and the values bound.
+    pub fn bound_calls(&self) -> Vec<BoundCall> {
+        lock(&self.bound).clone()
     }
 
     /// Every SQL text it received, in order.
@@ -167,6 +219,209 @@ impl Database for FakeDatabase {
 
     async fn tables(&self) -> Result<Vec<String>> {
         Ok(self.table_names())
+    }
+
+    /// Records the SQL and the values, and answers from the script.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        lock(&self.bound).push((sql.to_string(), params.to_vec()));
+        resolve(self.next_reply(sql)).await
+    }
+
+    async fn catalogs(&self) -> Result<Vec<Catalog>> {
+        match &self.schema {
+            Some(schema) => match schema.load(&SchemaPath::Catalogs) {
+                Ok(Children::Catalogs(c)) => Ok(c),
+                Ok(_) => Ok(Vec::new()),
+                Err(e) => Err(anyhow!(e)),
+            },
+            None => crate::schema::load_catalogs(self).await,
+        }
+    }
+
+    async fn objects(&self, catalog: &str) -> Result<Vec<DbObject>> {
+        match &self.schema {
+            Some(schema) => match schema.load(&SchemaPath::objects(catalog)) {
+                Ok(Children::Objects(o)) => Ok(o),
+                Ok(_) => Ok(Vec::new()),
+                Err(e) => Err(anyhow!(e)),
+            },
+            None => crate::schema::load_objects(self, catalog).await,
+        }
+    }
+
+    async fn columns(&self, catalog: &str, object: &str) -> Result<Vec<Column>> {
+        match &self.schema {
+            Some(schema) => match schema.load(&SchemaPath::details(catalog, object)) {
+                Ok(Children::Details(d)) => Ok(d.columns),
+                Ok(_) => Ok(Vec::new()),
+                Err(e) => Err(anyhow!(e)),
+            },
+            None => crate::schema::load_columns(self, catalog, object).await,
+        }
+    }
+
+    async fn indexes(&self, catalog: &str, object: &str) -> Result<Vec<Index>> {
+        match &self.schema {
+            Some(schema) => match schema.load(&SchemaPath::details(catalog, object)) {
+                Ok(Children::Details(d)) => Ok(d.indexes),
+                Ok(_) => Ok(Vec::new()),
+                Err(e) => Err(anyhow!(e)),
+            },
+            None => crate::schema::load_indexes(self, catalog, object).await,
+        }
+    }
+}
+
+/// A database's structure for a [`FakeDatabase`] to describe, built up a
+/// piece at a time:
+///
+/// ```ignore
+/// FakeSchema::new()
+///     .catalog("public", true, false)
+///     .catalog("pg_catalog", false, true)
+///     .table("public", "users")
+///     .column("public", "users", FakeSchema::pk("id", "int8"))
+///     .fail(SchemaPath::objects("audit"), "permission denied")
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FakeSchema {
+    pub catalogs: Vec<Catalog>,
+    pub objects: BTreeMap<String, Vec<DbObject>>,
+    pub details: BTreeMap<(String, String), Details>,
+    /// Loads that fail, with the message.
+    pub errors: BTreeMap<SchemaPath, String>,
+    /// Loads that take this many milliseconds; `u64::MAX` never answers.
+    pub delays: BTreeMap<SchemaPath, u64>,
+}
+
+impl FakeSchema {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a catalog.
+    #[must_use]
+    pub fn catalog(mut self, name: &str, is_default: bool, is_system: bool) -> Self {
+        self.catalogs.push(Catalog {
+            name: name.to_string(),
+            is_default,
+            is_system,
+        });
+        self.objects.entry(name.to_string()).or_default();
+        self
+    }
+
+    fn object(mut self, catalog: &str, name: &str, kind: ObjectKind) -> Self {
+        self.objects
+            .entry(catalog.to_string())
+            .or_default()
+            .push(DbObject {
+                catalog: catalog.to_string(),
+                name: name.to_string(),
+                kind,
+            });
+        self
+    }
+
+    /// Adds a table to `catalog`.
+    #[must_use]
+    pub fn table(self, catalog: &str, name: &str) -> Self {
+        self.object(catalog, name, ObjectKind::Table)
+    }
+
+    /// Adds a view to `catalog`.
+    #[must_use]
+    pub fn view(self, catalog: &str, name: &str) -> Self {
+        self.object(catalog, name, ObjectKind::View)
+    }
+
+    /// Adds a column to `catalog.object`; its ordinal follows the others.
+    #[must_use]
+    pub fn column(mut self, catalog: &str, object: &str, mut column: Column) -> Self {
+        let details = self
+            .details
+            .entry((catalog.to_string(), object.to_string()))
+            .or_default();
+        column.ordinal = u32::try_from(details.columns.len() + 1).unwrap_or(u32::MAX);
+        details.columns.push(column);
+        self
+    }
+
+    /// Adds an index to `catalog.object`.
+    #[must_use]
+    pub fn index(mut self, catalog: &str, object: &str, index: Index) -> Self {
+        self.details
+            .entry((catalog.to_string(), object.to_string()))
+            .or_default()
+            .indexes
+            .push(index);
+        self
+    }
+
+    /// Makes loading `path` fail with `message`.
+    #[must_use]
+    pub fn fail(mut self, path: SchemaPath, message: &str) -> Self {
+        self.errors.insert(path, message.to_string());
+        self
+    }
+
+    /// Makes loading `path` take `ms` milliseconds (`u64::MAX`: forever).
+    #[must_use]
+    pub fn delay(mut self, path: SchemaPath, ms: u64) -> Self {
+        self.delays.insert(path, ms);
+        self
+    }
+
+    /// A plain column that may be NULL.
+    pub fn col(name: &str, data_type: &str) -> Column {
+        Column {
+            name: name.to_string(),
+            data_type: data_type.to_string(),
+            nullable: true,
+            primary_key: false,
+            references: None,
+            default: None,
+            ordinal: 0,
+        }
+    }
+
+    /// A primary-key column.
+    pub fn pk(name: &str, data_type: &str) -> Column {
+        Column {
+            nullable: false,
+            primary_key: true,
+            ..Self::col(name, data_type)
+        }
+    }
+
+    /// A NOT NULL column that points at `table.column`.
+    pub fn fk(name: &str, data_type: &str, table: &str, column: &str) -> Column {
+        Column {
+            nullable: false,
+            references: Some((table.to_string(), column.to_string())),
+            ..Self::col(name, data_type)
+        }
+    }
+
+    /// What loading `path` gives.
+    pub fn load(&self, path: &SchemaPath) -> Result<Children, String> {
+        if let Some(error) = self.errors.get(path) {
+            return Err(error.clone());
+        }
+        Ok(match path {
+            SchemaPath::Catalogs => Children::Catalogs(self.catalogs.clone()),
+            SchemaPath::Objects { catalog } => {
+                let mut objects = self.objects.get(catalog).cloned().unwrap_or_default();
+                objects.sort_by(|a, b| a.name.cmp(&b.name));
+                Children::Objects(objects)
+            }
+            SchemaPath::Details { catalog, object } => Children::Details(
+                self.details
+                    .get(&(catalog.clone(), object.clone()))
+                    .cloned()
+                    .unwrap_or_default(),
+            ),
+        })
     }
 }
 

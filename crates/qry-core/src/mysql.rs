@@ -76,7 +76,7 @@ impl MySql {
     }
 }
 
-fn value_to_string(value: Value) -> Option<String> {
+pub(crate) fn value_to_string(value: Value) -> Option<String> {
     match value {
         Value::NULL => None,
         Value::Bytes(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
@@ -86,6 +86,40 @@ fn value_to_string(value: Value) -> Option<String> {
         Value::Double(n) => Some(n.to_string()),
         other => Some(other.as_sql(true).trim_matches('\'').to_string()),
     }
+}
+
+/// Runs `sql` as a prepared statement with `params` bound to its `?`s, in
+/// order. MariaDB speaks the same protocol, so it shares this.
+pub(crate) async fn exec_bound(
+    conn: &mut Conn,
+    sql: &str,
+    params: &[String],
+) -> Result<QueryResult> {
+    let params = if params.is_empty() {
+        mysql_async::Params::Empty
+    } else {
+        mysql_async::Params::Positional(params.iter().map(|p| Value::from(p.as_str())).collect())
+    };
+    let mut result = conn.exec_iter(sql, params).await?;
+    let columns = result
+        .columns_ref()
+        .iter()
+        .map(|c| ColumnMeta::new(c.name_str().into_owned(), format!("{:?}", c.column_type())))
+        .collect();
+    let rows = result
+        .collect::<Row>()
+        .await?
+        .into_iter()
+        .map(|row| row.unwrap().into_iter().map(value_to_string).collect())
+        .collect();
+    result.drop_result().await?;
+    Ok(QueryResult {
+        columns,
+        rows,
+        affected: None,
+        elapsed: std::time::Duration::ZERO,
+        truncated: false,
+    })
 }
 
 #[async_trait]
@@ -135,5 +169,10 @@ impl Database for MySql {
         let mut conn = self.conn.lock().await;
         conn.query_drop(sql).await?;
         Ok(conn.affected_rows())
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let mut conn = self.conn.lock().await;
+        exec_bound(&mut conn, sql, params).await
     }
 }

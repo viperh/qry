@@ -168,6 +168,41 @@ impl Database for Postgres {
         })
     }
 
+    /// The extended protocol, which `simple_query` cannot do: the catalog
+    /// queries cast every column to `text`, and their placeholders to
+    /// `$n::text`, so every value crosses as a string.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
+            .iter()
+            .map(|p| p as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+        let rows = self.client.query(sql, &refs).await?;
+        let columns = rows
+            .first()
+            .map(|row| {
+                row.columns()
+                    .iter()
+                    .map(|c| ColumnMeta::new(c.name(), c.type_().name()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let rows = rows
+            .iter()
+            .map(|row| {
+                (0..row.len())
+                    .map(|i| row.try_get::<_, Option<String>>(i).ok().flatten())
+                    .collect()
+            })
+            .collect();
+        Ok(QueryResult {
+            columns,
+            rows,
+            affected: None,
+            elapsed: std::time::Duration::ZERO,
+            truncated: false,
+        })
+    }
+
     async fn execute(&self, sql: &str) -> Result<u64> {
         let messages = self.client.simple_query(sql).await.map_err(|e| {
             let Some(db) = e.as_db_error() else {

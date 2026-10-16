@@ -8,6 +8,7 @@ pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
 pub mod postgres;
+pub mod schema;
 pub mod shared;
 pub mod sql;
 pub mod sqlite;
@@ -186,12 +187,21 @@ impl Driver {
         db.query(sql).await
     }
 
-    /// The tables of the open connection, for the connection tree.
+    /// The tables of the open connection's own catalog.
     pub async fn tables(&self) -> Result<Vec<String>> {
         let Some(db) = &self.db else {
             bail!("not connected to a database");
         };
         db.tables().await
+    }
+
+    /// Loads one node of the schema browser: the catalogs, a catalog's
+    /// objects, or an object's columns and indexes.
+    pub async fn load_schema(&self, path: &schema::SchemaPath) -> Result<schema::Children> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        schema::load(db.as_ref(), path).await
     }
 }
 

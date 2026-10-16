@@ -136,4 +136,9 @@ impl Database for MariaDb {
         conn.query_drop(sql).await?;
         Ok(conn.affected_rows())
     }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let mut conn = self.conn.lock().await;
+        crate::mysql::exec_bound(&mut conn, sql, params).await
+    }
 }
