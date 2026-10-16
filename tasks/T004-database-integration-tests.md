@@ -170,11 +170,11 @@ Fix the small ones in this task. File anything larger as a follow-up, with a fai
 
 ## Acceptance criteria
 
-- [ ] `crates/qry-core/tests/common/mod.rs` provides `TestDb`, `Backend`, `db_or_skip!` and `skip_or_fail` as described.
+- [x] `crates/qry-core/tests/common/mod.rs` provides `TestDb`, `Backend`, `db_or_skip!` and `skip_or_fail` as described.
 - [ ] Seed files exist for postgres, mysql (also used for mariadb), oracle and sqlite under `tests/fixtures/sql/`, and every one loads without error.
 - [ ] Every contract test below runs for SQLite, Postgres, MySQL, MariaDB and Oracle. The CI `db` job log shows each `<name>_<backend>` as `ok`, with zero skipped.
-- [ ] With no `QRY_TEST_*` variables and no `CI`, `cargo test -p qry-core` passes locally and prints one skip notice per backend.
-- [ ] With `CI=true` and no URLs, the server tests panic with a message naming the missing variable (verify once).
+- [x] With no `QRY_TEST_*` variables and no `CI`, `cargo test -p qry-core` passes locally and prints one skip notice per backend.
+- [x] With `CI=true` and no URLs, the server tests panic with a message naming the missing variable (verify once).
 - [ ] Each test creates and drops its own database, and tests pass with the default parallel test threads.
 - [ ] `zz_no_leftover_test_databases` passes on CI.
 - [ ] Oracle `tables()` (the `oracle.rs` override) returns the seed tables and view under the current schema. The dead Oracle `bail!` arm in `shared.rs` is gone.
@@ -222,3 +222,41 @@ Housekeeping:
 - **`zz_no_leftover_test_databases`**: once per server backend.
 
 CI: `db` (and `db-oracle`, if split) green; `ci-ok` green.
+
+## Implementation notes
+
+- **Seven boxes stay unticked, because no Oracle or MySQL server and no GitHub run were available.** Postgres and MariaDB were checked against real local servers instead (below), so the unticked boxes are mostly unverified rather than known to fail:
+  - **Seeds load:** `seed_sqlite.sql`, `seed_postgres.sql` and `seed_mysql.sql` load (SQLite always; Postgres 16; MariaDB 10.11). `seed_oracle.sql` has never run.
+  - **Every contract test on every backend, zero skipped, on CI**, **`zz_no_leftover_test_databases` on CI**, and **the `db` job green**: need a GitHub run. `db` is in `ci-ok`'s `needs` (it already was).
+  - **Each test creates and drops its own database, in parallel:** done and checked for SQLite, Postgres and MariaDB, with the default thread count. The Oracle path (a user per test, sessions killed before `DROP USER … CASCADE`) has never run.
+  - **Oracle `tables()`:** the dead `bail!` arm is gone (see below), but the override returning the seed's tables is unverified.
+  - **`docker compose … up -d --wait`:** there is a `docker` CLI but no daemon here. `docker compose -f deploy/docker-compose.test.yml config -q` accepts the file, and `scripts/db-test-env.sh` prints the four `export` lines.
+- **What was run against real servers.** A throw-away Postgres 16 cluster (`initdb` with scram-sha-256, user/password/database `qry`, like the CI service) and MariaDB 10.11 (`mariadb-install-db`, root password `qry`), both started by hand in a temp directory and removed afterwards:
+  - Postgres: all 18 contract tests and the 3 `db_postgres.rs` tests pass. With a test that panics while connected, its database is still dropped (`DROP DATABASE … WITH (FORCE)` from `Drop`). A planted `qry_test_000000000001…` database makes `zz_no_leftover_test_databases` fail and name it. With a URL whose database does not exist, every test panics with `QRY_TEST_POSTGRES_URL is set, but connecting to it failed: …`; a configured server never skips.
+  - MariaDB, pointed at by both `QRY_TEST_MYSQL_URL` and `QRY_TEST_MARIADB_URL`: all contract tests pass as `::mariadb`, and the `db_mysql.rs`/`db_mariadb.rs` tests pass. As `::mysql`, only `column_kinds_mapped` fails, as it should: MariaDB sends JSON as text, and real MySQL 8.4 sends `MYSQL_TYPE_JSON`. MySQL 8.4 itself (and its `caching_sha2_password` login over plain TCP) is unverified.
+  - Oracle: nothing ran. The Oracle expectations come from reading the `oracledb` 26.0.0-beta.4 sources: `Display` of `OracleTimestamp` and `OracleNumber`, `DbError::offset`, CLOBs fetched as strings by default.
+- **Layout** (as specified, with `Backend::Sqlite` added):
+  - `crates/qry-core/tests/common/mod.rs`: `Backend` (`Sqlite`, `Postgres`, `Mysql`, `MariaDb`, `Oracle`, with `env_var`, `dialect` and `seed_path`), `TestDb { backend, name, config, … }` with `seeded`, `fresh`, `connect`, `cleanup` and `sqlite_path`, plus `db_or_skip!`, `fresh_or_skip!`, `skip_or_fail`, `url`, `admin`, `parse_url`/`config_from_url`, `test_db_name`/`created_at`, `leftover_test_databases`, `q` (run or panic with the statement and the error chain), `run_script` (splits with `qry_core::sql::split`, as the editor does) and small assertions (`column`, `lower_names`, `lower`, `assert_no_rows`). `common/mysql_family.rs` holds the bodies that `db_mysql.rs` and `db_mariadb.rs` share.
+  - `db_contract.rs` (18 contracts × 5 backends = 90 tests), `db_sqlite.rs` (3), `db_postgres.rs` (3), `db_mysql.rs` (3), `db_mariadb.rs` (3) and `db_oracle.rs` (4).
+  - The seeds are in `tests/fixtures/sql/` at the workspace root, which T002 left for this task. They hold `people` (5 rows: NULLs, `Zoë`, `東京`, an empty note, a negative balance, binary avatars, a quote), the `active_people` view, and `orders` with a foreign key.
+- **Decisions and deviations:**
+  - **Test names are `<name>::<backend>`, not `<name>_<backend>`.** Joining identifiers in `macro_rules!` needs `paste`, which is not in `Cargo.lock`. So `contract!` emits `mod <name> { async fn sqlite() … async fn oracle() }`, and each module calls the contract function of the same name (`<name>`, not `contract_<name>`). `cargo test <name>` and `cargo test ::postgres` still filter as you would expect.
+  - **Database names:** `qry_test_` plus 32 hex digits shaped like a UUID v7. The first 12 digits are the creation time in Unix milliseconds, and the rest are hashed from `RandomState`, a counter, the pid and the clock. No `uuid`/`rand` dependency was added. `created_at` reads the time back, so `zz_no_leftover_test_databases` needs no server-side creation time (Postgres keeps none). A `qry_test_` name that does not decode counts as a leftover.
+  - **Cleanup on panic:** `TestDb`'s `Drop` runs when `cleanup()` was not reached. It drops the database from a thread of its own, with its own current-thread runtime, so no `catch_unwind` is needed in the macros. A failure there is printed, never a panic inside a panic. The happy path calls `db.cleanup().await`.
+  - **Skip notices** are written once per backend and test binary, straight to `std::io::stderr()`. That bypasses libtest's capture, so a plain `cargo test -p qry-core` shows e.g. `skipped: postgres (QRY_TEST_POSTGRES_URL is not set)`, once in `db_contract` and once in `db_postgres`. `QRY_DB_TESTS=skip` (case-insensitive) wins over `CI`. SQLite never skips, also under `QRY_DB_TESTS=skip`.
+  - **`CI=true` alone makes the server tests fail on purpose.** That is the specified behaviour. The suggested local check `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` therefore needs `QRY_DB_TESTS=skip` now, as the CI `test` job already sets it. Without it, the 85 server tests panic with `QRY_TEST_<X>_URL is not set on CI`.
+  - **Oracle test users** are created by the URL's account (`system` on CI) with `CREATE USER qry_test_… IDENTIFIED BY "Qry_test_pw1" QUOTA UNLIMITED ON USERS` and `GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW`. Before `DROP USER … CASCADE`, the user's sessions in `v$session` are killed, retrying for up to 10 s (ORA-01940), and ORA-01918 counts as already dropped.
+  - **The rustls TLS tests stay in `oracle_tests.rs`.** They need a loopback socket but no database, and they use private helpers. Moving them would only add churn.
+  - **Dialect differences, each written as a `match` in the contract:** Oracle stores `''` as NULL. SQLite has no fixed-point type (`-12.5`, `1000`, `0`, `42.1`), no booleans (`1`/`0`) and no timestamp type (it uses `datetime(…)`), and its column kinds come from the first value. Oracle's integers are `NUMBER`, so their kind is `Decimal`. MariaDB's JSON column is text. MySQL/MariaDB report no error position (T302). SQLite skips the two connect-error contracts, because it has no accounts and no port.
+- **Small bugs fixed in `qry-core`** (the contract pins one textual form per type):
+  - **`Database::tables()` is now a required method.** Each backend has its own query: SQLite `sqlite_master`, Postgres `current_schema()`, MySQL/MariaDB `DATABASE()` (`mysql::TABLES_SQL`), and Oracle its `all_tables`/`all_views` override. The unreachable Oracle `bail!` arm in `shared.rs` is gone, and `shared::first_column` collects the names. `FakeDatabase` already overrode `tables()`.
+  - **Binary renders as `\x` plus lowercase hex everywhere.** SQLite and Oracle used `x'…'`. MySQL/MariaDB ran blobs through `from_utf8_lossy`, which garbled them; the binary collation (63) now tells `BLOB`/`VARBINARY` from `TEXT`/`VARCHAR`, and also gives `TEXT` the kind `Text` instead of `Binary`.
+  - **Booleans:** Postgres `t`/`f` and MySQL/MariaDB `tinyint(1)` `1`/`0` are now `true`/`false`, and `tinyint(1)` has the kind `Bool`.
+  - **Oracle `DATE`/`TIMESTAMP`** were written `1990-04-01T00:00:00.000000000Z`. A `DATE` is now `1990-04-01`, or `… HH:MM:SS` when the time is not midnight. A timestamp is `YYYY-MM-DD HH:MM:SS[.f…]`, with trailing zeros trimmed, and a `WITH TIME ZONE` value is followed by `±HH:MM`.
+  - **Oracle `NUMBER(p,s)`** keeps its scale (`-12.50`, not `-12.5`).
+  - **Oracle error positions:** a server error becomes a `QueryError` whose position comes from `DbError::offset`, a 0-based character count where 0 means none.
+  - **SQLite `affected` for DML** was the row count of the (empty) result, so 0. A statement without columns now reports `conn.changes()`.
+- **CI:** the `db` job now has the four services and URLs from this task's snippet and runs `cargo test -p qry-core --all-features --locked --no-fail-fast --test 'db_*'`, with a step that prints the server logs on failure. Oracle is not split into `db-oracle` yet; the job comment says when to do it. The `--locked` grep still finds only `cargo fmt` and `cargo fuzz` lines.
+- **Local runs:** `deploy/docker-compose.test.yml` (the same images, credentials, ports and health checks as CI) and `scripts/db-test-env.sh` (prints the `export` lines; `QRY_TEST_HOST` overrides `localhost`). Documenting them in CONTRIBUTING is T401's.
+- **Tests added:** the 106 integration tests above, `mysql_tests.rs` (4: collation, `tinyint(1)`, numbers, cells) and 3 in `oracle_tests.rs` (`numbers_keep_the_scale_of_their_column`, `dates_and_timestamps_are_iso_8601_with_a_space`, `the_column_type_says_how_a_timestamp_is_written`). That makes 97 `qry-core` unit tests.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings` for both feature sets, `QRY_KEYRING=off CI=true QRY_DB_TESTS=skip cargo test --workspace --all-features --locked` (403 `qry` unit tests, every integration test, 97 in `qry-core`), plain `cargo test -p qry-core` without `CI`, and the CI docs command. The server runs are described above.

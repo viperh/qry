@@ -1,0 +1,64 @@
+# The database servers the integration suite (T004) runs against, with the
+# same images, credentials and ports as the CI `db` job:
+#
+#   docker compose -f deploy/docker-compose.test.yml up -d --wait
+#   eval "$(scripts/db-test-env.sh)"
+#   cargo test -p qry-core --test 'db_*'
+#   docker compose -f deploy/docker-compose.test.yml down
+#
+# Each test creates and drops a database of its own, so the servers can be
+# reused across runs.
+name: qry-test
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: qry
+      POSTGRES_PASSWORD: qry
+      POSTGRES_DB: qry
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "qry"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: qry
+      MYSQL_DATABASE: qry
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-pqry"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: qry
+      MARIADB_DATABASE: qry
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: qry
+    ports:
+      - "1521:1521"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60

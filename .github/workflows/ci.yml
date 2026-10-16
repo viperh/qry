@@ -98,9 +98,12 @@ jobs:
           QRY_DATA: ${{ runner.temp }}/qry/data
         run: cargo test --workspace --all-features --locked
 
-  # Database drivers against real servers. T004 adds the mysql, mariadb and
-  # oracle services and narrows the run to the `db_*` test targets; until
-  # then this is postgres plus the existing qry-core tests.
+  # Database drivers against real servers (T004): the `db_*` integration
+  # tests in crates/qry-core/tests, one throw-away database per test. Under
+  # CI a missing QRY_TEST_*_URL makes those tests panic, so this job must
+  # set all four, and never sets QRY_DB_TESTS. deploy/docker-compose.test.yml
+  # runs the same services locally. If Oracle's start-up (60-90 s) comes to
+  # dominate, split it into a `db-oracle` job and add that to ci-ok's needs.
   db:
     name: Database (services)
     runs-on: ubuntu-latest
@@ -117,17 +120,58 @@ jobs:
           --health-cmd "pg_isready -U qry"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: qry
+          MYSQL_DATABASE: qry
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pqry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: qry
+          MARIADB_DATABASE: qry
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: qry
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 60
     env:
       QRY_TEST_POSTGRES_URL: postgres://qry:qry@localhost:5432/qry
+      QRY_TEST_MYSQL_URL: mysql://root:qry@localhost:3306/qry
+      QRY_TEST_MARIADB_URL: mysql://root:qry@localhost:3307/qry
+      QRY_TEST_ORACLE_URL: oracle://system:qry@localhost:1521/FREEPDB1
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Run qry-core tests
-        run: cargo test -p qry-core --all-features --locked
+      - name: Run database tests
+        run: cargo test -p qry-core --all-features --locked --no-fail-fast --test 'db_*'
+      - name: Server logs
+        if: failure()
+        run: for c in $(docker ps -aq); do docker logs "$c" 2>&1 | tail -n 200; done
 
   msrv:
     name: MSRV
