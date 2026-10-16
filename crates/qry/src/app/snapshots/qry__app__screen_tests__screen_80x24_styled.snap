@@ -13,9 +13,9 @@ expression: "styled(&app.render_buffer(w, h))"
                               │                                                 
                               │                                                 
                               │ RESULTS  2 rows                                 
-                              │id name                                          
-                              │1  alice                                         
-                              │2  NULL                                          
+                              │  │id│name                                       
+                              │1 │1 │alice                                      
+                              │2 │2 │NULL                                       
                               │                                                 
                               │                                                 
                               │                                                 
@@ -75,16 +75,26 @@ expression: "styled(&app.render_buffer(w, h))"
 31,10 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
 0,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 30,11 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
-31,11 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
-33,11 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+31,11 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+33,11 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+34,11 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+36,11 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+37,11 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
 0,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 30,12 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
-31,12 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+31,12 Rgb(242, 176, 74) Rgb(27, 37, 51) NONE
+33,12 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+34,12 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+36,12 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+37,12 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
 0,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 30,13 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
-31,13 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
-34,13 Rgb(138, 148, 163) Rgb(16, 20, 26) ITALIC
-39,13 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+31,13 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+33,13 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+34,13 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+36,13 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+37,13 Rgb(138, 148, 163) Rgb(16, 20, 26) ITALIC
+41,13 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
 0,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 30,14 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
 31,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE

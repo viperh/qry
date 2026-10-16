@@ -52,7 +52,7 @@ pub(super) fn mouse(state: &mut State, mouse: MouseEvent, fx: &mut Vec<Effect>) 
             for _ in 0..WHEEL_ROWS {
                 match hit {
                     Hit::Tree => tree::run(state, action, fx),
-                    Hit::Results => results::run(state, action),
+                    Hit::Results => results::run(state, action, fx),
                     Hit::Editor | Hit::Tab(_) => {}
                 }
             }

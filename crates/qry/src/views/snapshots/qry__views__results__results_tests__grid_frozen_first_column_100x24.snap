@@ -1,0 +1,10 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+  │c0  ┃c15  │c16  │c17  │c18  │c19  │c20  │c21  │c22  │c23  │c24  │c25  │c26  │c27  │c28  │c29     
+1 │r0c0┃r0c15│r0c16│r0c17│r0c18│r0c19│r0c20│r0c21│r0c22│r0c23│r0c24│r0c25│r0c26│r0c27│r0c28│r0c29   
+2 │r1c0┃r1c15│r1c16│r1c17│r1c18│r1c19│r1c20│r1c21│r1c22│r1c23│r1c24│r1c25│r1c26│r1c27│r1c28│r1c29   
+3 │r2c0┃r2c15│r2c16│r2c17│r2c18│r2c19│r2c20│r2c21│r2c22│r2c23│r2c24│r2c25│r2c26│r2c27│r2c28│r2c29   
+4 │r3c0┃r3c15│r3c16│r3c17│r3c18│r3c19│r3c20│r3c21│r3c22│r3c23│r3c24│r3c25│r3c26│r3c27│r3c28│r3c29   
+5 │r4c0┃r4c15│r4c16│r4c17│r4c18│r4c19│r4c20│r4c21│r4c22│r4c23│r4c24│r4c25│r4c26│r4c27│r4c28│r4c29

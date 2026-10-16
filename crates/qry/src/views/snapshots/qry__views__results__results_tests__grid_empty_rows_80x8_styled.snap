@@ -1,0 +1,27 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+  │id│name                                                                      
+   (no rows)                                                                    
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+5,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+6,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,1 Reset Reset NONE
+3,1 Rgb(169, 180, 194) Reset NONE
+12,1 Reset Reset NONE
+0,2 Reset Reset NONE
+0,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE

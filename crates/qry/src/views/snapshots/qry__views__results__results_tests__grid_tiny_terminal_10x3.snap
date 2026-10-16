@@ -1,0 +1,7 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+   │c0    
+ 1 │r0c0  
+ 2 │r1c0

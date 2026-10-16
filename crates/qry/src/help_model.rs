@@ -104,7 +104,10 @@ const RESULTS_NAV: &[Action] = &[
 const RESULTS_COPY: &[Action] = &[
     Action::CopyCell,
     Action::CopyRow,
+    Action::CopyMenu,
     Action::Search,
+    Action::NextMatch,
+    Action::PrevMatch,
     Action::Inspect,
     Action::ToggleInspector,
     Action::ExportResults,

@@ -310,9 +310,21 @@ async fn commands_run_in_order_even_when_the_first_is_slow() {
     let mut done = Vec::new();
     while done.len() < 2 {
         if let Some(DbAnswer::QueryDone(result)) = answers.recv().await {
-            done.push((*result).clone());
+            let mut result = (*result).clone();
+            // How long it took is measured on the real clock.
+            result.elapsed = Duration::ZERO;
+            done.push(result);
         }
     }
     assert_eq!(done, [slow, fast]);
     assert_eq!(db.calls(), ["SELECT slow", "SELECT fast"]);
+}
+
+#[test]
+fn a_finished_query_carries_how_long_it_took() {
+    let answers = query_answer::<String>(Ok(grid(1, 1)), Duration::from_millis(12), None);
+    let DbAnswer::QueryDone(result) = &answers[0] else {
+        panic!("expected QueryDone first");
+    };
+    assert_eq!(result.elapsed, Duration::from_millis(12));
 }

@@ -19,9 +19,9 @@ expression: "app.render(w, h)"
                               │                                                                                         
                               │                                                                                         
                               │ RESULTS  2 rows                                                                         
-                              │id name                                                                                  
-                              │1  alice                                                                                 
-                              │2  NULL                                                                                  
+                              │  │id│name                                                                               
+                              │1 │1 │alice                                                                              
+                              │2 │2 │NULL                                                                               
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

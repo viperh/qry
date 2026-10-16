@@ -156,17 +156,17 @@ Editing cells, server-side sort and filter (re-querying with `ORDER BY`), pivot 
 
 ## Acceptance criteria
 
-- [ ] `QueryResult.columns` carries `ColumnMeta` with a `ValueKind` for all five backends. Existing callers (exporter, help, tests) are updated.
-- [ ] The grid has no box, a two-row header (name and type), a gutter, `│` dividers, striped rows, a selected-row band and an amber cursor cell, all from `Theme` helpers.
-- [ ] Numeric columns are right-aligned. `NULL` is dim italic and visually distinct from the text `'NULL'`.
-- [ ] Control characters render as dim glyphs, and long values are truncated with `…`.
-- [ ] Multiple result sets show as tabs. Each tab keeps its own selection, sort and search. At most 20 tabs are kept.
-- [ ] DML shows `✓ N rows affected · T ms`. Errors show a coral message and, with a position, a `^~~~` marker.
-- [ ] Sort cycles asc, desc, off; `S` adds secondary keys; NULLs are ordered as specified; the sort is stable; the shown indicators are correct.
-- [ ] Search highlights every match, `n`/`N` cycle through them, and searching 1M rows never blocks input for more than one tick.
+- [x] `QueryResult.columns` carries `ColumnMeta` with a `ValueKind` for all five backends. Existing callers (exporter, help, tests) are updated.
+- [x] The grid has no box, a two-row header (name and type), a gutter, `│` dividers, striped rows, a selected-row band and an amber cursor cell, all from `Theme` helpers.
+- [x] Numeric columns are right-aligned. `NULL` is dim italic and visually distinct from the text `'NULL'`.
+- [x] Control characters render as dim glyphs, and long values are truncated with `…`.
+- [x] Multiple result sets show as tabs. Each tab keeps its own selection, sort and search. At most 20 tabs are kept.
+- [x] DML shows `✓ N rows affected · T ms`. Errors show a coral message and, with a position, a `^~~~` marker.
+- [x] Sort cycles asc, desc, off; `S` adds secondary keys; NULLs are ordered as specified; the sort is stable; the shown indicators are correct.
+- [x] Search highlights every match, `n`/`N` cycle through them, and searching 1M rows never blocks input for more than one tick.
 - [ ] Copy works in every format listed. INSERT output re-runs on the same backend and reproduces the rows (integration test).
-- [ ] `:` goto, column resize `<`/`>`/`=`, and freeze `F` work.
-- [ ] The existing `results.rs` behaviour tests (edges, scrolling keeps the selection visible, header kept) pass in the ported `results_tests.rs`.
+- [x] `:` goto, column resize `<`/`>`/`=`, and freeze `F` work.
+- [x] The existing `results.rs` behaviour tests (edges, scrolling keeps the selection visible, header kept) pass in the ported `results_tests.rs`.
 - [ ] Rendering 120×40 of a 1M × 20 result stays under the T006 gate (`results_render_1m`).
 
 ## Tests
@@ -233,3 +233,39 @@ Editing cells, server-side sort and filter (re-querying with `ORDER BY`), pivot 
 
 - `column_kinds_mapped` for each backend: a fixture table with int, decimal, text, bool, date, timestamp, json and blob.
 - `copy_insert_round_trip` for each backend.
+
+## Implementation notes
+
+- **qry-core.** `ColumnMeta`/`ValueKind` live in `shared.rs`; Postgres prepares
+  the statement for its column types, MySQL uses `column_type()`, Oracle
+  `data_type()`, SQLite the runtime type of the first non-NULL value (the
+  driver does not expose `decltype` through our wrapper). `grid.rs` holds
+  `display_text`, `column_widths` (first 1 000 rows plus name and type,
+  capped), `visible_columns` (with a frozen first column), `sort_permutation`
+  (type-aware, natural text order, NULLs last asc / first desc, stable, a
+  `Vec<u32>` permutation) and the incremental `Search`. `copy.rs` renders a
+  `Selection` as CSV, TSV, JSON, Markdown or SQL INSERT, quoting identifiers
+  per dialect.
+- **View** (`views/results.rs`). Drawn cell by cell rather than with ratatui's
+  `Table`, so the gutter, dividers, right alignment, glyph runs and `…` cuts
+  are exact. The type row only appears when some column has a type. The
+  overflow hint takes its room from the columns, and a 1–2 cell sliver of a
+  last column is dropped unless it is selected. Empty column names show as
+  `?column?`. The search line takes the bottom line of the pane (toasts draw
+  over it while they show) and says `match i / n` on a match.
+- **Keys.** `:` stays the command palette (T206), so goto row is `ctrl-g`.
+  `0`/`$`, `ctrl-u`/`ctrl-d`, `s`/`S`, `n`/`N`, `ctrl-y`, `<`/`>`/`=`, `F`
+  are bound in the Results context. `w` and `Enter` belong to T304.
+- **Tabs.** A new result is shown only if the last tab was; someone looking
+  back at an earlier tab stays there, and the cap (20) keeps their tab.
+- **Search** scans `SEARCH_BUDGET` = 10 000 rows at once and as much per tick
+  after, so a 1M-row search spreads over 100 ticks.
+- **Elapsed.** The worker fills `QueryResult::elapsed`; the title reads
+  `N rows · T ms · sorted by X ▼`.
+- **Not done here.** The `arboard` fallback and the `clipboard` config key
+  (copying is OSC 52 only); the `copy_insert_round_trip` and
+  `column_kinds_mapped` DB integration tests (T004); the
+  `results_render_1m` gate (T006). The
+  `prop_csv_round_trips_through_csv_reader` proptest reads the CSV back with
+  a small reader in the test instead of the `csv` dev-dependency.
+

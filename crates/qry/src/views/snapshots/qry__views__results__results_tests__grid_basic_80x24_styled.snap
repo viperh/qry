@@ -1,0 +1,88 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+  │id  │name │total                                                             
+  │int8│text │numeric                                                           
+1 │   1│alice│  12.50                                                           
+2 │   2│bob  │   NULL                                                           
+3 │   3│carol│   7.25                                                           
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+7,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+8,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+12,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+13,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+14,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,1 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,1 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,1 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD
+7,1 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+8,1 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD
+12,1 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+13,1 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+14,1 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD
+21,1 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,2 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+8,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+13,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+14,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,3 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,3 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,3 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,3 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+8,3 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+13,3 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+14,3 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+17,3 Rgb(138, 148, 163) Rgb(16, 20, 26) ITALIC
+21,3 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,4 Rgb(242, 176, 74) Rgb(27, 37, 51) NONE
+2,4 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+3,4 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+7,4 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+8,4 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+13,4 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+14,4 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE
+0,12 Reset Reset NONE
+0,13 Reset Reset NONE
+0,14 Reset Reset NONE
+0,15 Reset Reset NONE
+0,16 Reset Reset NONE
+0,17 Reset Reset NONE
+0,18 Reset Reset NONE
+0,19 Reset Reset NONE
+0,20 Reset Reset NONE
+0,21 Reset Reset NONE
+0,22 Reset Reset NONE
+0,23 Reset Reset NONE

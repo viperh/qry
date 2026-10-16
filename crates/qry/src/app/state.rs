@@ -159,7 +159,8 @@ impl SessionState {
     }
 
     /// A tab for what a statement gave: the first, empty tab if nothing
-    /// has used it yet, else a new one at the end, which is shown. The
+    /// has used it yet, else a new one at the end. It is shown if the last
+    /// tab was, so someone looking back at an earlier tab stays there. The
     /// oldest go past [`MAX_TABS`].
     pub(crate) fn new_tab(&mut self, label: String) -> &mut ResultTab {
         self.tabs_made += 1;
@@ -168,16 +169,21 @@ impl SessionState {
             label,
             ..ResultTab::default()
         };
+        let following = self.active_tab + 1 >= self.tabs.len();
         if self.tabs.len() == 1 && self.tabs[0].is_empty() {
             self.tabs[0] = tab;
         } else {
             self.tabs.push(tab);
             if self.tabs.len() > MAX_TABS {
                 self.tabs.remove(0);
+                self.active_tab = self.active_tab.saturating_sub(1);
             }
         }
-        self.active_tab = self.tabs.len() - 1;
-        &mut self.tabs[self.active_tab]
+        let last = self.tabs.len() - 1;
+        if following {
+            self.active_tab = last;
+        }
+        &mut self.tabs[last]
     }
 }
 
@@ -218,6 +224,8 @@ pub(crate) struct ResultTab {
     pub(crate) label: String,
     pub(crate) results: ResultsState,
     pub(crate) error: Option<TabError>,
+    /// The table the statement read, for INSERTs copied from it.
+    pub(crate) table: Option<String>,
 }
 
 impl ResultTab {
@@ -813,6 +821,41 @@ pub(crate) struct ResultsState {
     /// Data rows that fit on screen, from the last draw. Used by
     /// PageUp/PageDown.
     pub(crate) page_rows: Cell<usize>,
+    /// The sort keys, most important first, and the rows' order under
+    /// them as indexes into the result; `None` while unsorted.
+    pub(crate) sort: Vec<(usize, qry_core::grid::Order)>,
+    pub(crate) order: Option<Vec<u32>>,
+    /// The search in this result, if one was started.
+    pub(crate) search: Option<GridSearch>,
+    /// The first column stays put while the others scroll.
+    pub(crate) frozen: bool,
+}
+
+impl ResultsState {
+    /// The result row shown at grid row `row`, through the sort order.
+    pub(crate) fn data_row(&self, row: usize) -> usize {
+        self.order
+            .as_ref()
+            .and_then(|order| order.get(row))
+            .map_or(row, |&i| i as usize)
+    }
+
+    /// The grid row a result row is shown at.
+    pub(crate) fn grid_row(&self, data_row: usize) -> usize {
+        self.order
+            .as_ref()
+            .and_then(|order| order.iter().position(|&i| i as usize == data_row))
+            .unwrap_or(data_row)
+    }
+}
+
+/// A search in a result: what is typed, and what it has found so far.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct GridSearch {
+    /// Still being typed: the keys go to the query line.
+    pub(crate) typing: bool,
+    pub(crate) input: String,
+    pub(crate) search: qry_core::grid::Search,
 }
 
 /// The help overlay: what it lists, built from the keymap when it opens.

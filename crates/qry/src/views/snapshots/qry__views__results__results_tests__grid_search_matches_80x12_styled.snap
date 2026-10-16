@@ -1,0 +1,89 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+  │c0  │c1  │c2                                                                 
+1 │r0c0│r0c1│r0c2                                                               
+2 │r1c0│r1c1│r1c2                                                               
+3 │r2c0│r2c1│r2c2                                                               
+4 │r3c0│r3c1│r3c2                                                               
+5 │r4c0│r4c1│r4c2                                                               
+6 │r5c0│r5c1│r5c2                                                               
+7 │r6c0│r6c1│r6c2                                                               
+8 │r7c0│r7c1│r7c2                                                               
+                                                                                
+                                                                                
+/1   match 1 / 10                                                               
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+7,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+8,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+10,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+12,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+13,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,1 Rgb(242, 176, 74) Rgb(27, 37, 51) NONE
+2,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+3,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+7,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+8,1 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+12,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+13,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+0,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,2 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+7,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+8,2 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+13,2 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+17,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+8,3 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+13,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,4 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+8,4 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+13,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,5 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+8,5 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+13,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,6 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,6 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,6 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,6 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+8,6 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,6 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+13,6 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,7 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,7 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,7 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,7 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+8,7 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,7 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+13,7 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,8 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,8 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,8 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,8 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+8,8 Rgb(242, 176, 74) Rgb(58, 47, 23) NONE
+12,8 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+13,8 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Rgb(242, 176, 74) Rgb(26, 33, 43) BOLD
+1,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+2,11 Rgb(14, 17, 22) Rgb(242, 176, 74) NONE
+3,11 Rgb(169, 180, 194) Rgb(26, 33, 43) NONE
+17,11 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE

@@ -214,7 +214,8 @@ pub(crate) fn query_answer<E: std::fmt::Display>(
     position: Option<usize>,
 ) -> Vec<DbAnswer> {
     match outcome {
-        Ok(result) => {
+        Ok(mut result) => {
+            result.elapsed = elapsed;
             let took = took(elapsed);
             let summary = match result.rows.len() {
                 // A CREATE or an INSERT returns no columns to fetch.
@@ -263,7 +264,7 @@ pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<
 
 /// How long something took, in the unit that reads best: `0.4 ms`, `12 ms`,
 /// `1.40 s`.
-fn took(elapsed: Duration) -> String {
+pub(crate) fn took(elapsed: Duration) -> String {
     match elapsed.as_secs_f64() {
         seconds if seconds >= 1.0 => format!("{seconds:.2} s"),
         _ if elapsed.as_millis() >= 1 => format!("{} ms", elapsed.as_millis()),

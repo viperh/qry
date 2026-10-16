@@ -1,0 +1,7 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+  │v      │?column?                                                             
+1 │NULL   │NULL                                                                 
+2 │a→b↵c␀d│xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…

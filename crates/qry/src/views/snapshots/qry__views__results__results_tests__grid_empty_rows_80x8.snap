@@ -1,0 +1,6 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+  │id│name                                                                      
+   (no rows)

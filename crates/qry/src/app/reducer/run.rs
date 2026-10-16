@@ -167,7 +167,10 @@ pub(super) fn done(
     }
     let sql = session.in_flight.take().map(|q| q.sql).unwrap_or_default();
     let label = label(session.dialect(), &sql, &result);
-    results::show(&mut session.new_tab(label).results, result);
+    let table = table_name(session.dialect(), &sql);
+    let tab = session.new_tab(label);
+    tab.table = table;
+    results::show(&mut tab.results, result);
     pump(state, id, fx);
 }
 

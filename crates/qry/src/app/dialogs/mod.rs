@@ -5,8 +5,10 @@
 pub(crate) mod confirm;
 pub(crate) mod connexportform;
 pub(crate) mod connform;
+pub(crate) mod copyform;
 pub(crate) mod exportform;
 pub(crate) mod form;
+pub(crate) mod gotoform;
 pub(crate) mod importform;
 pub(crate) mod passwordform;
 pub(crate) mod textinput;
@@ -17,8 +19,10 @@ use self::{
     confirm::{Confirm, OnConfirm},
     connexportform::ConnExportForm,
     connform::ConnForm,
+    copyform::CopyForm,
     exportform::ExportForm,
     form::Form,
+    gotoform::GotoForm,
     importform::ImportForm,
     passwordform::PasswordForm,
 };
@@ -34,6 +38,8 @@ pub(crate) enum DialogState {
     Import(ImportForm),
     ConnExport(ConnExportForm),
     Confirm(Confirm),
+    Copy(CopyForm),
+    Goto(GotoForm),
 }
 
 impl DialogState {
@@ -45,6 +51,8 @@ impl DialogState {
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
             Self::Confirm(form) => form,
+            Self::Copy(form) => form,
+            Self::Goto(form) => form,
         }
     }
 
@@ -56,6 +64,8 @@ impl DialogState {
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
             Self::Confirm(form) => form,
+            Self::Copy(form) => form,
+            Self::Goto(form) => form,
         }
     }
 }
@@ -87,6 +97,13 @@ pub(crate) enum Submission {
     Confirmed(OnConfirm),
     /// A confirm dialog's Cancel button.
     Dismissed,
+    /// Copy this much of the result (cell, row, column, all) as this.
+    Copy {
+        scope: usize,
+        format: qry_core::copy::CopyFormat,
+    },
+    /// Go to this row of the results: `N` or `N%`.
+    Goto(String),
 }
 
 /// The form helpers (`key`, `press`, `type_str`, `render`), shared by every

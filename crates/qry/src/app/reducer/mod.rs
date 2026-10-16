@@ -34,7 +34,12 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Paste(text) => paste(state, &text),
         UiEvent::Resize(w, h) => state.size = (w, h),
-        UiEvent::Tick(_) => {}
+        UiEvent::Tick(_) => {
+            // A long search goes on a batch at a time.
+            if results::step_searches(state) {
+                state.dirty = true;
+            }
+        }
         UiEvent::Clock(now) => state.clock = now,
         UiEvent::Notice(notice) => notices::notify(state, notice, &mut fx),
         UiEvent::Timer(Timer::Toast(n)) => notices::expired(state, n, &mut fx),
@@ -103,7 +108,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         action => match context {
             KeyContext::Tree => tree::run(state, action, fx),
             KeyContext::Editor => editor::run(state, action, fx),
-            KeyContext::Results => results::run(state, action),
+            KeyContext::Results => results::run(state, action, fx),
             KeyContext::Dialog => dialogs::act(state, action, fx),
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
             KeyContext::Help => help::act(state, action),

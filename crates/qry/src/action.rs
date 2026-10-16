@@ -66,6 +66,21 @@ pub enum Action {
     /// Shows the result tab before or after this one.
     PrevResult,
     NextResult,
+    /// Sorts by the current column (ascending, descending, off), or adds
+    /// it as one more sort key.
+    SortColumn,
+    AddSortColumn,
+    NextMatch,
+    PrevMatch,
+    /// The copy menu: the cell, row, column or whole result, as CSV, TSV,
+    /// JSON, Markdown or SQL INSERTs.
+    CopyMenu,
+    GotoRow,
+    NarrowColumn,
+    WidenColumn,
+    ResetWidths,
+    /// Keeps the first column in view while the others scroll.
+    FreezeColumn,
     Inspect,
     ToggleInspector,
     ToggleJobs,
@@ -162,6 +177,16 @@ impl Action {
             Self::CopyCell => "Copy the cell",
             Self::PrevResult => "Previous result",
             Self::NextResult => "Next result",
+            Self::SortColumn => "Sort by the column",
+            Self::AddSortColumn => "Add the column to the sort",
+            Self::NextMatch => "Next match",
+            Self::PrevMatch => "Previous match",
+            Self::CopyMenu => "Copy as…",
+            Self::GotoRow => "Go to a row",
+            Self::NarrowColumn => "Narrow the column",
+            Self::WidenColumn => "Widen the column",
+            Self::ResetWidths => "Reset the column widths",
+            Self::FreezeColumn => "Freeze the first column",
             Self::CopyRow => "Copy the row",
             Self::Inspect => "Inspect the value",
             Self::ToggleInspector => "Show / hide the inspector",
@@ -236,6 +261,16 @@ impl Action {
             Self::CopyCell => "Copy cell",
             Self::PrevResult => "Previous result",
             Self::NextResult => "Next result",
+            Self::SortColumn => "Sort by the column",
+            Self::AddSortColumn => "Add the column to the sort",
+            Self::NextMatch => "Next match",
+            Self::PrevMatch => "Previous match",
+            Self::CopyMenu => "Copy as…",
+            Self::GotoRow => "Go to a row",
+            Self::NarrowColumn => "Narrow the column",
+            Self::WidenColumn => "Widen the column",
+            Self::ResetWidths => "Reset the column widths",
+            Self::FreezeColumn => "Freeze the first column",
             Self::CopyRow => "Copy row",
             Self::Inspect => "Inspect value",
             Self::ToggleInspector => "Toggle inspector",
@@ -269,6 +304,16 @@ impl Action {
             | Self::CopyRow
             | Self::PrevResult
             | Self::NextResult
+            | Self::SortColumn
+            | Self::AddSortColumn
+            | Self::NextMatch
+            | Self::PrevMatch
+            | Self::CopyMenu
+            | Self::GotoRow
+            | Self::NarrowColumn
+            | Self::WidenColumn
+            | Self::ResetWidths
+            | Self::FreezeColumn
             | Self::Inspect
             | Self::ToggleInspector => "results",
             Self::FocusTree
@@ -304,7 +349,17 @@ impl Action {
             | Self::CopyRow
             | Self::Inspect
             | Self::PrevResult
-            | Self::NextResult => KeyContext::Results,
+            | Self::NextResult
+            | Self::SortColumn
+            | Self::AddSortColumn
+            | Self::NextMatch
+            | Self::PrevMatch
+            | Self::CopyMenu
+            | Self::GotoRow
+            | Self::NarrowColumn
+            | Self::WidenColumn
+            | Self::ResetWidths
+            | Self::FreezeColumn => KeyContext::Results,
             _ => KeyContext::Global,
         }
     }

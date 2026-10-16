@@ -116,7 +116,10 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         Submission::Connect { .. } | Submission::PasswordEntered { .. } => Some("Connecting…"),
         Submission::Export(_) | Submission::ExportConnections(_) => Some("Exporting…"),
         Submission::Import { .. } => Some("Importing…"),
-        Submission::Confirmed(_) | Submission::Dismissed => None,
+        Submission::Confirmed(_)
+        | Submission::Dismissed
+        | Submission::Copy { .. }
+        | Submission::Goto(_) => None,
     };
     dialog.form_mut().set_error(None);
     dialog.form_mut().set_pending(pending);
@@ -174,6 +177,23 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         }
         Submission::Dismissed => {
             close(state);
+            return;
+        }
+        Submission::Copy { scope, format } => {
+            close(state);
+            super::results::copy_as(state, scope, format, fx);
+            return;
+        }
+        // A row it cannot go to keeps the dialog, saying why.
+        Submission::Goto(text) => {
+            match super::results::goto(state, &text) {
+                Ok(()) => close(state),
+                Err(error) => {
+                    if let Some(dialog) = state.dialog_mut() {
+                        dialog.form_mut().set_error(Some(error));
+                    }
+                }
+            }
             return;
         }
     };

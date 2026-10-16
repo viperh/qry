@@ -1,0 +1,9 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+  │id  │name │total                                                             
+  │int8│text │numeric                                                           
+1 │   1│alice│  12.50                                                           
+2 │   2│bob  │   NULL                                                           
+3 │   3│carol│   7.25
