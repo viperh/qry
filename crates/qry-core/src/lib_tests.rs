@@ -32,6 +32,23 @@ async fn sqlite_round_trip() {
     );
 }
 
+#[tokio::test]
+async fn sqlite_reports_its_server_version() {
+    let mut driver = Driver::new();
+    assert!(driver.server_version().await.is_err(), "not connected yet");
+    driver.connect(in_memory()).await.unwrap();
+    let version = driver.server_version().await.unwrap();
+    assert!(version.starts_with("SQLite 3."), "{version}");
+}
+
+#[tokio::test]
+async fn a_fake_reports_the_version_it_was_given_without_a_reply() {
+    let fake = testing::FakeDatabase::default().version("PostgreSQL 16.4");
+    let driver = Driver::with_database(Box::new(fake.clone()));
+    assert_eq!(driver.server_version().await.unwrap(), "PostgreSQL 16.4");
+    assert!(fake.calls().is_empty());
+}
+
 fn postgres(ssl_mode: SslMode) -> ConnectionConfig {
     ConnectionConfig::Postgres(PostgresConfig {
         host: "db.invalid".into(),

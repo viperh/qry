@@ -25,6 +25,9 @@ pub enum Action {
     NewConnection,
     EditConnection,
     DeleteConnection,
+    /// Opens the connection dialog on a copy of the selected connection,
+    /// under a new id and without its password.
+    DuplicateConnection,
     ImportConnections,
     ExportConnections,
 
@@ -112,6 +115,8 @@ pub enum Action {
 
     Cancel,
     Submit,
+    /// Tries the connection dialog's connection without saving it.
+    TestConnection,
     NextField,
     PrevField,
     /// Only acts on a dialog's choice fields; text fields type the key.
@@ -162,6 +167,7 @@ impl Action {
             Self::NewConnection => "New connection",
             Self::EditConnection => "Edit this connection",
             Self::DeleteConnection => "Forget this connection",
+            Self::DuplicateConnection => "Duplicate this connection",
             Self::ImportConnections => "Import connections",
             Self::ExportConnections => "Export connections",
             Self::SwitchSession(_) => "Switch to session N",
@@ -222,6 +228,7 @@ impl Action {
             Self::DismissToast => "Dismiss the message",
             Self::Cancel => "Cancel / close",
             Self::Submit => "Submit",
+            Self::TestConnection => "Test the connection",
             Self::NextField => "Next field",
             Self::PrevField => "Previous field",
             Self::NextChoice => "Next choice",
@@ -267,8 +274,9 @@ impl Action {
             Self::NewConnection => "New connection",
             Self::EditConnection => "Edit connection",
             Self::DeleteConnection => "Delete connection",
+            Self::DuplicateConnection => "Duplicate connection",
             Self::ImportConnections => "Import connections",
-            Self::ExportConnections => "Export connections",
+            Self::ExportConnections => "Export connections…",
             Self::OpenNewSession => "Open another session",
             Self::NextSession => "Next session",
             Self::PrevSession => "Previous session",
@@ -321,6 +329,7 @@ impl Action {
             Self::NewConnection
             | Self::EditConnection
             | Self::DeleteConnection
+            | Self::DuplicateConnection
             | Self::ImportConnections
             | Self::ExportConnections
             | Self::Refresh
@@ -380,6 +389,7 @@ impl Action {
         match self {
             Self::EditConnection
             | Self::DeleteConnection
+            | Self::DuplicateConnection
             | Self::OpenNewSession
             | Self::Refresh
             | Self::RefreshAll

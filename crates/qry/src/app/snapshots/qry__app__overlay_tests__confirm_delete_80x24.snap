@@ -11,13 +11,13 @@ expression: "h.render(80, 24)"
                               │                                                 
                               │                                                 
                               │                                                 
-                    ┌ Delete Connection ───────────────────┐                    
-                    │ Delete "prod" and forget its stored  │                    
-                    │ password? This cannot be undone.     │                    
-                    │                                      │                    
-                    │               [ Cancel ]    Delete   │                    
-                    └──────────────────────────────────────┘                    
-                              │                                                 
+            ┌ Delete Connection ───────────────────────────────────┐            
+            │ Delete "prod"? This cannot be undone.                │            
+            │ [x] also remove its password from the keychain       │            
+            │ [x] also delete its query history                    │            
+            │                                                      │            
+            │                               [ Cancel ]    Delete   │            
+            └ Enter confirm · Space toggle · Esc cancel ───────────┘            
                               │                                                 
                               │                                                 
                               │                                                 

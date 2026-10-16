@@ -37,13 +37,28 @@ pub enum Effect {
         format: Format,
     },
     /// Write a backup of these connections, answered with
-    /// `FileAnswer::ConnectionsExported` or `ConnectionsExportFailed`.
+    /// `FileAnswer::ConnectionsExported` or `ConnectionsExportFailed`. A
+    /// file already there is only replaced with `overwrite`; without it the
+    /// answer is `ConnectionsExportExists`.
     ExportConnections {
         path: String,
         connections: Vec<StoredConnection>,
+        overwrite: bool,
     },
     /// Remove this connection's password from the keychain.
     ForgetSecret(String),
+    /// Remove this connection's query history (T306 keeps one; until then
+    /// there is nothing to remove).
+    DeleteHistory(String),
+    /// Try `record` on a throw-away connection that is neither saved nor
+    /// added to the tree, then drop it. A password typed for it waits in
+    /// the stash under [`test_stash_key`]
+    /// and is cleared once used. Answered with `UiEvent::ConnectionTested`
+    /// carrying the same `test` number.
+    TestConnection {
+        test: u64,
+        record: Box<StoredConnection>,
+    },
     /// Leave a typed password in `secrets::stash` under the connection's id,
     /// where that connection's worker takes it from. The `Db` effect that
     /// follows carries no password, only the connection's record or nothing
@@ -64,4 +79,10 @@ pub enum Effect {
     ClearScreen,
     Suspend,
     Quit,
+}
+
+/// Where a password typed for a connection test of `id` waits in the
+/// stash, apart from one typed to connect it, so neither uses up the other.
+pub(crate) fn test_stash_key(id: &str) -> String {
+    format!("test:{id}")
 }

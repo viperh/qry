@@ -1,6 +1,6 @@
 //! The outcomes of the files the runtime read or wrote.
 
-use super::{dialogs, notices::notify, tree};
+use super::{connections, dialogs, notices::notify, tree};
 use crate::{
     app::{
         effects::Effect,
@@ -19,7 +19,7 @@ pub(super) fn answer(state: &mut State, answer: FileAnswer, fx: &mut Vec<Effect>
         }
         FileAnswer::Imported(imported) => {
             dialogs::done(state, Awaiting::Import);
-            tree::import(state, *imported, fx);
+            connections::imported(state, *imported);
         }
         // The modal's footer is one line; the toast and the history have
         // room for the whole of a long path.
@@ -40,6 +40,7 @@ pub(super) fn answer(state: &mut State, answer: FileAnswer, fx: &mut Vec<Effect>
                 fx,
             );
         }
+        FileAnswer::ConnectionsExportExists(path) => connections::export_exists(state, path),
         FileAnswer::ConnectionsExportFailed(message) => {
             dialogs::failed(state, Awaiting::ExportConnections, &message);
             notify(state, Notice::error(message), fx);

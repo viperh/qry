@@ -25,4 +25,4 @@ expression: "h.render(w, ht)"
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter               │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─── 1–18 of 193 ─┘
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─── 1–18 of 198 ─┘

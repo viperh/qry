@@ -8,36 +8,36 @@ expression: text
 │ ←                    left                                  Dialogs                                                   │
 │ →                    right                                 ctrl-q     quit                                           │
 │ PgUp                 up a page                             F1         show / hide the help                           │
-│ PgDn                 down a page                           ←          left                                           │
-│ ctrl-Home            to the top                            →          right                                          │
-│ ctrl-End             to the bottom                         Home       start of the line                              │
-│ Home                 start of the line                     End        end of the line                                │
-│ End                  end of the line                       Esc        cancel / close                                 │
-│ Enter                new line                              Enter      submit                                         │
-│ Tab                  indent                                Tab        next field                                     │
-│ ctrl-←               previous word                         shift-Tab  previous field                                 │
-│ ctrl-→               next word                             Space      next choice                                    │
-│ shift-←              select left                           Backspace  delete the character before                    │
-│ shift-→              select right                          Del        delete the character after                     │
-│ shift-↑              select up                                                                                       │
-│ shift-↓              select down                           Command palette                                           │
-│ ctrl-shift-←         select the previous word              ctrl-q     quit                                           │
-│ ctrl-shift-→         select the next word                  F1         show / hide the help                           │
-│ shift-Home           select to the start of the line       ctrl-p     command palette                                │
-│ shift-End            select to the end of the line         ↑ ctrl-k   up                                             │
-│ ctrl-a               select all                            ↓ ctrl-j   down                                           │
-│ Backspace            delete the character before           ←          left                                           │
-│ Del                  delete the character after            →          right                                          │
-│ ctrl-w               delete the word before                PgUp       up a page                                      │
-│ alt-d                delete the word after                 PgDn       down a page                                    │
-│ ctrl-k               delete to the end of the line         Home       start of the line                              │
-│ ctrl-z               undo                                  End        end of the line                                │
-│ ctrl-y ctrl-shift-z  redo                                  Esc        cancel / close                                 │
-│ ctrl-x               cut                                   Enter      submit                                         │
-│ ctrl-v               paste                                 Tab        next field                                     │
-│                                                            Backspace  delete the character before                    │
-│ Editor · Running                                           Del        delete the character after                     │
-│ F5 alt-r ctrl-Enter  run the statement                                                                               │
+│ PgDn                 down a page                           ↑          up                                             │
+│ ctrl-Home            to the top                            ↓          down                                           │
+│ ctrl-End             to the bottom                         ←          left                                           │
+│ Home                 start of the line                     →          right                                          │
+│ End                  end of the line                       PgUp       up a page                                      │
+│ Enter                new line                              PgDn       down a page                                    │
+│ Tab                  indent                                Home       start of the line                              │
+│ ctrl-←               previous word                         End        end of the line                                │
+│ ctrl-→               next word                             Esc        cancel / close                                 │
+│ shift-←              select left                           Enter      submit                                         │
+│ shift-→              select right                          ctrl-t     test the connection                            │
+│ shift-↑              select up                             Tab        next field                                     │
+│ shift-↓              select down                           shift-Tab  previous field                                 │
+│ ctrl-shift-←         select the previous word              Space      next choice                                    │
+│ ctrl-shift-→         select the next word                  Backspace  delete the character before                    │
+│ shift-Home           select to the start of the line       Del        delete the character after                     │
+│ shift-End            select to the end of the line                                                                   │
+│ ctrl-a               select all                            Command palette                                           │
+│ Backspace            delete the character before           ctrl-q     quit                                           │
+│ Del                  delete the character after            F1         show / hide the help                           │
+│ ctrl-w               delete the word before                ctrl-p     command palette                                │
+│ alt-d                delete the word after                 ↑ ctrl-k   up                                             │
+│ ctrl-k               delete to the end of the line         ↓ ctrl-j   down                                           │
+│ ctrl-z               undo                                  ←          left                                           │
+│ ctrl-y ctrl-shift-z  redo                                  →          right                                          │
+│ ctrl-x               cut                                   PgUp       up a page                                      │
+│ ctrl-v               paste                                 PgDn       down a page                                    │
+│                                                            Home       start of the line                              │
+│ Editor · Running                                           End        end of the line                                │
+│ F5 alt-r ctrl-Enter  run the statement                     Esc        cancel / close                                 │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Enter inspect value                   │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │

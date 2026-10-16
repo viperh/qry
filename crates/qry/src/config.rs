@@ -49,6 +49,8 @@ pub struct Config {
     pub(crate) continue_on_error: bool,
     /// The most rows a query keeps; 0 keeps every row.
     pub(crate) max_rows: usize,
+    /// The first write of a session on a `prod` connection asks first.
+    pub(crate) confirm_writes_on_prod: bool,
     /// Problems that did not stop the config from loading; see
     /// [`Config::warnings`].
     warnings: Vec<String>,
@@ -63,6 +65,7 @@ struct RawFile {
     continue_on_error: Option<bool>,
     #[serde(default)]
     max_rows: Option<usize>,
+    confirm_writes_on_prod: Option<bool>,
     /// `{ context: { chord: action or null } }`.
     #[serde(default)]
     keybindings: Option<Map<String, Value>>,
@@ -146,6 +149,9 @@ impl Config {
         }
         if let Some(max_rows) = file.max_rows {
             self.max_rows = max_rows;
+        }
+        if let Some(ask) = file.confirm_writes_on_prod {
+            self.confirm_writes_on_prod = ask;
         }
 
         let mut old = Migrated::default();
@@ -263,6 +269,10 @@ impl Config {
             self.continue_on_error
         ));
         out.push_str(&format!("  \"max_rows\": {},\n", self.max_rows));
+        out.push_str(&format!(
+            "  \"confirm_writes_on_prod\": {},\n",
+            self.confirm_writes_on_prod
+        ));
         out.push_str("  \"keybindings\": {");
         for (i, context) in KeyContext::iter().enumerate() {
             let mut bindings: Vec<_> = self

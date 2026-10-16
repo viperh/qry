@@ -108,6 +108,7 @@ fn arb_stored_connection() -> impl Strategy<Value = StoredConnection> {
                 mode,
                 dsn,
                 secret,
+                label: None,
                 extra,
                 ephemeral: false,
             },

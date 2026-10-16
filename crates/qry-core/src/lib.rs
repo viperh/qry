@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
+pub mod connspec;
 pub mod copy;
 pub mod exporter;
 #[doc(hidden)]
@@ -202,6 +203,15 @@ impl Driver {
     /// What stops the open connection's running statement, if it can be.
     pub fn cancel_handle(&self) -> Option<std::sync::Arc<dyn shared::CancelHandle>> {
         self.db.as_ref()?.cancel_handle()
+    }
+
+    /// What the open connection's server says it is; see
+    /// [`Database::server_version`].
+    pub async fn server_version(&self) -> Result<String> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.server_version().await
     }
 
     /// The tables of the open connection's own catalog.

@@ -11,21 +11,18 @@ use qry_core::{
 };
 use ratatui_textarea::CursorMove;
 
-use super::{dialogs, sessions};
+use super::{connections, sessions};
 use crate::{
     action::Action,
     app::{
-        dialogs::{DialogState, confirm::Confirm, textinput::typed_char},
+        dialogs::textinput::typed_char,
         effects::Effect,
         event::Timer,
         schematree::{self, Folder, Section, TreeNode},
-        state::{
-            Awaiting, Node, Queued, SessionId, SessionState, SessionStatus, State, TreeFilter,
-        },
+        state::{Node, Queued, SessionId, SessionState, SessionStatus, State, TreeFilter},
     },
     connections::{Secret, StoredConnection},
     db::DbCommand,
-    import::Imported,
     notice::Notice,
 };
 
@@ -53,48 +50,6 @@ pub(super) fn attempt(state: &mut State, record: &StoredConnection, fx: &mut Vec
     }
 }
 
-/// Adds what an import found that the tree does not have, saves once, and
-/// says in the status bar what happened to the rest.
-pub(super) fn import(state: &mut State, imported: Imported, fx: &mut Vec<Effect>) {
-    let found = imported.connections.len();
-    let mut added = 0;
-    for record in imported.connections {
-        let known = state
-            .tree
-            .connections
-            .iter()
-            .any(|n| n.record.id == record.id || n.record.same_target(&record));
-        if known {
-            continue;
-        }
-        state.tree.connections.push(Node::new(record, false));
-        added += 1;
-    }
-    if added > 0 {
-        save(state, fx);
-    }
-
-    let mut parts = vec![format!(
-        "Imported {added} connection{} from {}",
-        if added == 1 { "" } else { "s" },
-        imported.format
-    )];
-    if found > added {
-        parts.push(format!("{} already here", found - added));
-    }
-    for skipped in &imported.skipped {
-        parts.push(format!("skipped {}: {}", skipped.name, skipped.reason));
-    }
-    parts.extend(imported.warnings);
-    let message = parts.join("; ");
-    let notice = if imported.skipped.is_empty() {
-        Notice::success(message)
-    } else {
-        Notice::warning(message)
-    };
-    super::notices::notify(state, notice, fx);
-}
-
 /// The records worth writing: everything but the scratch database.
 pub(super) fn to_save(state: &State) -> Vec<StoredConnection> {
     state
@@ -106,7 +61,7 @@ pub(super) fn to_save(state: &State) -> Vec<StoredConnection> {
         .collect()
 }
 
-fn save(state: &State, fx: &mut Vec<Effect>) {
+pub(super) fn save(state: &State, fx: &mut Vec<Effect>) {
     fx.push(Effect::SaveConnections(to_save(state)));
 }
 
@@ -232,15 +187,16 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
         }
         Action::EditConnection => {
             let record = state.tree.connections[conn].record.clone();
-            dialogs::edit_connection(state, &record);
+            connections::edit(state, &record);
         }
-        // Only the confirm's Delete forgets it; see `delete`.
+        Action::DuplicateConnection => {
+            let record = state.tree.connections[conn].record.clone();
+            connections::duplicate(state, &record);
+        }
+        // Only the confirm's Delete forgets it; see `connections::delete`.
         Action::DeleteConnection => {
-            let record = &state.tree.connections[conn].record;
-            let keychain = matches!(record.secret, Secret::Keyring);
-            let confirm = Confirm::delete_connection(&record.id, record.title(), keychain);
-            state.open_dialog(DialogState::Confirm(confirm));
-            state.awaiting = None;
+            let record = state.tree.connections[conn].record.clone();
+            connections::ask_delete(state, &record);
         }
         Action::Disconnect => {
             let id = &state.tree.connections[conn].record.id;
@@ -652,26 +608,9 @@ pub(super) fn schema_loaded(
     }
 }
 
-/// Forgets the stored connection `id`, as its delete confirm asked: its
-/// password goes with it, so nothing is orphaned, and the file is written.
-pub(super) fn delete(state: &mut State, id: &str, fx: &mut Vec<Effect>) {
-    let Some(i) = state.tree.position(id) else {
-        return;
-    };
-    let record = &state.tree.connections[i].record;
-    let forget =
-        matches!(record.secret, Secret::Keyring).then(|| Effect::ForgetSecret(record.id.clone()));
-    let saved = !record.ephemeral;
-    forget_node(state, i);
-    fx.extend(forget);
-    if saved {
-        save(state, fx);
-    }
-}
-
 /// Drops a connection. Its sessions stay open; what they answer about it
 /// finds no connection and changes nothing.
-fn forget_node(state: &mut State, connection: usize) {
+pub(super) fn forget_node(state: &mut State, connection: usize) {
     let tree = &mut state.tree;
     tree.connections.remove(connection);
     // Rows name connections by index, so none may outlive this.
@@ -734,20 +673,6 @@ pub(super) fn connections_loaded(state: &mut State, records: Vec<StoredConnectio
         {
             state.tree.connections.push(Node::new(record, false));
         }
-    }
-}
-
-/// The same list a save writes: everything but the scratch database.
-pub(super) fn export_connections(state: &mut State, path: String, fx: &mut Vec<Effect>) {
-    let connections = to_save(state);
-    if connections.is_empty() {
-        dialogs::failed(
-            state,
-            Awaiting::ExportConnections,
-            "There are no saved connections to export",
-        );
-    } else {
-        fx.push(Effect::ExportConnections { path, connections });
     }
 }
 

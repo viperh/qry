@@ -178,6 +178,14 @@ fn line(
                 label(theme.tree_connection()),
                 theme,
             ));
+            // `[prod]`, `[staging]`, `[dev]`, in the label's colour.
+            if let Some(tag) = connection.record.label {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    format!("[{}]", tag.name()),
+                    theme.conn_label(tag),
+                ));
+            }
             spinner(&mut spans);
         }
         TreeNode::Catalog { conn, cat } => {

@@ -7,6 +7,7 @@ pub(crate) mod editor;
 pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
+pub(crate) mod import_preview;
 pub(crate) mod inspector;
 pub(crate) mod jobs;
 pub(crate) mod layout;
@@ -106,7 +107,10 @@ fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
     for open in &state.overlays {
         match open {
             Overlay::Dialog(DialogState::Confirm(confirm)) => {
-                confirm::draw(confirm, theme, frame, area)
+                confirm::draw(confirm, &state.config.keymap, theme, frame, area)
+            }
+            Overlay::Dialog(DialogState::ImportPreview(preview)) => {
+                import_preview::draw(preview, &state.config.keymap, theme, frame, area)
             }
             Overlay::Dialog(dialog) => form::draw(
                 dialog.form(),

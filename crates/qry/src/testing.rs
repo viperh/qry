@@ -349,6 +349,18 @@ impl AppHarness {
                             None => {}
                         }
                     }
+                    // The fake connects in 42 ms and reports its version.
+                    Effect::TestConnection { test, .. } => {
+                        if let Some(db) = &self.database {
+                            self.inbox.push_back(UiEvent::ConnectionTested {
+                                test: *test,
+                                outcome: Ok(crate::app::event::Tested {
+                                    millis: 42,
+                                    version: db.server_version_text(),
+                                }),
+                            });
+                        }
+                    }
                     Effect::ScheduleTimer { timer, after } => {
                         let after = u64::try_from(after.as_millis()).unwrap_or(u64::MAX);
                         self.pending.push(Pending {

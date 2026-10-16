@@ -15,7 +15,7 @@ use std::fmt;
 use color_eyre::eyre::{Result, eyre};
 use ratatui::style::{Color, Modifier, Style};
 
-use crate::connections::Driver;
+use crate::connections::{ConnLabel, Driver};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Theme {
@@ -433,6 +433,20 @@ impl Theme {
             SessionStatus::Connecting | SessionStatus::Closed => (self.dim(), "◌"),
             SessionStatus::Failed(_) => (self.value_error(), "✗"),
         }
+    }
+
+    /// A connection's `[prod]` / `[staging]` / `[dev]` tag in the tree and
+    /// the top bar: coral, amber and teal, bold so it reads without colour.
+    pub fn conn_label(&self, label: ConnLabel) -> Style {
+        let fg = match label {
+            ConnLabel::Prod => self.coral,
+            ConnLabel::Staging => self.amber,
+            ConnLabel::Dev => self.teal,
+        };
+        self.pick(
+            Style::new().fg(fg).add_modifier(Modifier::BOLD),
+            Modifier::BOLD,
+        )
     }
 
     /// A short dim label for the driver. No brand colours.

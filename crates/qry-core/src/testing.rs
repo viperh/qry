@@ -66,6 +66,7 @@ pub struct FakeDatabase {
     cancel: Arc<tokio::sync::Notify>,
     cancels: Arc<Mutex<usize>>,
     schema: Option<FakeSchema>,
+    version: String,
 }
 
 /// What the fake says when a statement is cancelled, as Postgres does.
@@ -99,7 +100,21 @@ impl FakeDatabase {
             cancel: Arc::default(),
             cancels: Arc::default(),
             schema: None,
+            version: "fake 1.0".to_string(),
         }
+    }
+
+    /// What [`Database::server_version`] answers; `fake 1.0` unless set.
+    /// Asking does not use up a scripted reply and is not recorded.
+    #[must_use]
+    pub fn version(mut self, version: &str) -> Self {
+        self.version = version.to_string();
+        self
+    }
+
+    /// The version it reports, as [`Database::server_version`] returns it.
+    pub fn server_version_text(&self) -> String {
+        self.version.clone()
     }
 
     /// Queues the answer to the next statement. Replies are used once each,
@@ -293,6 +308,10 @@ impl Database for FakeDatabase {
             },
             None => crate::schema::load_indexes(self, catalog, object).await,
         }
+    }
+
+    async fn server_version(&self) -> Result<String> {
+        Ok(self.server_version_text())
     }
 }
 

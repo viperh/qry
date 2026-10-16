@@ -204,12 +204,9 @@ impl Worker {
         if typed && record.secret == Secret::Keyring && !password.is_empty() {
             let id = record.id.clone();
             let stored = tokio::task::spawn_blocking(move || secrets::store(&id, &password)).await;
+            // The reducer says so in a toast, and the record asks from now on.
             if !matches!(stored, Ok(Ok(()))) {
                 answers.push(DbAnswer::SecretNotStored(record.id.clone()));
-                answers.push(error(format!(
-                    "{} is saved, but the keychain would not take its password: you will be asked each time",
-                    record.title()
-                )));
             }
         }
         answers
@@ -308,6 +305,49 @@ pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<
         DbAnswer::Connected(label),
         success(format!("Connected to {shown}")),
     ]
+}
+
+/// Tries `record` on a connection of its own, which is dropped as soon as
+/// the server has said what it is: how long connecting took and the
+/// server's version, or why it failed (with any password taken out).
+/// `typed` is a password typed into the dialog; without one the record's
+/// own source is used, but never a prompt. The password is cleared when
+/// this returns.
+pub(crate) async fn test_connection(
+    record: StoredConnection,
+    typed: Option<Password>,
+) -> Result<crate::app::event::Tested, String> {
+    let password = match (typed, &record.secret) {
+        (Some(typed), _) => typed,
+        (None, Secret::None) => Password::default(),
+        (None, Secret::Env { var }) => secrets::from_env(var)
+            .ok_or_else(|| format!("the environment variable {var} is not set"))?,
+        (None, Secret::Keyring) => {
+            let id = record.id.clone();
+            match tokio::task::spawn_blocking(move || secrets::fetch(&id)).await {
+                Ok(Ok(Some(password))) => password,
+                _ => return Err("no password in the keychain yet; type it to test".into()),
+            }
+        }
+        (None, Secret::Prompt) => return Err("type the password to test the connection".into()),
+    };
+    let outcome = async {
+        let config = record.to_config(password.as_str())?;
+        let mut driver = Driver::new();
+        let started = Instant::now();
+        fn to_report(e: impl std::fmt::Display) -> color_eyre::Report {
+            color_eyre::eyre::eyre!("{e:#}")
+        }
+        driver.connect(config).await.map_err(to_report)?;
+        let millis = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        let version = driver.server_version().await.map_err(to_report)?;
+        Ok::<_, color_eyre::Report>(crate::app::event::Tested { millis, version })
+    }
+    .await;
+    outcome.map_err(|e| {
+        let message = secrets::redact(&format!("{e:#}"));
+        message.lines().next().unwrap_or_default().to_string()
+    })
 }
 
 /// How long something took, in the unit that reads best: `0.4 ms`, `12 ms`,

@@ -119,6 +119,25 @@ pub trait Database: Send + Sync {
         schema::load_indexes(self, catalog, object).await
     }
 
+    /// What the server says it is, such as `PostgreSQL 16.4` or `3.45.1`,
+    /// for the connection dialog's test message. Each backend asks in its
+    /// own words; one with a cheaper way of its own can override this.
+    async fn server_version(&self) -> Result<String> {
+        let sql = match self.kind() {
+            DatabaseType::Sqlite => "SELECT 'SQLite ' || sqlite_version()",
+            DatabaseType::Postgres => "SELECT 'PostgreSQL ' || current_setting('server_version')",
+            DatabaseType::Mysql => "SELECT CONCAT('MySQL ', VERSION())",
+            DatabaseType::MariaDb => "SELECT CONCAT('MariaDB ', VERSION())",
+            DatabaseType::Oracle => "SELECT banner FROM v$version WHERE ROWNUM = 1",
+        };
+        let result = self.query(sql).await?;
+        result
+            .rows
+            .first()
+            .and_then(|row| row.first().cloned().flatten())
+            .ok_or_else(|| anyhow::anyhow!("the server did not say what version it is"))
+    }
+
     /// The names of the tables and views in the connection's own catalog: a
     /// thin wrapper over [`objects`](Self::objects). Each backend overrides
     /// it with one query of its own (Oracle, with no `information_schema`,

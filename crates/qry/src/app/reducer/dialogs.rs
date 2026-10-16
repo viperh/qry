@@ -9,20 +9,18 @@
 
 use std::time::Duration;
 
-use super::{connect, sessions, tree};
+use super::{connect, connections, run, sessions};
 use crate::{
     action::Action,
     app::{
         dialogs::{
-            DialogState, Submission, confirm::OnConfirm, connexportform::ConnExportForm,
-            connform::ConnForm, exportform::ExportForm, importform::ImportForm,
-            passwordform::PasswordForm,
+            DialogState, Submission, confirm::OnConfirm, exportform::ExportForm,
+            importform::ImportForm, passwordform::PasswordForm,
         },
         effects::Effect,
         event::Timer,
         state::{Awaiting, PasswordRequest, SessionId, State},
     },
-    connections::StoredConnection,
     db::DbCommand,
 };
 
@@ -30,10 +28,10 @@ use crate::{
 /// open one. Whatever the old one was waiting for no longer matters.
 pub(super) fn open(state: &mut State, action: Action) {
     let dialog = match action {
-        Action::NewConnection => DialogState::Connection(ConnForm::new(state.ids.connection_id())),
+        Action::NewConnection => return connections::new_connection(state),
+        Action::ExportConnections => return connections::open_export(state),
         Action::ExportResults => DialogState::Export(ExportForm::default()),
         Action::ImportConnections => DialogState::Import(ImportForm::default()),
-        Action::ExportConnections => DialogState::ConnExport(ConnExportForm::default()),
         _ => return,
     };
     state.open_dialog(dialog);
@@ -43,6 +41,8 @@ pub(super) fn open(state: &mut State, action: Action) {
 /// Closes the modal, and stops waiting for its answer. A password prompt
 /// that was waiting its turn comes up next.
 fn close(state: &mut State) {
+    // A run held for the prod confirm goes with it.
+    run::drop_held(state);
     state.close_dialog();
     state.awaiting = None;
     if !state.password_queue.is_empty() {
@@ -55,6 +55,7 @@ fn close(state: &mut State) {
 pub(super) fn act(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     match action {
         Action::Submit => submit(state, fx),
+        Action::TestConnection => connections::test(state, fx),
         Action::Cancel => close(state),
         action => {
             if let Some(dialog) = state.dialog_mut() {
@@ -62,12 +63,6 @@ pub(super) fn act(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
             }
         }
     }
-}
-
-/// The tree asked for a connection to be changed.
-pub(super) fn edit_connection(state: &mut State, record: &StoredConnection) {
-    state.open_dialog(DialogState::Connection(ConnForm::editing(record)));
-    state.awaiting = None;
 }
 
 /// Session `session`'s worker wants a password typed for connection `id`,
@@ -100,9 +95,18 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
     if state.awaiting.is_some() {
         return;
     }
+    // Enter on the connection dialog's `[ Test ]` button tests.
+    if let Some(DialogState::Connection(dialog)) = state.dialog()
+        && dialog.on_test_button()
+    {
+        return connections::test(state, fx);
+    }
     let Some(dialog) = state.dialog_mut() else {
         return;
     };
+    if !dialog.form_mut().check() {
+        return;
+    }
     let submission = match dialog.form().submit() {
         Ok(submission) => submission,
         Err(error) => {
@@ -114,9 +118,10 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         // A typed password is the rest of a connection attempt, so the
         // prompt waits for the same answer.
         Submission::Connect { .. } | Submission::PasswordEntered { .. } => Some("Connecting…"),
-        Submission::Export(_) | Submission::ExportConnections(_) => Some("Exporting…"),
+        Submission::Export(_) | Submission::ExportConnections { .. } => Some("Exporting…"),
         Submission::Import { .. } => Some("Importing…"),
-        Submission::Confirmed(_)
+        Submission::ImportSelected(_)
+        | Submission::Confirmed(_)
         | Submission::Dismissed
         | Submission::Copy { .. }
         | Submission::Goto(_) => None,
@@ -159,9 +164,13 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             Awaiting::Import
         }
         // The tree holds the list to write.
-        Submission::ExportConnections(path) => {
+        Submission::ExportConnections { path, ids } => {
             state.awaiting = Some(Awaiting::ExportConnections);
-            tree::export_connections(state, path, fx);
+            connections::export(state, path, &ids, false, fx);
+            return;
+        }
+        Submission::ImportSelected(records) => {
+            connections::import_selected(state, records, fx);
             return;
         }
         // Nothing to wait for: a confirm closes now.
@@ -172,17 +181,32 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         }
         Submission::Confirmed(OnConfirm::QuitRollingBack(sessions)) => {
             close(state);
+            // Set first, so the rollbacks are not held for a prod confirm.
+            state.quit_when_idle = true;
             for id in sessions {
                 let rollback = vec![crate::app::state::Queued::new("ROLLBACK", None)];
                 super::run::enqueue_on(state, id, rollback, fx);
             }
-            state.quit_when_idle = true;
             super::run::quit_if_idle(state, fx);
             return;
         }
-        Submission::Confirmed(OnConfirm::DeleteConnection(id)) => {
+        Submission::Confirmed(OnConfirm::DeleteConnection {
+            id,
+            forget_secret,
+            delete_history,
+        }) => {
             close(state);
-            tree::delete(state, &id, fx);
+            connections::delete(state, &id, forget_secret, delete_history, fx);
+            return;
+        }
+        Submission::Confirmed(OnConfirm::RunOnProd(session)) => {
+            run::release(state, session, fx);
+            close(state);
+            return;
+        }
+        Submission::Confirmed(OnConfirm::OverwriteConnections { path, ids }) => {
+            close(state);
+            connections::export(state, path, &ids, true, fx);
             return;
         }
         Submission::Dismissed => {

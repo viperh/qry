@@ -6,8 +6,8 @@ expression: "styled(&h.render_buffer(120, 40))"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › exp                                                                                 6 / 62 │            
-            │ Export connections                            connection                              ctrl-s │            
+            │ › exp                                                                                 6 / 63 │            
+            │ Export connections…                           connection                                     │            
             │ Export results                                results                                 ctrl-s │            
             │ export csv <path>                             results                                        │            
             │ export tsv <path>                             results                                        │            
@@ -75,7 +75,6 @@ expression: "styled(&h.render_buffer(120, 40))"
 17,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
 60,5 Rgb(138, 148, 163) Rgb(42, 35, 64) NONE
 92,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
-100,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
 106,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 107,5 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
 108,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

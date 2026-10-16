@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use qry_core::{
     QueryResult,
-    sql::{Dialect, TokenKind, is_ddl, lex, split, statement_at},
+    sql::{Dialect, TokenKind, is_ddl, is_read_only, lex, split, statement_at},
 };
 
 use qry_core::jobs::{Cancelled, JobId, JobKind, JobState};
@@ -14,9 +14,11 @@ use qry_core::jobs::{Cancelled, JobId, JobKind, JobState};
 use super::{notices::notify, results, tx_change};
 use crate::{
     app::{
+        dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
         state::{EditorState, Failed, Queued, SessionId, State, TabError},
     },
+    connections::ConnLabel,
     db::DbCommand,
     notice::Notice,
 };
@@ -87,6 +89,29 @@ pub(crate) fn enqueue_on(
     fx: &mut Vec<Effect>,
 ) {
     if statements.is_empty() || state.sessions.get(id).is_none() {
+        return;
+    }
+    // The first write of a session on a prod connection asks first.
+    let ask = state.config.confirm_writes_on_prod;
+    let Some(session) = state.sessions.get(id) else {
+        return;
+    };
+    let writes = statements
+        .iter()
+        .any(|q| !is_read_only(session.dialect(), &q.sql));
+    // The rollbacks asked for on the way out are not asked about again.
+    if ask
+        && writes
+        && !state.quit_when_idle
+        && session.label == Some(ConnLabel::Prod)
+        && !session.writes_confirmed
+    {
+        let confirm = Confirm::run_on_prod(session.id, &session.title);
+        if let Some(session) = state.sessions.get_mut(id) {
+            session.held = statements;
+        }
+        state.open_dialog(DialogState::Confirm(confirm));
+        state.awaiting = None;
         return;
     }
     let jobs = &mut state.jobs;
@@ -161,6 +186,24 @@ pub(super) fn fetch_all(state: &mut State, fx: &mut Vec<Effect>) {
     let mut queued = Queued::new(tab.sql.clone(), None);
     queued.all_rows = true;
     enqueue(state, vec![queued], fx);
+}
+
+/// The prod confirm said yes: session `id` runs what it held, and is not
+/// asked again.
+pub(crate) fn release(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    session.writes_confirmed = true;
+    let held = std::mem::take(&mut session.held);
+    enqueue_on(state, id, held, fx);
+}
+
+/// The prod confirm went away without a yes: what it held is not run.
+pub(crate) fn drop_held(state: &mut State) {
+    for session in state.sessions.by_id.values_mut() {
+        session.held.clear();
+    }
 }
 
 /// Sends session `id`'s next statement, if its worker is free.

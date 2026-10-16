@@ -11,6 +11,10 @@
   // The most rows a query keeps; more are not read. 0 keeps every row.
   "max_rows": 1000,
 
+  // The first statement that writes, in each session on a connection
+  // labelled prod, asks before it runs, unless this is false.
+  "confirm_writes_on_prod": true,
+
   // Key bindings, by context: `Global` applies wherever a pane has focus,
   // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
   // `Jobs`), which win over it. `Dialog`, `Help` and `Palette` apply alone
@@ -88,7 +92,7 @@
       "</>": "Filter",
       // Clears the filter; without one, dismisses the toast as elsewhere.
       "<esc>": "Cancel",
-      "<ctrl-s>": "ExportConnections"
+      "<c>": "DuplicateConnection"
     },
     // `?` and `:` are not bound here, so they can be typed.
     "Editor": {
@@ -223,8 +227,13 @@
     "Dialog": {
       "<enter>": "Submit",
       "<esc>": "Cancel",
+      "<ctrl-t>": "TestConnection",
       "<tab>": "NextField",
       "<shift-tab>": "PrevField",
+      "<up>": "Up",
+      "<down>": "Down",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
       "<left>": "Left",
       "<right>": "Right",
       "<home>": "LineStart",

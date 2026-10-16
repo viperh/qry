@@ -12,10 +12,26 @@ use crate::{action::Action, app::state::SessionId, theme::Accent};
 pub(crate) enum OnConfirm {
     /// Close this session, though a query is running there.
     CloseSession(SessionId),
-    /// Forget the stored connection with this id, and its password.
-    DeleteConnection(String),
+    /// Forget the stored connection with this id, and, as its checkboxes
+    /// say, its keychain password and its query history.
+    DeleteConnection {
+        id: String,
+        forget_secret: bool,
+        delete_history: bool,
+    },
+    /// Run the statements waiting on this `prod` session, writes and all.
+    RunOnProd(SessionId),
+    /// Replace the existing backup at `path` with these connections.
+    OverwriteConnections { path: String, ids: Vec<String> },
     /// Roll back these sessions' open transactions, then quit.
     QuitRollingBack(Vec<SessionId>),
+}
+
+/// What a confirm's checkbox decides.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Check {
+    ForgetSecret,
+    DeleteHistory,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -28,6 +44,11 @@ pub(crate) struct Confirm {
     /// Whether the confirm button, not Cancel, is selected.
     confirm_selected: bool,
     error: Option<String>,
+    /// Checkboxes under the message, and what each decides.
+    fields: Vec<Field>,
+    checks: Vec<Check>,
+    labels: Vec<&'static str>,
+    focus: usize,
 }
 
 impl Confirm {
@@ -46,7 +67,52 @@ impl Confirm {
             on_confirm,
             confirm_selected: !destructive,
             error: None,
+            fields: Vec::new(),
+            checks: Vec::new(),
+            labels: Vec::new(),
+            focus: 0,
         }
+    }
+
+    /// Adds a checkbox under the message.
+    pub(crate) fn with_check(mut self, check: Check, caption: &str, checked: bool) -> Self {
+        self.fields.push(Field::checkbox(checked, caption));
+        self.checks.push(check);
+        self.labels.push("");
+        self
+    }
+
+    /// Whether checkbox `check` is there and ticked.
+    pub(crate) fn is_checked(&self, check: Check) -> bool {
+        self.checks
+            .iter()
+            .position(|c| *c == check)
+            .is_some_and(|i| self.checked(i))
+    }
+
+    /// Asks before running a statement that writes on a `prod` connection,
+    /// once per session.
+    pub(crate) fn run_on_prod(session: SessionId, title: &str) -> Self {
+        Self::new(
+            "Write to Production",
+            format!(
+                "{title} is labelled prod and this run changes data. Run it? qry will not ask again in this session."
+            ),
+            "Run",
+            false,
+            OnConfirm::RunOnProd(session),
+        )
+    }
+
+    /// Asks before replacing an existing backup file.
+    pub(crate) fn overwrite_connections(path: String, ids: Vec<String>) -> Self {
+        Self::new(
+            "Replace File",
+            format!("{path} already exists. Replace it with this backup?"),
+            "Replace",
+            false,
+            OnConfirm::OverwriteConnections { path, ids },
+        )
     }
 
     /// Asks before closing a session whose query is still running.
@@ -84,22 +150,6 @@ impl Confirm {
             "Roll back & quit",
             true,
             OnConfirm::QuitRollingBack(sessions),
-        )
-    }
-
-    /// Asks before forgetting a stored connection.
-    pub(crate) fn delete_connection(id: &str, name: &str, keychain: bool) -> Self {
-        let message = if keychain {
-            format!("Delete \"{name}\" and forget its stored password? This cannot be undone.")
-        } else {
-            format!("Delete \"{name}\"? This cannot be undone.")
-        };
-        Self::new(
-            "Delete Connection",
-            message,
-            "Delete",
-            true,
-            OnConfirm::DeleteConnection(id.to_string()),
         )
     }
 
@@ -141,29 +191,34 @@ impl Form for Confirm {
         }
     }
 
-    /// Wide enough for the message on a line or two, within 40 to 72.
+    /// Wide enough for the message on a line or two, within 40 (56 with
+    /// checkboxes) to 72.
     fn width(&self) -> u16 {
         let chars = u16::try_from(self.message.chars().count()).unwrap_or(u16::MAX);
-        (chars / 2 + 6).clamp(40, 72)
+        // With checkboxes the keys go in the border, which needs room.
+        let least = if self.fields.is_empty() { 40 } else { 56 };
+        (chars / 2 + 6).clamp(least, 72)
     }
 
-    fn labels(&self) -> &'static [&'static str] {
-        &[]
+    fn labels(&self) -> &[&'static str] {
+        &self.labels
     }
 
     fn fields(&self) -> &[Field] {
-        &[]
+        &self.fields
     }
 
     fn fields_mut(&mut self) -> &mut [Field] {
-        &mut []
+        &mut self.fields
     }
 
     fn focus(&self) -> usize {
-        0
+        self.focus
     }
 
-    fn set_focus(&mut self, _focus: usize) {}
+    fn set_focus(&mut self, focus: usize) {
+        self.focus = focus.min(self.fields.len().saturating_sub(1));
+    }
 
     fn error(&self) -> Option<&str> {
         self.error.as_deref()
@@ -174,24 +229,40 @@ impl Form for Confirm {
     }
 
     fn submit(&self) -> Result<Submission, String> {
-        Ok(if self.confirm_selected {
-            Submission::Confirmed(self.on_confirm.clone())
-        } else {
-            Submission::Dismissed
-        })
+        if !self.confirm_selected {
+            return Ok(Submission::Dismissed);
+        }
+        let on_confirm = match &self.on_confirm {
+            OnConfirm::DeleteConnection { id, .. } => OnConfirm::DeleteConnection {
+                id: id.clone(),
+                forget_secret: self.is_checked(Check::ForgetSecret),
+                delete_history: self.is_checked(Check::DeleteHistory),
+            },
+            other => other.clone(),
+        };
+        Ok(Submission::Confirmed(on_confirm))
     }
 
-    /// ← / → / Tab move between the two buttons.
+    /// ← / → move between the two buttons. With checkboxes, Tab and the
+    /// arrows up and down move between them and Space ticks one; without,
+    /// Tab and Space move between the buttons too.
     fn act(&mut self, action: Action) {
-        if matches!(
-            action,
-            Action::Left
-                | Action::Right
-                | Action::NextField
-                | Action::PrevField
-                | Action::NextChoice
-        ) {
-            self.confirm_selected = !self.confirm_selected;
+        let count = self.fields.len();
+        match action {
+            Action::Left | Action::Right => self.confirm_selected = !self.confirm_selected,
+            Action::NextField | Action::Down if count > 0 => self.focus = (self.focus + 1) % count,
+            Action::PrevField | Action::Up if count > 0 => {
+                self.focus = (self.focus + count - 1) % count;
+            }
+            Action::NextChoice if count > 0 => {
+                if let Some(Field::Checkbox { checked, .. }) = self.fields.get_mut(self.focus) {
+                    *checked = !*checked;
+                }
+            }
+            Action::NextField | Action::PrevField | Action::NextChoice => {
+                self.confirm_selected = !self.confirm_selected;
+            }
+            _ => {}
         }
     }
 }

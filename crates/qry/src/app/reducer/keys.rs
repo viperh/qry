@@ -139,7 +139,10 @@ fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<E
     };
     match context {
         KeyContext::Editor => state.editor_mut().textarea.insert_char(c),
-        KeyContext::Dialog => _ = super::dialogs::confirm_shortcut(state, c, fx),
+        KeyContext::Dialog => {
+            _ = super::dialogs::confirm_shortcut(state, c, fx)
+                || super::connections::preview_shortcut(state, c);
+        }
         KeyContext::Help if super::inspector::showing_popup(state) => {
             _ = super::inspector::popup_shortcut(state, c, fx);
         }

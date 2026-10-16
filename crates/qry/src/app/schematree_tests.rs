@@ -371,6 +371,7 @@ fn confirm_delete_forgets_keychain_secret_and_saves() {
         h.take_effects(),
         [
             Effect::ForgetSecret("id-prod".into()),
+            Effect::DeleteHistory("id-prod".into()),
             Effect::SaveConnections(Vec::new())
         ]
     );
@@ -387,7 +388,13 @@ fn delete_prompt_secret_sends_no_forget() {
     select(&mut h, "prod");
     h.take_effects();
     h.keys("delete y");
-    assert_eq!(h.take_effects(), [Effect::SaveConnections(Vec::new())]);
+    assert_eq!(
+        h.take_effects(),
+        [
+            Effect::DeleteHistory("id-prod".into()),
+            Effect::SaveConnections(Vec::new())
+        ]
+    );
 }
 
 #[test]

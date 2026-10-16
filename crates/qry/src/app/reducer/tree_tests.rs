@@ -16,7 +16,7 @@ use super::*;
 use crate::{
     app::{
         DbAnswer, SessionId,
-        dialogs::{DialogState, connexportform::ConnExportForm, form::Form},
+        dialogs::{DialogState, form::Form},
         state::Focus,
     },
     config::Config,
@@ -182,18 +182,6 @@ fn connect(tree: &mut Tree, name: &str, path: &str) -> StoredConnection {
     record
 }
 
-fn imported(connections: Vec<StoredConnection>) -> Imported {
-    Imported {
-        format: crate::import::Format::DBeaver,
-        connections,
-        skipped: vec![crate::import::Skipped {
-            name: "docs".into(),
-            reason: "uses the DBeaver provider `mongodb`".into(),
-        }],
-        warnings: vec!["prod has no user name; edit it before connecting".into()],
-    }
-}
-
 /// The records of the one save among `effects`.
 fn saved(effects: &[Effect]) -> Vec<StoredConnection> {
     let saves: Vec<_> = effects
@@ -207,80 +195,6 @@ fn saved(effects: &[Effect]) -> Vec<StoredConnection> {
         panic!("expected one save, got {effects:?}");
     };
     list.clone()
-}
-
-#[test]
-fn an_import_adds_what_is_new_saves_once_and_reports() {
-    let mut tree = Tree::new();
-    let saved_one = record("app", "app.db");
-    tree.loaded(vec![saved_one.clone()]);
-
-    // The same file under another name and id is already here.
-    let mut same = record("app copy", "app.db");
-    same.id = "other-id".into();
-    let new = record("new", "new.db");
-    import(
-        &mut tree.state,
-        imported(vec![same, new.clone(), saved_one.clone()]),
-        &mut tree.fx,
-    );
-
-    let written = saved(&tree.take());
-    let ids: Vec<&str> = written.iter().map(|r| r.id.as_str()).collect();
-    assert_eq!(ids, [saved_one.id.as_str(), new.id.as_str()]);
-
-    let (_, notice) = tree.state.messages.newest_first().next().unwrap();
-    assert_eq!(
-        notice.level,
-        crate::notice::Level::Warning,
-        "some were skipped"
-    );
-    let message = &notice.text;
-    assert!(
-        message.starts_with("Imported 1 connection from DBeaver"),
-        "{message}"
-    );
-    assert!(message.contains("2 already here"), "{message}");
-    assert!(message.contains("skipped docs"), "{message}");
-    assert!(message.contains("no user name"), "{message}");
-
-    // Importing it all again changes nothing and writes nothing.
-    import(&mut tree.state, imported(vec![new]), &mut tree.fx);
-    assert_eq!(tree.state.messages.len(), 2, "it still says so");
-    assert!(tree.take().is_empty(), "nothing new, so no save");
-}
-
-#[test]
-fn an_export_hands_the_saved_list_to_the_runtime() {
-    let mut tree = Tree::new();
-    // The modal waits for the answer, which here is a refusal.
-    tree.state
-        .open_dialog(DialogState::ConnExport(ConnExportForm::default()));
-    tree.state.awaiting = Some(Awaiting::ExportConnections);
-    export_connections(&mut tree.state, "b.json".into(), &mut tree.fx);
-    assert!(tree.take().is_empty());
-    assert_eq!(
-        tree.state.dialog().unwrap().form().error(),
-        Some("There are no saved connections to export")
-    );
-
-    let saved_one = record("app", "app.db");
-    tree.loaded(vec![saved_one.clone()]);
-    let mut scratch = record("scratch", ":memory:");
-    scratch.ephemeral = true;
-    tree.attempt(&scratch);
-    tree.connected(":memory:");
-    tree.take();
-
-    export_connections(&mut tree.state, "b.json".into(), &mut tree.fx);
-    assert_eq!(
-        tree.take(),
-        [Effect::ExportConnections {
-            path: "b.json".into(),
-            connections: vec![saved_one]
-        }],
-        "everything but the scratch database"
-    );
 }
 
 #[test]
@@ -380,7 +294,8 @@ fn deleting_a_connection_saves_and_forgets_its_password() {
     assert_eq!(
         tree.take(),
         [
-            Effect::ForgetSecret(id),
+            Effect::ForgetSecret(id.clone()),
+            Effect::DeleteHistory(id),
             Effect::SaveConnections(Vec::new())
         ]
     );
@@ -444,7 +359,7 @@ fn e_opens_the_selected_connection_for_editing() {
         panic!("expected the connection form");
     };
     assert_eq!(form.title(), "Edit Connection");
-    assert_eq!(form.text(0), "prod");
+    assert_eq!(form.text(1), "prod");
     assert!(tree.take().is_empty());
 }
 

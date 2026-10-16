@@ -2,6 +2,7 @@
 //! takes the state and the list of effects to add to.
 
 mod chrome;
+mod connections;
 mod db;
 mod dialogs;
 mod editor;
@@ -67,6 +68,7 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         }
         UiEvent::Db(..) => {}
         UiEvent::File(answer) => files::answer(state, answer, &mut fx),
+        UiEvent::ConnectionTested { test, outcome } => connections::tested(state, test, outcome),
     }
     if tree_may_change {
         tree::after(state, &mut fx);

@@ -1,0 +1,200 @@
+---
+source: crates/qry/src/app/dialogs/conndialog_tests.rs
+expression: styled(&buffer)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌ New Connection ─────────────────────────────────────────────── postgres ─┐            
+            │   Driver       ‹ PostgreSQL ›                                            │            
+            │ › Name                                                                   │            
+            │                a name is required                                        │            
+            │                [ ] use a DSN instead                                     │            
+            │   Host                                                                   │            
+            │                a host is required                                        │            
+            │   Port         0                                                         │            
+            │                must be a number from 1 to 65535                          │            
+            │   User                                                                   │            
+            │                a user is required                                        │            
+            │   Password                                                               │            
+            │   Password in  ‹ keychain ›                                              │            
+            │   Database                                                               │            
+            │                a database is required                                    │            
+            │   Schema                                                                 │            
+            │   SSL          ‹ prefer ›                                                │            
+            │   Label        ‹ none ›                                                  │            
+            │                [ Test ]                                                  │            
+            │                                                                          │            
+            │ Name: a name is required                                                 │            
+            └──────────────────────────────────────────────────────────────────────────┘            
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+--- styles (x,y fg bg modifiers) ---
+0,0 Reset Reset NONE
+0,1 Reset Reset NONE
+0,2 Reset Reset NONE
+0,3 Reset Reset NONE
+0,4 Reset Reset NONE
+12,4 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,4 Rgb(79, 193, 201) Rgb(30, 38, 50) BOLD
+29,4 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+76,4 Rgb(169, 180, 194) Rgb(22, 28, 37) NONE
+86,4 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,4 Reset Reset NONE
+0,5 Reset Reset NONE
+12,5 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,5 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+41,5 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+43,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,5 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,5 Reset Reset NONE
+0,6 Reset Reset NONE
+12,6 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+14,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+29,6 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+30,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,6 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,6 Reset Reset NONE
+0,7 Reset Reset NONE
+12,7 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,7 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+47,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,7 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,7 Reset Reset NONE
+0,8 Reset Reset NONE
+12,8 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,8 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,8 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,8 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,8 Reset Reset NONE
+0,9 Reset Reset NONE
+12,9 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,9 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,9 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,9 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,9 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,9 Reset Reset NONE
+0,10 Reset Reset NONE
+12,10 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,10 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+47,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,10 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,10 Reset Reset NONE
+0,11 Reset Reset NONE
+12,11 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,11 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,11 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,11 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,11 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,11 Reset Reset NONE
+0,12 Reset Reset NONE
+12,12 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,12 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,12 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+61,12 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,12 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,12 Reset Reset NONE
+0,13 Reset Reset NONE
+12,13 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,13 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,13 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,13 Reset Reset NONE
+0,14 Reset Reset NONE
+12,14 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,14 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+47,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,14 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,14 Reset Reset NONE
+0,15 Reset Reset NONE
+12,15 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,15 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,15 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,15 Reset Reset NONE
+0,16 Reset Reset NONE
+12,16 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,16 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+39,16 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+41,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,16 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,16 Reset Reset NONE
+0,17 Reset Reset NONE
+12,17 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,17 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,17 Reset Reset NONE
+0,18 Reset Reset NONE
+12,18 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,18 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,18 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+51,18 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,18 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,18 Reset Reset NONE
+0,19 Reset Reset NONE
+12,19 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,19 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,19 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,19 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,19 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,19 Reset Reset NONE
+0,20 Reset Reset NONE
+12,20 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,20 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+37,20 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+39,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,20 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,20 Reset Reset NONE
+0,21 Reset Reset NONE
+12,21 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,21 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+35,21 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+37,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,21 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,21 Reset Reset NONE
+0,22 Reset Reset NONE
+12,22 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+16,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+29,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,22 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,22 Reset Reset NONE
+0,23 Reset Reset NONE
+12,23 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,23 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,23 Reset Reset NONE
+0,24 Reset Reset NONE
+12,24 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+13,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+14,24 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+86,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+87,24 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,24 Reset Reset NONE
+0,25 Reset Reset NONE
+12,25 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
+88,25 Reset Reset NONE
+0,26 Reset Reset NONE
+0,27 Reset Reset NONE
+0,28 Reset Reset NONE
+0,29 Reset Reset NONE

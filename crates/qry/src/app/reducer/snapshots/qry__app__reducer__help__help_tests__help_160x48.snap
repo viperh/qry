@@ -6,46 +6,46 @@ expression: "h.render(w, ht)"
 │ Global                                               Editor · Running                                     Dialogs                                            │
 │ ctrl-q               quit                            F5 ctrl-Enter  run the statement                     ctrl-q     quit                                    │
 │ ctrl-z               suspend to the shell            F8             run everything                        F1         show / hide the help                    │
-│ F1                   show / hide the help            ctrl-e         run the selection                     ←          left                                    │
-│ ctrl-p               command palette                 ctrl-c         cancel the query (copy when none r…   →          right                                   │
-│ Tab                  next pane                       Editor · Other                                       Home       start of the line                       │
-│ shift-Tab            previous pane                   F6             next pane                             End        end of the line                         │
-│ ctrl-n               new connection                  shift-Tab      dedent                                Esc        cancel / close                          │
-│ ctrl-o               import connections                                                                   Enter      submit                                  │
-│ ctrl-/               show / hide the key hints       Results · Navigation                                 Tab        next field                              │
-│ ctrl-↑               grow the editor                 k ↑            up                                    shift-Tab  previous field                          │
-│ ctrl-↓               shrink the editor               j ↓            down                                  Space      next choice                             │
-│ F11                  maximise the pane / restore     h ←            left                                  Backspace  delete the character before             │
-│ ctrl-l               show the messages               l →            right                                 Del        delete the character after              │
-│ Esc                  dismiss the message             PgUp ctrl-u    up a page                                                                                │
-│                                                      PgDn ctrl-d    down a page                           Command palette                                    │
-│ Tree                                                 g g            to the top                            ctrl-q     quit                                    │
-│ ?                    show / hide the help            G              to the bottom                         F1         show / hide the help                    │
-│ :                    command palette                 0 Home         start of the line                     ctrl-p     command palette                         │
-│ n                    new connection                  $ End          end of the line                       ↑ ctrl-k   up                                      │
-│ e                    edit this connection            [              previous result                       ↓ ctrl-j   down                                    │
-│ D Del                forget this connection          ]              next result                           ←          left                                    │
-│ ctrl-s               export connections                                                                   →          right                                   │
-│ k ↑                  up                              Results · Copy & search                              PgUp       up a page                               │
-│ j ↓                  down                            ctrl-s         export the results to a file          PgDn       down a page                             │
-│ h ←                  left                            /              search the results                    Home       start of the line                       │
-│ l →                  right                           y              copy the cell                         End        end of the line                         │
-│ PgUp                 up a page                       Y              copy the row                          Esc        cancel / close                          │
-│ PgDn                 down a page                     n              next match                            Enter      submit                                  │
-│ g g Home             to the top                      N              previous match                        Tab        next field                              │
-│ G End                to the bottom                   ctrl-y         copy as…                              Backspace  delete the character before             │
-│ Space                expand / collapse               Enter          inspect the value                     Del        delete the character after              │
-│ Enter                connect / switch to its sess…   i              show / hide the inspector                                                                │
-│ shift-Enter          open another session on it      Results · Other                                      Jobs                                               │
-│ r                    refresh the node                ?              show / hide the help                  ?          show / hide the help                    │
-│ R                    refresh the whole connection    :              command palette                       :          command palette                         │
-│ /                    filter the tree                 ctrl-c         cancel the query (copy when none r…   c          cancel the query (copy when none runs)  │
-│ .                    show / hide system objects      s              sort by the column                    k ↑        up                                      │
-│ s                    insert SELECT * FROM the tab…   S              add the column to the sort            j ↓        down                                    │
-│ y                    copy the qualified name         ctrl-g         go to a row                           h ←        left                                    │
-│ x                    disconnect its session          <              narrow the column                     l →        right                                   │
-│ J                    show / hide the jobs            >              widen the column                      g g        to the top                              │
-│ Esc                  clear the filter                =              reset the column widths               G          to the bottom                           │
+│ F1                   show / hide the help            ctrl-e         run the selection                     ↑          up                                      │
+│ ctrl-p               command palette                 ctrl-c         cancel the query (copy when none r…   ↓          down                                    │
+│ Tab                  next pane                       Editor · Other                                       ←          left                                    │
+│ shift-Tab            previous pane                   F6             next pane                             →          right                                   │
+│ ctrl-n               new connection                  shift-Tab      dedent                                PgUp       up a page                               │
+│ ctrl-o               import connections                                                                   PgDn       down a page                             │
+│ ctrl-/               show / hide the key hints       Results · Navigation                                 Home       start of the line                       │
+│ ctrl-↑               grow the editor                 k ↑            up                                    End        end of the line                         │
+│ ctrl-↓               shrink the editor               j ↓            down                                  Esc        cancel / close                          │
+│ F11                  maximise the pane / restore     h ←            left                                  Enter      submit                                  │
+│ ctrl-l               show the messages               l →            right                                 ctrl-t     test the connection                     │
+│ Esc                  dismiss the message             PgUp ctrl-u    up a page                             Tab        next field                              │
+│                                                      PgDn ctrl-d    down a page                           shift-Tab  previous field                          │
+│ Tree                                                 g g            to the top                            Space      next choice                             │
+│ ?                    show / hide the help            G              to the bottom                         Backspace  delete the character before             │
+│ :                    command palette                 0 Home         start of the line                     Del        delete the character after              │
+│ n                    new connection                  $ End          end of the line                                                                          │
+│ e                    edit this connection            [              previous result                       Command palette                                    │
+│ D Del                forget this connection          ]              next result                           ctrl-q     quit                                    │
+│ c                    duplicate this connection                                                            F1         show / hide the help                    │
+│ k ↑                  up                              Results · Copy & search                              ctrl-p     command palette                         │
+│ j ↓                  down                            ctrl-s         export the results to a file          ↑ ctrl-k   up                                      │
+│ h ←                  left                            /              search the results                    ↓ ctrl-j   down                                    │
+│ l →                  right                           y              copy the cell                         ←          left                                    │
+│ PgUp                 up a page                       Y              copy the row                          →          right                                   │
+│ PgDn                 down a page                     n              next match                            PgUp       up a page                               │
+│ g g Home             to the top                      N              previous match                        PgDn       down a page                             │
+│ G End                to the bottom                   ctrl-y         copy as…                              Home       start of the line                       │
+│ Space                expand / collapse               Enter          inspect the value                     End        end of the line                         │
+│ Enter                connect / switch to its sess…   i              show / hide the inspector             Esc        cancel / close                          │
+│ shift-Enter          open another session on it      Results · Other                                      Enter      submit                                  │
+│ r                    refresh the node                ?              show / hide the help                  Tab        next field                              │
+│ R                    refresh the whole connection    :              command palette                       Backspace  delete the character before             │
+│ /                    filter the tree                 ctrl-c         cancel the query (copy when none r…   Del        delete the character after              │
+│ .                    show / hide system objects      s              sort by the column                                                                       │
+│ s                    insert SELECT * FROM the tab…   S              add the column to the sort            Jobs                                               │
+│ y                    copy the qualified name         ctrl-g         go to a row                           ?          show / hide the help                    │
+│ x                    disconnect its session          <              narrow the column                     :          command palette                         │
+│ J                    show / hide the jobs            >              widen the column                      c          cancel the query (copy when none runs)  │
+│ Esc                  clear the filter                =              reset the column widths               k ↑        up                                      │
 │                                                                                                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value                                               │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                                                               │
