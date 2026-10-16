@@ -21,3 +21,6 @@
 !/.idea/dictionaries/
 !/.idea/inspectionProfiles/
 /.idea/workspace.xml
+
+# Temporary git worktrees made by Claude Code agents.
+/.claude/worktrees/
