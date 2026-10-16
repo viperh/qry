@@ -22,6 +22,8 @@ pub mod config_migrate;
 pub mod connections;
 pub mod db;
 pub mod errors;
+#[doc(hidden)]
+pub mod fuzz;
 pub mod help_model;
 pub mod import;
 pub mod keymap;

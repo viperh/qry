@@ -155,10 +155,14 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
 /// that is not one goes after them), everything else in natural order.
 fn compare_values(kind: ValueKind, a: &str, b: &str) -> Ordering {
     if kind.is_numeric() {
-        match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
-            (Ok(x), Ok(y)) => return x.partial_cmp(&y).unwrap_or(Ordering::Equal),
-            (Ok(_), Err(_)) => return Ordering::Less,
-            (Err(_), Ok(_)) => return Ordering::Greater,
+        // NaN is not a number here: it compares equal to every number,
+        // which is no order at all, and the standard sort panics on such a
+        // comparison. As text it goes after the numbers.
+        let number = |s: &str| s.trim().parse::<f64>().ok().filter(|x| !x.is_nan());
+        match (number(a), number(b)) {
+            (Some(x), Some(y)) => return x.partial_cmp(&y).unwrap_or(Ordering::Equal),
+            (Some(_), None) => return Ordering::Less,
+            (None, Some(_)) => return Ordering::Greater,
             _ => {}
         }
     }

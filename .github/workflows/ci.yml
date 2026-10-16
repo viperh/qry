@@ -195,53 +195,36 @@ jobs:
       - name: Check dependency direction (script)
         run: python3 scripts/check-layering.py
 
-  # Every fuzz target for 30 s. The targets arrive with T005; until fuzz/
-  # exists the job only checks out and reports the skip. (`hashFiles` is
-  # not available in a job-level `if`, so the gate is a step.) The nightly
-  # runs are T005's fuzz.yml.
+  # Every fuzz target for 30 s, from the seed corpus. The nightly runs, with
+  # a corpus kept between them, are fuzz.yml. cargo-fuzz needs nightly;
+  # `+nightly` overrides rust-toolchain.toml (channel = "stable").
   fuzz-smoke:
     name: Fuzz (30 s per target)
     runs-on: ubuntu-latest
-    env:
-      # Overrides rust-toolchain.toml (channel = "stable"); cargo-fuzz needs nightly.
-      RUSTUP_TOOLCHAIN: nightly
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # in case a target links qry (vergen-gix)
-      - name: Look for fuzz targets
-        id: fuzz
-        run: |
-          if [ -f fuzz/Cargo.toml ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::fuzz/Cargo.toml does not exist yet (T005); skipping"
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
+          fetch-depth: 0 # the targets link qry, whose build script runs vergen-gix
       - name: Install nightly toolchain
-        if: steps.fuzz.outputs.present == 'true'
         uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
-        if: steps.fuzz.outputs.present == 'true'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-fuzz
       - uses: Swatinem/rust-cache@v2
-        if: steps.fuzz.outputs.present == 'true'
         with:
           workspaces: fuzz
+      - name: Seed the corpus
+        run: fuzz/seed-corpus.sh
       - name: Build every target
-        if: steps.fuzz.outputs.present == 'true'
-        run: cargo fuzz build
+        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
       - name: Run every target for 30 s
-        if: steps.fuzz.outputs.present == 'true'
         run: |
           status=0
-          for target in $(cargo fuzz list); do
+          for target in $(cargo +nightly fuzz list); do
             echo "::group::$target"
-            mkdir -p "fuzz/corpus/$target"
-            if ! cargo fuzz run "$target" "fuzz/corpus/$target" -- \
+            if ! cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "$target" "fuzz/corpus/$target" -- \
                  -max_total_time=30 -rss_limit_mb=2048 -timeout=10; then
               echo "::error::fuzz target $target crashed"
               status=1
@@ -250,7 +233,7 @@ jobs:
           done
           exit $status
       - name: Upload crashes
-        if: failure() && steps.fuzz.outputs.present == 'true'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: fuzz-crashes

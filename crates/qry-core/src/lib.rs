@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod copy;
 pub mod exporter;
+#[doc(hidden)]
+pub mod fuzz;
 pub mod grid;
 pub mod jobs;
 pub mod mariadb;

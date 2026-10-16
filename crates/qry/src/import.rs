@@ -69,9 +69,21 @@ pub struct Imported {
 }
 
 /// Reads and converts a file. Blocking: call it from `spawn_blocking`.
-pub(crate) fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
+pub fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
     let path = expand_home(path);
     let bytes = std::fs::read(&path).wrap_err_with(|| format!("cannot read {}", path.display()))?;
+    from_named_bytes(&bytes, format, &path)
+}
+
+/// Converts the bytes of a file without touching the disk: what
+/// [`from_file`] does once it has read them, with errors naming "the
+/// file". The fuzz targets call it directly.
+pub fn from_bytes(bytes: &[u8], format: Format) -> color_eyre::Result<Imported> {
+    from_named_bytes(bytes, format, Path::new("the file"))
+}
+
+/// [`from_bytes`], with `path` named in errors.
+fn from_named_bytes(bytes: &[u8], format: Format, path: &Path) -> color_eyre::Result<Imported> {
     if bytes.starts_with(b"PK") {
         bail!(
             "{} is a zip archive, such as a DBeaver project export; \
@@ -79,9 +91,9 @@ pub(crate) fn from_file(path: &str, format: Format) -> color_eyre::Result<Import
             path.display()
         );
     }
-    let text = String::from_utf8(bytes)
+    let text = std::str::from_utf8(bytes)
         .wrap_err_with(|| format!("{} is not a text file", path.display()))?;
-    from_text(&text, format, &path)
+    from_text(text, format, path)
 }
 
 /// Converts the text of a file, which `path` names in errors.
@@ -112,7 +124,14 @@ pub(crate) fn from_text(text: &str, format: Format, path: &Path) -> color_eyre::
         warnings: Vec::new(),
     };
     match format {
-        Format::Qry => imported.connections = connections::parse(text, path)?,
+        Format::Qry => {
+            imported.connections = connections::parse(text, path)?;
+            // A backup qry wrote holds no password, but a hand-edited one
+            // could, in a field this build keeps without knowing it.
+            for record in &mut imported.connections {
+                strip_passwords(&mut record.extra);
+            }
+        }
         Format::SqlDeveloper => sql_developer(&value, &mut imported)?,
         Format::DBeaver => dbeaver(&value, &mut imported)?,
         Format::Auto => unreachable!("detected above"),
@@ -126,6 +145,29 @@ pub(crate) fn from_text(text: &str, format: Format, path: &Path) -> color_eyre::
         }
     }
     Ok(imported)
+}
+
+/// Whether a field's name says it holds a password, in any case:
+/// `password`, `dbPassword`, `passwd`, `pwd`.
+pub(crate) fn is_password_key(key: &str) -> bool {
+    let key = key.to_ascii_lowercase();
+    key.contains("password") || key.contains("passwd") || key.contains("pwd")
+}
+
+/// Drops every field, at any depth, whose name says it holds a password.
+fn strip_passwords(object: &mut Map<String, Value>) {
+    object.retain(|key, _| !is_password_key(key));
+    for value in object.values_mut() {
+        strip_passwords_in(value);
+    }
+}
+
+fn strip_passwords_in(value: &mut Value) {
+    match value {
+        Value::Object(object) => strip_passwords(object),
+        Value::Array(items) => items.iter_mut().for_each(strip_passwords_in),
+        _ => {}
+    }
 }
 
 /// Tells the three apart by shape. Each keeps a `connections` key: qry's is

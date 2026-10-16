@@ -1,0 +1,108 @@
+# cargo-fuzz targets for qry. A workspace of its own, excluded from the root
+# one, so a stable `cargo build --workspace` never sees it. With nightly:
+#
+#   fuzz/seed-corpus.sh
+#   cargo +nightly fuzz run sql_split fuzz/corpus/sql_split
+#
+# Each target is one line calling a `fuzz_*` function in `qry::fuzz` or
+# `qry_core::fuzz`; their proptest twins run on stable in `cargo test`.
+# A new target also needs seeds in seed-corpus.sh and a line in the
+# matrix of .github/workflows/fuzz.yml (crates/qry/tests/fuzz_inventory.rs
+# checks the names line up).
+[package]
+name = "qry-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+qry = { path = "../crates/qry", default-features = false }
+qry-core = { path = "../crates/qry-core" }
+
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+panic = "abort"
+
+[[bin]]
+name = "import_qry"
+path = "fuzz_targets/import_qry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "import_dbeaver"
+path = "fuzz_targets/import_dbeaver.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "import_sqldeveloper"
+path = "fuzz_targets/import_sqldeveloper.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "import_auto"
+path = "fuzz_targets/import_auto.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "connections_parse"
+path = "fuzz_targets/connections_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "keymap_parse"
+path = "fuzz_targets/keymap_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "palette_score"
+path = "fuzz_targets/palette_score.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sql_lex"
+path = "fuzz_targets/sql_lex.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sql_split"
+path = "fuzz_targets/sql_split.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "grid"
+path = "fuzz_targets/grid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "copy_render"
+path = "fuzz_targets/copy_render.rs"
+test = false
+doc = false
+bench = false

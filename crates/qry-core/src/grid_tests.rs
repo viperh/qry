@@ -70,6 +70,29 @@ fn sort_nulls_last_asc_first_desc() {
     assert_eq!(rows_of(&r, &desc, 0), [None, s("b"), s("a")]);
 }
 
+/// Found by the `grid` fuzz target: NaN compared equal to every number,
+/// so the comparison was no order and the standard sort panicked. NaN now
+/// sorts with the text, after the numbers.
+#[test]
+fn sort_numeric_with_nan_puts_it_after_the_numbers() {
+    let values = [
+        "4", "8", "NaN", "8", "8", "NaN", "6", "4", "3", "NaN", "5", "NaN", "NaN", "8", "7", "7",
+        "4", "NaN", "NaN", "4", "7",
+    ];
+    let rows: Vec<Vec<Option<&str>>> = values.iter().map(|v| vec![Some(*v)]).collect();
+    let rows: Vec<&[Option<&str>]> = rows.iter().map(Vec::as_slice).collect();
+    let r = typed_result(&[("n", "int4")], &rows);
+    let order = sort_permutation(&r, &[(0, Order::Asc)]);
+    let shown: Vec<_> = rows_of(&r, &order, 0).into_iter().flatten().collect();
+    assert_eq!(
+        shown,
+        [
+            "3", "4", "4", "4", "4", "5", "6", "7", "7", "7", "8", "8", "8", "8", "NaN", "NaN",
+            "NaN", "NaN", "NaN", "NaN", "NaN"
+        ]
+    );
+}
+
 #[test]
 fn sort_is_stable() {
     let r = result(
