@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use qry_core::{
     QueryResult,
-    sql::{Dialect, TokenKind, lex, split, statement_at},
+    sql::{Dialect, TokenKind, is_ddl, lex, split, statement_at},
 };
 
 use qry_core::jobs::{Cancelled, JobId, JobKind, JobState};
@@ -270,6 +270,10 @@ pub(super) fn done(
         return;
     };
     let sql = queued.map(|q| q.sql).unwrap_or_default();
+    // The schema may have changed: what the tree holds of it loads again.
+    if is_ddl(session.dialect(), &sql) {
+        session.schema.clear();
+    }
     let label = label(session.dialect(), &sql, &result);
     let table = table_name(session.dialect(), &sql);
     let tab = session.new_tab(label);

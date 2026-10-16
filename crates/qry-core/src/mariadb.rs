@@ -148,4 +148,9 @@ impl Database for MariaDb {
     async fn tables(&self) -> Result<Vec<String>> {
         Ok(first_column(self.query(TABLES_SQL).await?))
     }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let mut conn = self.conn.lock().await;
+        crate::mysql::exec_bound(&mut conn, sql, params).await
+    }
 }

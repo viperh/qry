@@ -4,14 +4,14 @@ expression: "s.h.render(80, 24)"
 ---
  qry  …  5 warehouse-replica-eu-west  6 billing-replica-eu-west         NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                              
- ▸ ● scratch                  │  1 │                                            
- ▸   prod                     │                                                 
- ▸   analytics                │                                                 
- ▸ ● orders-replica-eu-west   │                                                 
- ▸ ● inventory-replica-eu-west│                                                 
- ▸ ● reporting-replica-eu-west│                                                 
- ▸ ● warehouse-replica-eu-west│                                                 
- ▸ ● billing-replica-eu-west  │                                                 
+ ▸ ● sq  scratch              │  1 │                                            
+ ▸ ○ sq  prod                 │                                                 
+ ▸ ○ sq  analytics            │                                                 
+ ▸ ● sq  orders-replica-eu-wes│                                                 
+ ▸ ● sq  inventory-replica-eu-│                                                 
+ ▸ ● sq  reporting-replica-eu-│                                                 
+ ▸ ● sq  warehouse-replica-eu-│                                                 
+▌▸ ● sq  billing-replica-eu-we│                                                 
                               │ RESULTS                                         
                               │                                                 
                               │                                                 
@@ -25,4 +25,4 @@ expression: "s.h.render(80, 24)"
                               │                                                 
                               │                                                 
  billing-replica-eu-west · sqlite · billing.db · auto                           
- Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands    ? help
+ Enter open  Space expand  n new conn  Tab next pane  : commands         ? help

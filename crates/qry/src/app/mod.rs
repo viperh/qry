@@ -14,6 +14,7 @@ pub(crate) mod dialogs;
 pub mod effects;
 pub mod event;
 mod reducer;
+pub(crate) mod schematree;
 pub mod state;
 
 use std::sync::Arc;

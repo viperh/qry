@@ -81,7 +81,7 @@ impl MySql {
     }
 }
 
-fn value_to_string(value: Value) -> Option<String> {
+pub(crate) fn value_to_string(value: Value) -> Option<String> {
     match value {
         Value::NULL => None,
         Value::Bytes(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
@@ -176,6 +176,41 @@ pub(crate) fn cell(value: Value, shown: Shown) -> Option<String> {
 pub(crate) const TABLES_SQL: &str = "SELECT table_name FROM information_schema.tables \
      WHERE table_schema = DATABASE() ORDER BY table_name";
 
+/// Runs `sql` as a prepared statement with `params` bound to its `?`s, in
+/// order. MariaDB speaks the same protocol, so it shares this.
+pub(crate) async fn exec_bound(
+    conn: &mut Conn,
+    sql: &str,
+    params: &[String],
+) -> Result<QueryResult> {
+    let params = if params.is_empty() {
+        mysql_async::Params::Empty
+    } else {
+        mysql_async::Params::Positional(params.iter().map(|p| Value::from(p.as_str())).collect())
+    };
+    let mut result = conn.exec_iter(sql, params).await?;
+    let (columns, shown): (Vec<ColumnMeta>, Vec<_>) =
+        result.columns_ref().iter().map(column_meta).unzip();
+    let mut rows = Vec::new();
+    while let Some(row) = result.next().await? {
+        rows.push(
+            row.unwrap()
+                .into_iter()
+                .zip(&shown)
+                .map(|(value, &shown)| cell(value, shown))
+                .collect(),
+        );
+    }
+    result.drop_result().await?;
+    Ok(QueryResult {
+        columns,
+        rows,
+        affected: None,
+        elapsed: std::time::Duration::ZERO,
+        truncated: false,
+    })
+}
+
 #[async_trait]
 impl Database for MySql {
     fn kind(&self) -> DatabaseType {
@@ -241,6 +276,11 @@ impl Database for MySql {
 
     async fn tables(&self) -> Result<Vec<String>> {
         Ok(first_column(self.query(TABLES_SQL).await?))
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let mut conn = self.conn.lock().await;
+        exec_bound(&mut conn, sql, params).await
     }
 }
 

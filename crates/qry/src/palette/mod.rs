@@ -35,6 +35,13 @@ pub enum PaletteTarget {
     Action(Action),
     /// Open the stored connection with this id, or switch to its session.
     OpenConnection(String),
+    /// Run `SELECT * FROM` this table or view in this session, as Enter on
+    /// it in the tree does.
+    Table {
+        session: crate::app::state::SessionId,
+        catalog: String,
+        object: String,
+    },
     /// A command that takes the text typed after `prefix`.
     Argument {
         prefix: &'static str,

@@ -4,7 +4,7 @@ expression: text
 ---
  qry  1 scratch ◐                                                                             sqlite · :memory:   EDIT  
  SCHEMA                       │ QUERY  ln 1, col 21                                                                     
- ▸ ● scratch                  │▌ 1 │ select * from events                                                               
+▌▸ ● sq  scratch              │▌ 1 │ select * from events                                                               
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

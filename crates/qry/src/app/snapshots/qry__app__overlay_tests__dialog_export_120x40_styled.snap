@@ -4,7 +4,7 @@ expression: "styled(&h.render_buffer(120, 40))"
 ---
  qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ● scratch                  │  1 │                                                                                    
+▌▸ ● sq  scratch              │  1 │                                                                                    
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
@@ -52,7 +52,7 @@ expression: "styled(&h.render_buffer(120, 40))"
 30,1 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 31,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
 0,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD | DIM
-12,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+16,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,4 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

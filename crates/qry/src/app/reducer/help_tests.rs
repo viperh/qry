@@ -114,9 +114,16 @@ fn help_snapshots() {
         .unwrap();
     assert!(running.entries[0].0.contains("alt-r"), "{running:?}");
     // Scrolled to where the editor's groups are.
-    h.render(120, 40);
-    h.keys("pagedown j j j j");
-    let text = h.render(120, 40);
+    // Scrolled until the editor's running keys are in view, however much
+    // comes before them.
+    let mut text = h.render(120, 40);
+    for _ in 0..200 {
+        if text.contains("alt-r") {
+            break;
+        }
+        h.keys("j");
+        text = h.render(120, 40);
+    }
     assert!(text.contains("alt-r"), "{text}");
     insta::assert_snapshot!("help_120x40_remapped", text);
 }

@@ -1,0 +1,22 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: "format!(\"{}\\n---\\n{}\", buffer_lines(&focused).join(\"\\n\"),\nbuffer_lines(&unfocused).join(\"\\n\"))"
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+     ▾ Tables  2                        
+       ▸ orders                         
+       ▸ users                          
+     ▸ Views  1                         
+                                        
+                                        
+                                        
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+     ▾ Tables  2                        
+       ▸ orders                         
+       ▸ users                          
+     ▸ Views  1

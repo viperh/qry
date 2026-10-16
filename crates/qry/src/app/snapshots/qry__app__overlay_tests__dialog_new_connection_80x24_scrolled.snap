@@ -4,7 +4,7 @@ expression: "h.render(80, 24)"
 ---
  qry  1 scratch                                     sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                              
- ▸ ● scratch                  │  1 │                                            
+▌▸ ● sq  scratch              │  1 │                                            
                               │                                                 
                               │                                                 
     ┌ New Connection ──────────────────────────────────────────────────────┐    

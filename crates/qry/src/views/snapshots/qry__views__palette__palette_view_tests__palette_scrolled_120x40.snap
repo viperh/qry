@@ -4,15 +4,15 @@ expression: text
 ---
  qry  1 scratch                                                                            sqlite · :memory:   COMMAND  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ◌ scratch                  │  1 │                                                                                    
+▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ ›                                                                                    57 / 57 │            
+            │ ›                                                                                    62 / 62 │            
             │ Go to the tree                                view                                           │            
             │ Go to the editor                              view                                           │            
             │ Go to the results                             view                                           │            
             │ New connection                                connection                              ctrl-n │            
             │ Edit connection                               connection                                   e │            
-            │ Delete connection                             connection                                 Del │            
+            │ Delete connection                             connection                                   D │            
             │ Import connections                            connection                              ctrl-o │            
             │ Export connections                            connection                              ctrl-s │            
             │ Next session                                  session                              ctrl-PgDn │            

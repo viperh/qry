@@ -10,6 +10,8 @@ use ratatui::{
     style::{Color, Style},
 };
 
+use qry_core::schema::{Children, SchemaPath};
+
 use super::*;
 use crate::{
     app::{
@@ -52,20 +54,39 @@ impl Tree {
         }
     }
 
-    /// The effects since the last call, oldest first.
+    /// The effects since the last call, oldest first, without the
+    /// spinner's pacing.
     fn take(&mut self) -> Vec<Effect> {
-        std::mem::take(&mut self.fx)
+        let mut fx = std::mem::take(&mut self.fx);
+        fx.retain(|e| {
+            !matches!(
+                e,
+                Effect::ScheduleTimer {
+                    timer: crate::app::event::Timer::Tree(_),
+                    ..
+                }
+            )
+        });
+        fx
+    }
+
+    /// What every event ends with in the app: loads asked for, rows worked
+    /// out again.
+    fn settle(&mut self) {
+        after(&mut self.state, &mut self.fx);
     }
 
     /// A connection submitted from the New Connection modal, as the app
     /// opens it: in the session already on it, or a new one.
     fn attempt(&mut self, record: &StoredConnection) {
         self.session = super::super::connect(&mut self.state, record.clone(), &mut self.fx);
+        self.settle();
     }
 
     /// An answer from the last session opened.
     fn answer(&mut self, answer: DbAnswer) {
         super::super::db::answer(&mut self.state, self.session, answer, &mut self.fx);
+        self.settle();
     }
 
     fn connected(&mut self, label: &str) {
@@ -76,9 +97,48 @@ impl Tree {
         self.answer(DbAnswer::ConnectFailed("no such file".into()));
     }
 
+    /// Answers every schema load asked for so far, from a `main` catalog
+    /// holding `tables`, until nothing more is asked.
     fn tables(&mut self, tables: &[&str]) {
-        let tables = tables.iter().map(ToString::to_string).collect();
-        self.answer(DbAnswer::TablesLoaded(tables));
+        loop {
+            let (loads, rest): (Vec<Effect>, Vec<Effect>) = std::mem::take(&mut self.fx)
+                .into_iter()
+                .partition(|e| matches!(e, Effect::Db(_, DbCommand::LoadSchema { .. })));
+            self.fx = rest;
+            if loads.is_empty() {
+                return;
+            }
+            for load in loads {
+                let Effect::Db(id, DbCommand::LoadSchema { path, generation }) = load else {
+                    continue;
+                };
+                let children = match &path {
+                    SchemaPath::Catalogs => Children::Catalogs(vec![qry_core::schema::Catalog {
+                        name: "main".into(),
+                        is_default: true,
+                        is_system: false,
+                    }]),
+                    SchemaPath::Objects { catalog } => Children::Objects(
+                        tables
+                            .iter()
+                            .map(|t| qry_core::schema::DbObject {
+                                catalog: catalog.clone(),
+                                name: t.to_string(),
+                                kind: qry_core::schema::ObjectKind::Table,
+                            })
+                            .collect(),
+                    ),
+                    SchemaPath::Details { .. } => Children::Details(Default::default()),
+                };
+                let answer = DbAnswer::Schema {
+                    path,
+                    generation,
+                    outcome: Ok(children),
+                };
+                super::super::db::answer(&mut self.state, id, answer, &mut self.fx);
+                self.settle();
+            }
+        }
     }
 
     /// The connection the active session is on, if the tree lists it.
@@ -89,6 +149,7 @@ impl Tree {
 
     fn loaded(&mut self, records: Vec<StoredConnection>) {
         connections_loaded(&mut self.state, records);
+        self.settle();
     }
 
     fn press(&mut self, code: KeyCode) {
@@ -97,6 +158,7 @@ impl Tree {
             KeyEvent::new(code, KeyModifiers::NONE),
             &mut self.fx,
         );
+        self.settle();
     }
 
     /// Draws the tree into a `width`x`height` terminal.
@@ -228,7 +290,7 @@ fn a_connection_joins_the_tree_once_it_opens() {
 
     connect(&mut tree, "prod", "app.db");
     let shown = tree.lines(30, 8);
-    assert!(shown.contains("▸ ● prod"), "{shown}");
+    assert!(shown.contains("▸ ● sq  prod"), "{shown}");
     assert_eq!(tree.active(), Some(0));
 
     // The same connection again is not added twice: the id is what
@@ -339,16 +401,15 @@ fn a_keychain_that_refused_downgrades_the_record_and_saves() {
     assert_eq!(written[0].secret, Secret::Prompt, "it asks each time now");
 }
 
-/// The colours of the first cell of one rendered row.
-fn row_style(tree: &Tree, width: u16, height: u16, y: u16) -> (Color, Color) {
-    let cell = &tree.drawn(width, height)[(1, y)];
-    (cell.fg, cell.bg)
+/// The background of the first cell of one rendered row.
+fn row_style(tree: &Tree, width: u16, height: u16, y: u16) -> Color {
+    tree.drawn(width, height)[(1, y)].bg
 }
 
-/// The colours a theme style draws with, on a cell nothing else coloured
-/// (an unset colour draws as the default, `Reset`).
-fn colours(style: Style) -> (Color, Color) {
-    (style.fg.unwrap_or_default(), style.bg.unwrap_or_default())
+/// The background a theme style draws with (an unset colour draws as the
+/// default, `Reset`).
+fn colours(style: Style) -> Color {
+    style.bg.unwrap_or_default()
 }
 
 #[test]
@@ -363,7 +424,7 @@ fn the_selection_takes_the_selected_style_and_the_rest_the_plain_one() {
     );
     assert_ne!(selected, plain);
 
-    // Row 0 is the border, so the connections are on rows 1 and 2.
+    // Row 0 is the title, so the connections are on rows 1 and 2.
     assert_eq!(row_style(&tree, 30, 8, 1), selected);
     assert_eq!(row_style(&tree, 30, 8, 2), plain);
 
@@ -434,7 +495,7 @@ fn a_saved_connection_survives_a_failed_connect() {
     tree.failed();
 
     assert_eq!(tree.state.tree.connections.len(), 1);
-    assert!(tree.lines(30, 8).contains("▸ ✗ prod"));
+    assert!(tree.lines(30, 8).contains("▸ ✗ sq  prod"));
 }
 
 #[test]
@@ -470,7 +531,7 @@ fn enter_opens_a_session_on_the_selected_connection() {
     };
     assert_eq!(sent.name, "two");
     assert_eq!(tree.state.sessions.active, *id);
-    assert!(tree.lines(30, 8).contains("▸ ◌ two"), "connecting");
+    assert!(tree.lines(30, 8).contains("▸ ⠋ sq  two"), "connecting");
 }
 
 #[test]
@@ -480,26 +541,45 @@ fn space_expands_the_active_connection_and_shows_its_tables() {
     tree.take();
 
     tree.press(KeyCode::Char(' '));
-    assert_eq!(
-        tree.take(),
-        [Effect::Db(tree.session, DbCommand::ListTables)]
-    );
+    let effects = tree.take();
+    let [
+        Effect::Db(
+            _,
+            DbCommand::LoadSchema {
+                path: SchemaPath::Catalogs,
+                generation,
+            },
+        ),
+    ] = effects.as_slice()
+    else {
+        panic!("expected the catalogs to load, got {effects:?}");
+    };
+    tree.fx.push(Effect::Db(
+        tree.session,
+        DbCommand::LoadSchema {
+            path: SchemaPath::Catalogs,
+            generation: *generation,
+        },
+    ));
     let shown = tree.lines(30, 8);
     assert!(
-        shown.contains("▾ ● prod") && shown.contains("loading"),
-        "{shown}"
+        shown.contains("▾ ● sq  prod ⠋"),
+        "a spinner while it loads: {shown}"
     );
 
     tree.tables(&["users", "orders"]);
     let shown = tree.lines(30, 8);
+    assert!(shown.contains("▾ main"), "its own catalog opens: {shown}");
+    assert!(shown.contains("▾ Tables  2"), "{shown}");
     assert!(
         shown.contains("users") && shown.contains("orders"),
         "{shown}"
     );
 
-    // Tables are rows of their own, so the selection walks through them.
+    // Tables are rows of their own, so the selection walks through them:
+    // prod, main, Tables, orders, users, Views.
     tree.press(KeyCode::End);
-    assert_eq!(tree.state.tree.selected, 2);
+    assert_eq!(tree.state.tree.selected, 5);
 
     // Collapsing hides them again.
     tree.press(KeyCode::Home);
@@ -512,7 +592,6 @@ fn expanding_another_connection_opens_it_first() {
     let mut tree = Tree::new();
     tree.loaded(vec![record("one", "one.db")]);
     connect(&mut tree, "two", "two.db");
-    tree.tables(&["t"]);
     tree.take();
 
     // "one" has no session, so Space opens one first.
@@ -526,7 +605,14 @@ fn expanding_another_connection_opens_it_first() {
     tree.session = *id;
 
     tree.connected("one.db");
-    assert_eq!(tree.take(), [Effect::Db(*id, DbCommand::ListTables)]);
+    assert!(
+        tree.fx.iter().any(|e| matches!(
+            e,
+            Effect::Db(s, DbCommand::LoadSchema { path: SchemaPath::Catalogs, .. }) if s == id
+        )),
+        "{:?}",
+        tree.fx
+    );
     assert_eq!(tree.active(), Some(0));
 
     tree.tables(&["people"]);
@@ -534,22 +620,38 @@ fn expanding_another_connection_opens_it_first() {
 }
 
 #[test]
-fn a_failed_table_list_closes_the_branch_so_it_can_be_tried_again() {
+fn a_failed_load_shows_why_and_r_tries_again() {
     let mut tree = Tree::new();
     connect(&mut tree, "prod", "app.db");
-    tree.press(KeyCode::Char(' '));
     tree.take();
-
-    tree.answer(DbAnswer::TablesFailed("gone".into()));
-    let shown = tree.lines(30, 8);
-    assert!(shown.contains("▸ ● prod"), "{shown}");
-    assert!(!shown.contains("loading"), "{shown}");
-
     tree.press(KeyCode::Char(' '));
-    assert_eq!(
-        tree.take(),
-        [Effect::Db(tree.session, DbCommand::ListTables)]
-    );
+    let effects = tree.take();
+    let [Effect::Db(_, DbCommand::LoadSchema { generation, .. })] = effects.as_slice() else {
+        panic!("{effects:?}");
+    };
+
+    tree.answer(DbAnswer::Schema {
+        path: SchemaPath::Catalogs,
+        generation: *generation,
+        outcome: Err("gone".into()),
+    });
+    let shown = tree.lines(30, 8);
+    assert!(shown.contains("▾ ● sq  prod"), "{shown}");
+    assert!(shown.contains("! gone"), "{shown}");
+    assert!(tree.take().is_empty(), "no retry on its own");
+
+    tree.press(KeyCode::Down);
+    tree.press(KeyCode::Char('r'));
+    assert!(matches!(
+        tree.take().as_slice(),
+        [Effect::Db(
+            _,
+            DbCommand::LoadSchema {
+                path: SchemaPath::Catalogs,
+                ..
+            }
+        )]
+    ));
 }
 
 #[test]
@@ -560,7 +662,7 @@ fn long_trees_scroll_to_keep_the_selection_in_view() {
     }
     tree.press(KeyCode::End);
 
-    // 8 rows tall: 2 border rows leave 6 connections in view.
+    // 8 rows tall: the title leaves 7 connections in view.
     let shown = tree.lines(30, 8);
     assert!(shown.contains("c19"), "{shown}");
     assert!(!shown.contains("c0 ") && !shown.contains("▸ c0"), "{shown}");
@@ -583,7 +685,6 @@ fn deleting_a_connection_being_opened_drops_its_late_answer() {
     tree.tables(&["t"]);
     assert_eq!(tree.state.tree.connections.len(), 1);
     assert!(!tree.lines(30, 8).contains("two"));
-    assert!(tree.state.tree.connections[0].tables.is_none());
 }
 
 #[test]
@@ -596,12 +697,12 @@ fn the_tree_marks_each_connection_by_its_sessions() {
     tree.loaded(vec![down.clone()]);
     tree.attempt(&down);
     let shown = tree.lines(30, 8);
-    assert!(shown.contains("▸   idle"), "no session: {shown}");
-    assert!(shown.contains("▸ ● open"), "{shown}");
-    assert!(shown.contains("▸ ◌ down"), "{shown}");
+    assert!(shown.contains("▸ ○ sq  idle"), "no session: {shown}");
+    assert!(shown.contains("▸ ● sq  open"), "{shown}");
+    assert!(shown.contains("▸ ⠋ sq  down"), "{shown}");
 
     tree.failed();
-    assert!(tree.lines(30, 8).contains("▸ ✗ down"));
+    assert!(tree.lines(30, 8).contains("▸ ✗ sq  down"));
     let t = Theme::DARK;
     let row = tree.drawn(30, 8);
     let dot = (0..30).find(|x| row[(*x, 3)].symbol() == "✗").unwrap();

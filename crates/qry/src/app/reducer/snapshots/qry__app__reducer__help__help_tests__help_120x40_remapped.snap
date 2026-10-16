@@ -3,42 +3,42 @@ source: crates/qry/src/app/reducer/help_tests.rs
 expression: text
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ →                    right                                 connection                                                │
-│ PgUp                 up a page                                                                                       │
-│ PgDn                 down a page                           Dialogs                                                   │
-│ ctrl-Home            to the top                            ctrl-q     quit                                           │
-│ ctrl-End             to the bottom                         F1         show / hide the help                           │
-│ Home                 start of the line                     ←          left                                           │
-│ End                  end of the line                       →          right                                          │
-│ Enter                new line                              Home       start of the line                              │
-│ Tab                  indent                                End        end of the line                                │
-│ ctrl-←               previous word                         Esc        cancel / close                                 │
-│ ctrl-→               next word                             Enter      submit                                         │
-│ shift-←              select left                           Tab        next field                                     │
-│ shift-→              select right                          shift-Tab  previous field                                 │
-│ shift-↑              select up                             Space      next choice                                    │
-│ shift-↓              select down                           Backspace  delete the character before                    │
-│ ctrl-shift-←         select the previous word              Del        delete the character after                     │
-│ ctrl-shift-→         select the next word                                                                            │
-│ shift-Home           select to the start of the line       Command palette                                           │
-│ shift-End            select to the end of the line         ctrl-q     quit                                           │
-│ ctrl-a               select all                            F1         show / hide the help                           │
-│ Backspace            delete the character before           ctrl-p     command palette                                │
-│ Del                  delete the character after            ↑ ctrl-k   up                                             │
-│ ctrl-w               delete the word before                ↓ ctrl-j   down                                           │
-│ alt-d                delete the word after                 ←          left                                           │
-│ ctrl-k               delete to the end of the line         →          right                                          │
-│ ctrl-z               undo                                  PgUp       up a page                                      │
-│ ctrl-y ctrl-shift-z  redo                                  PgDn       down a page                                    │
-│ ctrl-x               cut                                   Home       start of the line                              │
-│ ctrl-v               paste                                 End        end of the line                                │
-│                                                            Esc        cancel / close                                 │
-│ Editor · Running                                           Enter      submit                                         │
-│ F5 alt-r ctrl-Enter  run the statement                     Tab        next field                                     │
-│ F8                   run everything                        Backspace  delete the character before                    │
-│ ctrl-e               run the selection                     Del        delete the character after                     │
-│ ctrl-c               cancel the query (copy when none r…                                                             │
+│ ↑                    up                                    G            to the bottom                                │
+│ ↓                    down                                                                                            │
+│ ←                    left                                  Sessions                                                  │
+│ →                    right                                 ctrl-1–9     switch to session N                          │
+│ PgUp                 up a page                             ctrl-PgDn    next session                                 │
+│ PgDn                 down a page                           ctrl-PgUp    previous session                             │
+│ ctrl-Home            to the top                            ctrl-w       close this session                           │
+│ ctrl-End             to the bottom                         shift-Enter in the tree opens another session on a        │
+│ Home                 start of the line                     connection                                                │
+│ End                  end of the line                                                                                 │
+│ Enter                new line                              Dialogs                                                   │
+│ Tab                  indent                                ctrl-q       quit                                         │
+│ ctrl-←               previous word                         F1           show / hide the help                         │
+│ ctrl-→               next word                             ←            left                                         │
+│ shift-←              select left                           →            right                                        │
+│ shift-→              select right                          Home         start of the line                            │
+│ shift-↑              select up                             End          end of the line                              │
+│ shift-↓              select down                           Esc          cancel / close                               │
+│ ctrl-shift-←         select the previous word              Enter        submit                                       │
+│ ctrl-shift-→         select the next word                  Tab          next field                                   │
+│ shift-Home           select to the start of the line       shift-Tab    previous field                               │
+│ shift-End            select to the end of the line         Space        next choice                                  │
+│ ctrl-a               select all                            Backspace    delete the character before                  │
+│ Backspace            delete the character before           Del          delete the character after                   │
+│ Del                  delete the character after                                                                      │
+│ ctrl-w               delete the word before                Command palette                                           │
+│ alt-d                delete the word after                 ctrl-q       quit                                         │
+│ ctrl-k               delete to the end of the line         F1           show / hide the help                         │
+│ ctrl-z               undo                                  ctrl-p       command palette                              │
+│ ctrl-y ctrl-shift-z  redo                                  ↑ ctrl-k     up                                           │
+│ ctrl-x               cut                                   ↓ ctrl-j     down                                         │
+│ ctrl-v               paste                                 ←            left                                         │
+│                                                            →            right                                        │
+│ Editor · Running                                           PgUp         up a page                                    │
+│ F5 alt-r ctrl-Enter  run the statement                     PgDn         down a page                                  │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Enter inspect value                   │
-│ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                     │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 40–74 of 91 ─┘
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ────────────────────────────────────────── 46–80 of 100 ─┘

@@ -4,7 +4,10 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::DatabaseType;
+use crate::{
+    DatabaseType, schema,
+    schema::{Catalog, Column, DbObject, Index},
+};
 
 /// When to use TLS. Same names and meaning as libpq's `sslmode`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -86,11 +89,56 @@ pub trait Database: Send + Sync {
         None
     }
 
-    /// The tables and views this connection can see, sorted, for the
-    /// tree. Each backend keeps its list somewhere else, so each backend
-    /// runs its own query (and Oracle, with no `information_schema`, its
-    /// own catalog views).
-    async fn tables(&self) -> Result<Vec<String>>;
+    /// Runs a query with these values bound to its placeholders (`$1`,
+    /// `?`, `?1` or `:1`, as the backend writes them). The catalog queries
+    /// of [`schema`] go through here, so no name is ever
+    /// written into SQL text. A backend that cannot bind refuses.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let _ = (sql, params);
+        bail!("this database cannot run a query with bound parameters")
+    }
+
+    /// The catalogs (schemas, databases, owners), the connection's own
+    /// first.
+    async fn catalogs(&self) -> Result<Vec<Catalog>> {
+        schema::load_catalogs(self).await
+    }
+
+    /// The tables and views of `catalog`, by name.
+    async fn objects(&self, catalog: &str) -> Result<Vec<DbObject>> {
+        schema::load_objects(self, catalog).await
+    }
+
+    /// The columns of `catalog.object`, in table order.
+    async fn columns(&self, catalog: &str, object: &str) -> Result<Vec<Column>> {
+        schema::load_columns(self, catalog, object).await
+    }
+
+    /// The indexes of `catalog.object`.
+    async fn indexes(&self, catalog: &str, object: &str) -> Result<Vec<Index>> {
+        schema::load_indexes(self, catalog, object).await
+    }
+
+    /// The names of the tables and views in the connection's own catalog: a
+    /// thin wrapper over [`objects`](Self::objects). Each backend overrides
+    /// it with one query of its own (Oracle, with no `information_schema`,
+    /// its catalog views).
+    async fn tables(&self) -> Result<Vec<String>> {
+        let catalogs = self.catalogs().await?;
+        let Some(own) = catalogs
+            .iter()
+            .find(|c| c.is_default)
+            .or_else(|| catalogs.first())
+        else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .objects(&own.name)
+            .await?
+            .into_iter()
+            .map(|o| o.name)
+            .collect())
+    }
 }
 
 /// The first column of each row, NULLs left out: what a backend's

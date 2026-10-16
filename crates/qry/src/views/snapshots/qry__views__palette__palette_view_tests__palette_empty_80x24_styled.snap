@@ -4,9 +4,9 @@ expression: "styled(&h.render_buffer(80, 24))"
 ---
  qry  1 scratch                                    sqlite · :memory:   COMMAND  
  SCHEMA                       │ QUERY  ln 1, col 1                              
- ▸ ◌ scratch                  │  1 │                                            
+▌▸ ⠋ sq  scratch              │  1 │                                            
     ┌──────────────────────────────────────────────────────────────────────┐    
-    │ ›                                                            57 / 57 │    
+    │ ›                                                            62 / 62 │    
     │ Quit                            app                           ctrl-q │    
     │ Suspend to the shell            app                           ctrl-z │    
     │ Redraw the screen               view                                 │    
@@ -16,7 +16,7 @@ expression: "styled(&h.render_buffer(80, 24))"
     │ Go to the results               view                                 │    
     │ New connection                  connection                    ctrl-n │    
     │ Edit connection                 connection                         e │    
-    │ Delete connection               connection                       Del │    
+    │ Delete connection               connection                         D │    
     │ Import connections              connection                    ctrl-o │    
     │ Export connections              connection                    ctrl-s │    
     │ Next session                    session                    ctrl-PgDn │    
@@ -37,7 +37,7 @@ expression: "styled(&h.render_buffer(80, 24))"
 30,1 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 31,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
 0,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD | DIM
-12,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+16,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 4,3 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
 76,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
@@ -130,7 +130,7 @@ expression: "styled(&h.render_buffer(80, 24))"
 5,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 38,14 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
 60,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-71,14 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+73,14 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 74,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 75,14 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
 76,14 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

@@ -109,7 +109,7 @@ async fn a_closed_session_reports_its_worker_stopped() {
 
     executor.execute(Effect::CloseSession(id));
     assert!(!executor.sessions.contains(id));
-    executor.execute(Effect::Db(id, DbCommand::ListTables));
+    executor.execute(Effect::Db(id, DbCommand::Query("SELECT 1".into())));
     assert_eq!(
         events.try_recv().unwrap(),
         UiEvent::Db(id, DbAnswer::WorkerStopped)

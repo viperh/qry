@@ -4,10 +4,12 @@
 //! Everything here is total: any text, however broken, lexes and splits
 //! without panicking, and the token spans tile the input exactly.
 
+mod ident;
 mod keywords;
 mod lex;
 mod split;
 
+pub use ident::{qualified_name, quote_ident};
 pub use lex::{Token, TokenKind, lex};
 pub use split::{Statement, is_ddl, split, statement_at};
 

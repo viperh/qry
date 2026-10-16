@@ -25,4 +25,4 @@ expression: "h.render(80, 24)"
                               │                                                 
                               │                                                 
  connecting to scratch… · sqlite · :memory:                                     
- Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands    ? help
+ Enter open  Space expand  n new conn  Tab next pane  : commands         ? help

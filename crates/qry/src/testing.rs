@@ -24,7 +24,7 @@ use std::{
 };
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-pub use qry_core::testing::{Reply, grid, result};
+pub use qry_core::testing::{FakeSchema, Reply, grid, result};
 use qry_core::{QueryResult, testing::FakeDatabase};
 use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 
@@ -115,7 +115,8 @@ impl AppHarness {
         }
     }
 
-    /// Answers `Connect`, `OpenSession`, `Query` and `ListTables` from `db`,
+    /// Answers `Connect`, `OpenSession`, `Query` and `LoadSchema` from `db`
+    /// (schema loads from its [`FakeSchema`]),
     /// on the virtual clock: a [`Reply::Delay`] arrives once [`advance`]
     /// passes it, and a [`Reply::Hang`] never does. The requests are still
     /// recorded as effects. Without a database they are only recorded.
@@ -296,7 +297,7 @@ impl AppHarness {
     }
 
     /// Returns and clears the effects recorded so far. A waiting dialog's
-    /// spinner timers and the toasts' lifetimes are delivered on the
+    /// spinner timers, the tree's and the toasts' lifetimes are delivered on the
     /// virtual clock but not recorded.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
@@ -333,6 +334,21 @@ impl AppHarness {
                     }
                     Effect::Db(id, DbCommand::QueryAll(sql)) => self.answer_query(*id, sql, 0),
                     Effect::CancelQuery(id) => self.cancel_query(*id),
+                    Effect::Db(id, DbCommand::LoadSchema { path, generation }) => {
+                        let answer = self.database.as_ref().map(|db| {
+                            let (outcome, delay) = db.schema_answer(path);
+                            (db::schema_answer(path.clone(), *generation, outcome), delay)
+                        });
+                        match answer {
+                            // The worker stays busy for good, as the real
+                            // one would.
+                            Some((_, u64::MAX)) => {
+                                self.worker_free_at.insert(*id, u64::MAX);
+                            }
+                            Some((answer, delay)) => self.schedule(*id, delay, vec![answer]),
+                            None => {}
+                        }
+                    }
                     Effect::ScheduleTimer { timer, after } => {
                         let after = u64::try_from(after.as_millis()).unwrap_or(u64::MAX);
                         self.pending.push(Pending {
@@ -342,15 +358,8 @@ impl AppHarness {
                         // A spinner's frames and a toast's lifetime are
                         // pacing, not something a test asks for: delivered,
                         // but not recorded.
-                        if matches!(timer, Timer::Spinner(_) | Timer::Toast(_)) {
+                        if matches!(timer, Timer::Spinner(_) | Timer::Toast(_) | Timer::Tree(_)) {
                             continue;
-                        }
-                    }
-                    Effect::Db(id, DbCommand::ListTables) => {
-                        let answer = (self.database.as_ref())
-                            .map(|db| db::tables_answer(Ok::<_, String>(db.table_names())));
-                        if let Some(answer) = answer {
-                            self.schedule(*id, 0, answer);
                         }
                     }
                     // A closed session's worker is dropped with whatever it

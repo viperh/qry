@@ -6,7 +6,10 @@
 use std::{sync::Arc, time::Instant};
 
 use crossterm::event::{KeyEvent, MouseEvent};
-use qry_core::QueryResult;
+use qry_core::{
+    QueryResult,
+    schema::{Children, SchemaPath},
+};
 
 use super::state::SessionId;
 use crate::{
@@ -56,6 +59,9 @@ pub enum Timer {
     /// The visible toast's lifetime ran out, numbered as `Toasts` counts
     /// its timers.
     Toast(u64),
+    /// The next frame of the tree's spinner, numbered as
+    /// `TreeState::spinner_timer` counts them.
+    Tree(u64),
 }
 
 /// The outcome of an effect that reads or writes a file.
@@ -110,9 +116,13 @@ pub enum DbAnswer {
     /// why it could not.
     Exported(String),
     ExportFailed(String),
-    /// The tables of whatever is connected, for the tree.
-    TablesLoaded(Vec<String>),
-    TablesFailed(String),
+    /// The answer to a `LoadSchema`: what the node holds, or why it could
+    /// not be read.
+    Schema {
+        path: SchemaPath,
+        generation: u64,
+        outcome: Result<Children, String>,
+    },
     /// Something to tell the user, as a toast and in the history.
     Notice(Notice),
     /// The worker has gone, so nothing sent to it will be answered.
@@ -145,8 +155,26 @@ impl std::fmt::Debug for DbAnswer {
                 .finish(),
             Self::Exported(path) => f.debug_tuple("Exported").field(path).finish(),
             Self::ExportFailed(message) => f.debug_tuple("ExportFailed").field(message).finish(),
-            Self::TablesLoaded(tables) => f.debug_tuple("TablesLoaded").field(tables).finish(),
-            Self::TablesFailed(message) => f.debug_tuple("TablesFailed").field(message).finish(),
+            // A catalog can hold thousands of tables: only the count.
+            Self::Schema {
+                path,
+                generation,
+                outcome,
+            } => {
+                let outcome = match outcome {
+                    Ok(Children::Catalogs(c)) => format!("{} catalogs", c.len()),
+                    Ok(Children::Objects(o)) => format!("{} objects", o.len()),
+                    Ok(Children::Details(d)) => {
+                        format!("{} columns, {} indexes", d.columns.len(), d.indexes.len())
+                    }
+                    Err(e) => format!("failed: {e}"),
+                };
+                f.debug_struct("Schema")
+                    .field("path", path)
+                    .field("generation", generation)
+                    .field("outcome", &outcome)
+                    .finish()
+            }
             Self::Notice(notice) => f.debug_tuple("Notice").field(notice).finish(),
             Self::WorkerStopped => f.write_str("WorkerStopped"),
         }

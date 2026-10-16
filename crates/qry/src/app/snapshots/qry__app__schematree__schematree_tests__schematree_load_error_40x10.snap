@@ -1,0 +1,8 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+       ! permission denied

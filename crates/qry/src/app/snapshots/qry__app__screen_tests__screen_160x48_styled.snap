@@ -4,7 +4,7 @@ expression: "styled(&app.render_buffer(w, h))"
 ---
  qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
  SCHEMA                                 │ QUERY  ln 1, col 27                                                                                                   
- ▸ ● scratch                            │▌ 1 │ select id, name from users                                                                                       
+▌▸ ● sq  scratch                        │▌ 1 │ select id, name from users                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
@@ -49,7 +49,7 @@ expression: "styled(&app.render_buffer(w, h))"
                                         │                                                                                                                       
                                         │                                                                                                                       
  scratch · sqlite · :memory: · auto                                                                                                              R 1 / 2  C 1/2 
- Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help 
+ Enter open  Space expand  n new conn  Tab next pane  : commands  ctrl-q quit                                                                            ? help 
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
 5,0 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED
@@ -62,9 +62,11 @@ expression: "styled(&app.render_buffer(w, h))"
 40,1 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
 41,1 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
 0,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
-3,2 Rgb(79, 193, 201) Rgb(27, 37, 51) BOLD
-5,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
-12,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+1,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD
+3,2 Rgb(159, 211, 138) Rgb(27, 37, 51) BOLD
+5,2 Rgb(79, 193, 201) Rgb(27, 37, 51) BOLD
+9,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
+16,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 40,2 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
 41,2 Rgb(242, 176, 74) Rgb(14, 17, 22) NONE
 45,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
@@ -230,17 +232,17 @@ expression: "styled(&app.render_buffer(w, h))"
 18,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
 25,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 27,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
-33,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-42,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-44,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
-47,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-57,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-59,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
-60,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-69,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
-71,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
-77,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
-82,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+28,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+37,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+39,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+42,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+52,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+54,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+55,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+64,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+66,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+72,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+77,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 153,47 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
 154,47 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
 159,47 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE

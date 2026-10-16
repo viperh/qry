@@ -19,10 +19,14 @@ use crossterm::event::KeyEvent;
 use qry_core::{
     QueryResult,
     jobs::{JobId, Jobs},
+    schema::SchemaCache,
 };
 use ratatui_textarea::TextArea;
 
-use super::dialogs::DialogState;
+use super::{
+    dialogs::DialogState,
+    schematree::{CatalogView, RowKey, VisibleRow},
+};
 pub use crate::theme::SessionStatus;
 use crate::{
     config::Config,
@@ -93,6 +97,8 @@ pub(crate) struct SessionState {
     pub(crate) in_transaction: bool,
     /// Expand its connection in the tree once it is open.
     pub(crate) expand_when_connected: bool,
+    /// What the schema browser has loaded through this session.
+    pub(crate) schema: SchemaCache,
 }
 
 impl SessionState {
@@ -120,6 +126,7 @@ impl SessionState {
             tx_changes: VecDeque::new(),
             in_transaction: false,
             expand_when_connected: false,
+            schema: SchemaCache::default(),
         }
     }
 
@@ -719,15 +726,19 @@ impl State {
     }
 }
 
-/// A connection the tree knows about, and what it has learned of it.
+/// A connection the tree knows about, and what of it is open.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Node {
     pub(crate) record: StoredConnection,
     /// What the database called itself; `None` until it has connected once.
     pub(crate) label: Option<String>,
     pub(crate) expanded: bool,
-    pub(crate) tables: Option<Vec<String>>,
-    pub(crate) loading: bool,
+    /// Which catalogs, folders and objects under it are open, by name, so
+    /// they stay open across reloads.
+    pub(crate) catalogs: BTreeMap<String, CatalogView>,
+    /// Its catalogs were loaded once and the connection's own was opened;
+    /// later loads leave what is open alone.
+    pub(crate) opened: bool,
     /// Added this session and not written to the file yet.
     pub(crate) unsaved: bool,
 }
@@ -738,8 +749,8 @@ impl Node {
             record,
             label: None,
             expanded: false,
-            tables: None,
-            loading: false,
+            catalogs: BTreeMap::new(),
+            opened: false,
             unsaved,
         }
     }
@@ -749,23 +760,42 @@ impl Node {
     }
 }
 
-/// One drawn line of the tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Row {
-    Connection(usize),
-    Table(usize, usize),
-    /// A word under a connection, such as while its tables load.
-    Note(&'static str),
+/// The tree's `/` filter.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct TreeFilter {
+    pub(crate) text: String,
+    /// The prompt is taking keys; Enter keeps the filter and stops.
+    pub(crate) editing: bool,
+    /// What was selected before it opened, for Esc to go back to.
+    pub(crate) before: Option<RowKey>,
+    /// The text changed: the selection moves to the first match.
+    pub(crate) jump: bool,
 }
 
-/// The connection tree: the stored records and what is expanded. Which of
-/// them are open is the sessions' business.
+/// The schema browser: the stored connections, what is open under them,
+/// and the rows that follow. Which connections are open is the sessions'
+/// business, and what they hold is each session's `schema` cache.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct TreeState {
     pub(crate) connections: Vec<Node>,
+    /// The rows, worked out after each event that can change them.
+    pub(crate) rows: Vec<VisibleRow>,
     pub(crate) selected: usize,
-    /// First row in view; kept by the view.
+    /// The selected row by name, so it follows its node when rows move.
+    pub(crate) selected_key: Option<RowKey>,
+    /// First row in view, and rows that fit; kept by the view.
     pub(crate) offset: Cell<usize>,
+    pub(crate) page: Cell<usize>,
+    /// System catalogs (`pg_catalog`, `mysql`, `SYS`) are shown.
+    pub(crate) show_system: bool,
+    pub(crate) filter: Option<TreeFilter>,
+    /// The filter is on and some of what it could match is not loaded.
+    pub(crate) filter_partial: bool,
+    /// The spinner's frame, which `Timer::Tree` is the live one, and
+    /// whether one is scheduled.
+    pub(crate) spinner: usize,
+    pub(crate) spinner_timer: u64,
+    pub(crate) spinning: bool,
 }
 
 impl TreeState {
@@ -776,21 +806,11 @@ impl TreeState {
             .position(|n| n.record.id == connection)
     }
 
-    pub(crate) fn rows(&self) -> Vec<Row> {
-        let mut rows = Vec::new();
-        for (i, connection) in self.connections.iter().enumerate() {
-            rows.push(Row::Connection(i));
-            if !connection.expanded {
-                continue;
-            }
-            match (&connection.tables, connection.loading) {
-                (_, true) => rows.push(Row::Note("loading…")),
-                (Some(tables), _) if tables.is_empty() => rows.push(Row::Note("(no tables)")),
-                (Some(tables), _) => rows.extend((0..tables.len()).map(|t| Row::Table(i, t))),
-                (None, _) => rows.push(Row::Note("(not connected)")),
-            }
-        }
-        rows
+    /// The selected row, if there are any.
+    pub(crate) fn selected_row(&self) -> Option<VisibleRow> {
+        self.rows
+            .get(self.selected.min(self.rows.len().saturating_sub(1)))
+            .copied()
     }
 }
 

@@ -4,7 +4,7 @@ expression: "crate::testing::buffer_lines(&buffer).join(\"\\n\")"
 ---
  qry  1 scratch ◐                                                                           sqlite · :memory:   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 44 · 2 statements                                                      
- ▸ ● scratch                  │▌ 1 │ select * from events where a > 1; select 2;                                        
+▌▸ ● sq  scratch              │▌ 1 │ select * from events where a > 1; select 2;                                        
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

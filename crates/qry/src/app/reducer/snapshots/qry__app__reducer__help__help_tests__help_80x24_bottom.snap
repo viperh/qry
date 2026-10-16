@@ -24,5 +24,5 @@ expression: "h.render(80, 24)"
 │                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
-│ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 161–178 of 178 ─┘
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter               │
+└───────────────────────────────────────────────────────────── 170–187 of 187 ─┘

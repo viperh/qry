@@ -7,8 +7,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 /// them around as messages. The help lists them in declaration order.
 ///
 /// Some have no effect yet and are bound already so the defaults do not
-/// change under users later: the palette (T206), filtering
-/// the tree (T301), the results' copy, search and inspector (T303, T304) and
+/// change under users later: the results' copy, search and inspector (T303, T304) and
 /// the jobs drawer (T305).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, Serialize, Deserialize, EnumIter)]
 pub enum Action {
@@ -62,7 +61,18 @@ pub enum Action {
     /// open already.
     OpenNewSession,
     Refresh,
+    /// Reads everything of the selected connection again.
+    RefreshAll,
     Filter,
+    /// Shows or hides the system catalogs in the tree.
+    ToggleSystemObjects,
+    /// Puts `SELECT * FROM` the selected table in the editor, without
+    /// running it.
+    InsertSelect,
+    /// Copies the selected table's qualified name.
+    CopyName,
+    /// Closes the selected connection's session.
+    Disconnect,
     Search,
     CopyCell,
     CopyRow,
@@ -179,7 +189,12 @@ impl Action {
             Self::Open => "Open",
             Self::OpenNewSession => "Open another session on it",
             Self::Refresh => "Refresh",
+            Self::RefreshAll => "Refresh the whole connection",
             Self::Filter => "Filter",
+            Self::ToggleSystemObjects => "Show / hide system objects",
+            Self::InsertSelect => "Insert SELECT * FROM the table",
+            Self::CopyName => "Copy the qualified name",
+            Self::Disconnect => "Disconnect its session",
             Self::Search => "Search",
             Self::CopyCell => "Copy the cell",
             Self::PrevResult => "Previous result",
@@ -265,8 +280,13 @@ impl Action {
             Self::Commit => "Commit",
             Self::Rollback => "Rollback",
             Self::ExportResults => "Export results",
-            Self::Refresh => "Refresh tables",
+            Self::Refresh => "Refresh node",
+            Self::RefreshAll => "Refresh connection",
             Self::Filter => "Filter the tree",
+            Self::ToggleSystemObjects => "Toggle system objects",
+            Self::InsertSelect => "Insert SELECT for table",
+            Self::CopyName => "Copy qualified name",
+            Self::Disconnect => "Disconnect",
             Self::Search => "Search the results",
             Self::CopyCell => "Copy cell",
             Self::PrevResult => "Previous result",
@@ -304,7 +324,12 @@ impl Action {
             | Self::ImportConnections
             | Self::ExportConnections
             | Self::Refresh
-            | Self::Filter => "connection",
+            | Self::RefreshAll
+            | Self::Filter
+            | Self::ToggleSystemObjects
+            | Self::InsertSelect
+            | Self::CopyName
+            | Self::Disconnect => "connection",
             Self::OpenNewSession | Self::NextSession | Self::PrevSession | Self::CloseSession => {
                 "session"
             }
@@ -357,7 +382,12 @@ impl Action {
             | Self::DeleteConnection
             | Self::OpenNewSession
             | Self::Refresh
-            | Self::Filter => KeyContext::Tree,
+            | Self::RefreshAll
+            | Self::Filter
+            | Self::ToggleSystemObjects
+            | Self::InsertSelect
+            | Self::CopyName
+            | Self::Disconnect => KeyContext::Tree,
             Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => {
                 KeyContext::Editor
             }

@@ -74,21 +74,10 @@ impl Sqlite {
     }
 }
 
-#[async_trait]
-impl Database for Sqlite {
-    fn kind(&self) -> DatabaseType {
-        DatabaseType::Sqlite
-    }
-
-    fn label(&self) -> String {
-        self.config.path.display().to_string()
-    }
-
-    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
-        Some(Arc::new(Interrupt(self.interrupt.clone())))
-    }
-
-    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+impl Sqlite {
+    /// Runs `sql` with `params` bound to its placeholders, in order,
+    /// keeping at most `max_rows` rows (0 keeps all).
+    async fn run(&self, sql: &str, params: Vec<String>, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
 
         let result = self
@@ -103,7 +92,7 @@ impl Database for Sqlite {
 
                 let mut rows = Vec::new();
                 let mut truncated = false;
-                let mut cursor = stmt.query([])?;
+                let mut cursor = stmt.query(rusqlite::params_from_iter(params.iter()))?;
 
                 while let Some(row) = cursor.next()? {
                     // Stepping stops here; the rest is never read.
@@ -152,6 +141,29 @@ impl Database for Sqlite {
             .await
             .map_err(positioned)?;
         Ok(result)
+    }
+}
+
+#[async_trait]
+impl Database for Sqlite {
+    fn kind(&self) -> DatabaseType {
+        DatabaseType::Sqlite
+    }
+
+    fn label(&self) -> String {
+        self.config.path.display().to_string()
+    }
+
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(Interrupt(self.interrupt.clone())))
+    }
+
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+        self.run(sql, Vec::new(), max_rows).await
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        self.run(sql, params.to_vec(), 0).await
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {

@@ -55,18 +55,12 @@ async fn two_sqlite_sessions_are_independent() {
         next(&mut answers, a).await,
         DbAnswer::QueryDone(_)
     ));
-    sessions.send(a, DbCommand::ListTables).unwrap();
-    assert_eq!(
-        next(&mut answers, a).await,
-        DbAnswer::TablesLoaded(vec!["only_in_a".into()])
-    );
+    sessions.send(a, list_main()).unwrap();
+    assert_eq!(table_names(next(&mut answers, a).await), ["only_in_a"]);
 
     // The other :memory: database is another database.
-    sessions.send(b, DbCommand::ListTables).unwrap();
-    assert_eq!(
-        next(&mut answers, b).await,
-        DbAnswer::TablesLoaded(Vec::new())
-    );
+    sessions.send(b, list_main()).unwrap();
+    assert!(table_names(next(&mut answers, b).await).is_empty());
     sessions
         .send(b, DbCommand::Query("SELECT * FROM only_in_a".into()))
         .unwrap();
@@ -90,14 +84,14 @@ async fn close_drops_worker() {
 
     sessions.close(id);
     assert!(!sessions.contains(id));
-    assert_eq!(sessions.send(id, DbCommand::ListTables), Err(WorkerGone));
+    assert_eq!(sessions.send(id, list_main()), Err(WorkerGone));
     // The worker ends once its sender is gone, and with it the last sender
     // of the answers.
     while let Some((from, answer)) = answers.recv().await {
         assert_eq!(from, id, "{answer:?}");
     }
     assert_eq!(
-        SessionManager::default().send(SessionId(9), DbCommand::ListTables),
+        SessionManager::default().send(SessionId(9), list_main()),
         Err(WorkerGone),
         "never opened"
     );
@@ -133,4 +127,23 @@ async fn answers_are_tagged_with_session_id() {
     }
     seen.sort();
     assert_eq!(seen, [SessionId(1), SessionId(2), SessionId(3)]);
+}
+
+/// Loads the objects of `main`.
+fn list_main() -> DbCommand {
+    DbCommand::LoadSchema {
+        path: qry_core::schema::SchemaPath::objects("main"),
+        generation: 1,
+    }
+}
+
+/// The names in a schema answer of objects.
+fn table_names(answer: DbAnswer) -> Vec<String> {
+    match answer {
+        DbAnswer::Schema {
+            outcome: Ok(qry_core::schema::Children::Objects(objects)),
+            ..
+        } => objects.into_iter().map(|o| o.name).collect(),
+        other => panic!("not a list of objects: {other:?}"),
+    }
 }

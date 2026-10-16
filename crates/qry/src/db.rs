@@ -8,7 +8,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use qry_core::{Driver, ExportConfig, Exporter, QueryResult, shared::CancelHandle};
+use qry_core::{
+    Driver, ExportConfig, Exporter, QueryResult,
+    schema::{Children, SchemaPath},
+    shared::CancelHandle,
+};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::{
@@ -32,8 +36,10 @@ pub enum DbCommand {
     QueryAll(String),
     /// Writes the last result to a file; no second trip to the database.
     Export(ExportConfig),
-    /// The tables of the open connection, for the tree.
-    ListTables,
+    /// One node of the schema browser: the catalogs, a catalog's objects, or
+    /// an object's columns and indexes. The answer carries `generation`
+    /// back, so the tree can tell it from a later load of the same node.
+    LoadSchema { path: SchemaPath, generation: u64 },
 }
 
 /// The connection and the last result it produced.
@@ -110,7 +116,10 @@ impl Worker {
             DbCommand::Query(sql) => self.query(&sql, self.max_rows).await,
             DbCommand::QueryAll(sql) => self.query(&sql, 0).await,
             DbCommand::Export(config) => self.export(config).await,
-            DbCommand::ListTables => tables_answer(self.driver.tables().await),
+            DbCommand::LoadSchema { path, generation } => {
+                let outcome = self.driver.load_schema(&path).await;
+                vec![schema_answer(path, generation, outcome)]
+            }
         }
     }
 
@@ -270,16 +279,20 @@ pub(crate) fn query_answer<E: std::fmt::Display>(
     }
 }
 
-/// What the worker reports for a table listing, for the tree.
-pub(crate) fn tables_answer<E: std::fmt::Display>(
-    outcome: Result<Vec<String>, E>,
-) -> Vec<DbAnswer> {
-    match outcome {
-        Ok(tables) => vec![DbAnswer::TablesLoaded(tables)],
-        Err(e) => vec![
-            DbAnswer::TablesFailed(e.to_string()),
-            error(format!("{e:#}")),
-        ],
+/// What the worker reports for a schema load, for the tree. A failure is
+/// not a toast: the tree shows it on the node that failed.
+pub(crate) fn schema_answer<E: std::fmt::Display>(
+    path: SchemaPath,
+    generation: u64,
+    outcome: Result<Children, E>,
+) -> DbAnswer {
+    DbAnswer::Schema {
+        path,
+        generation,
+        outcome: outcome.map_err(|e| {
+            let message = secrets::redact(&format!("{e:#}"));
+            message.lines().next().unwrap_or_default().to_string()
+        }),
     }
 }
 

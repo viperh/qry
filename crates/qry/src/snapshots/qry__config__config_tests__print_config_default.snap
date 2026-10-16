@@ -38,7 +38,9 @@ expression: "Config::embedded().effective_json()"
     "Tree": {
       "?": "Help",
       ":": "Palette",
+      "n": "NewConnection",
       "e": "EditConnection",
+      "D": "DeleteConnection",
       "Del": "DeleteConnection",
       "ctrl-s": "ExportConnections",
       "k": "Up",
@@ -49,6 +51,8 @@ expression: "Config::embedded().effective_json()"
       "←": "Left",
       "l": "Right",
       "→": "Right",
+      "PgUp": "PageUp",
+      "PgDn": "PageDown",
       "g g": "Top",
       "Home": "Top",
       "G": "Bottom",
@@ -57,8 +61,14 @@ expression: "Config::embedded().effective_json()"
       "Enter": "Open",
       "shift-Enter": "OpenNewSession",
       "r": "Refresh",
+      "R": "RefreshAll",
       "/": "Filter",
-      "J": "ToggleJobs"
+      ".": "ToggleSystemObjects",
+      "s": "InsertSelect",
+      "y": "CopyName",
+      "x": "Disconnect",
+      "J": "ToggleJobs",
+      "Esc": "Cancel"
     },
     "Editor": {
       "F6": "FocusNext",

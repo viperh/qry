@@ -4,8 +4,8 @@ expression: "h.render(120, 40)"
 ---
  qry  1 scratch  2 prod                                                               postgres · app@db.local   NORMAL  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ● scratch                  │  1 │                                                                                    
- ▸ ◌ prod                     │                                                                                         
+ ▸ ● sq  scratch              │  1 │                                                                                    
+▌▸ ⠹ pg  prod                 │                                                                                         
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

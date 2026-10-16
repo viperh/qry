@@ -55,6 +55,13 @@ pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
         super::results::search_key(state, key);
         return;
     }
+    // So does the tree's filter prompt, with its Enter, Esc and Backspace.
+    if state.overlays.is_empty()
+        && state.focus == crate::app::state::Focus::Tree
+        && super::tree::filter_key(state, key)
+    {
+        return;
+    }
     // The palette's query takes plain characters the same way.
     if matches!(state.overlays.last(), Some(Overlay::Palette(_)))
         && let Some(c) = typed_char(key)

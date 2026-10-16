@@ -80,7 +80,15 @@ pub(super) fn reconnect(
 
 /// Closes the active session, asking first if a query is running there.
 fn close_active(state: &mut State, fx: &mut Vec<Effect>) {
-    let session = state.sessions.active();
+    let id = state.sessions.active;
+    close_or_confirm(state, id, fx);
+}
+
+/// Closes session `id`, asking first if a query is running there.
+pub(super) fn close_or_confirm(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
+    let Some(session) = state.sessions.get(id) else {
+        return;
+    };
     if session.busy() || session.in_transaction {
         let form = if session.busy() {
             Confirm::close_session(session.id, &session.title)
@@ -91,7 +99,6 @@ fn close_active(state: &mut State, fx: &mut Vec<Effect>) {
         state.awaiting = None;
         return;
     }
-    let id = session.id;
     close(state, id, fx);
 }
 

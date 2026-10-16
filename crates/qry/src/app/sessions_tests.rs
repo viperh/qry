@@ -65,6 +65,7 @@ impl FakeSessions {
     fn select(&mut self, row: usize) -> &mut Self {
         self.h.state_mut().focus = Focus::Tree;
         self.h.state_mut().tree.selected = row;
+        self.h.state_mut().tree.selected_key = None;
         self
     }
 
@@ -211,7 +212,14 @@ fn answer_for_closed_session_is_dropped() {
 
     let before = s.snapshot();
     s.answer(prod.0, DbAnswer::QueryDone(Arc::new(grid(1, 1))));
-    s.answer(prod.0, DbAnswer::TablesLoaded(vec!["t".into()]));
+    s.answer(
+        prod.0,
+        DbAnswer::Schema {
+            path: qry_core::schema::SchemaPath::Catalogs,
+            generation: 1,
+            outcome: Err("gone".into()),
+        },
+    );
     s.answer(prod.0, DbAnswer::WorkerStopped);
     assert_eq!(s.snapshot(), before);
     assert!(s.effects().is_empty());
@@ -286,7 +294,7 @@ fn worker_stopped_marks_session_failed() {
         text.contains("scratch: database worker has stopped"),
         "{text}"
     );
-    assert!(text.contains("✗ scratch"), "the tree marks it: {text}");
+    assert!(text.contains("✗ sq  scratch"), "the tree marks it: {text}");
 }
 
 #[test]
@@ -415,7 +423,7 @@ fn a_failed_saved_connection_reconnects_on_enter() {
     s.select(1).keys("enter");
     s.answer(2, DbAnswer::ConnectFailed("refused".into()));
     s.effects();
-    assert!(s.h.render(80, 24).contains("✗ prod"));
+    assert!(s.h.render(80, 24).contains("✗ sq  prod"));
     s.keys("ctrl-1").select(1).keys("enter");
     assert_eq!(
         s.effects(),
@@ -425,7 +433,12 @@ fn a_failed_saved_connection_reconnects_on_enter() {
         )]
     );
     assert_eq!(s.active(), SessionId(2));
-    assert!(s.h.render(80, 24).contains("◌ prod"));
+    // Connecting again: the spinner instead of the failure mark.
+    let text = s.h.render(80, 24);
+    assert!(
+        text.contains("sq  prod") && !text.contains("✗ sq  prod"),
+        "{text}"
+    );
 }
 
 #[test]
