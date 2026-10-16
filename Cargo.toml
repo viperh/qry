@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# cargo-fuzz targets: a workspace of their own, built only with nightly.
+exclude = ["fuzz"]
 
 # Values shared by every crate in the workspace. Each crate opts in with
 # `version.workspace = true` etc. in its own Cargo.toml.

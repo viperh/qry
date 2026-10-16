@@ -289,7 +289,7 @@ struct ConnectionFile {
 /// Reads the connections in `dir` (the data directory, in the app). A
 /// missing file is not an error: it means a first run. A malformed one is,
 /// and the bad file is left untouched.
-pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let file = dir.join(FILE);
     let text = match fs::read_to_string(&file) {
         Ok(text) => text,
@@ -301,7 +301,7 @@ pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>>
 
 /// The connections in the text of a connection file, which `file` names in
 /// errors. Also how a copy of the file is imported as a backup.
-pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let parsed: ConnectionFile = serde_json::from_str(text).wrap_err_with(|| {
         format!(
             "{} is not a connection file qry understands",
@@ -320,7 +320,7 @@ pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredCon
 
 /// Writes the connections whole into `dir`, and atomically: a crash
 /// mid-save leaves the previous file intact.
-pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
+pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
     fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     restrict(dir, 0o700)?;
 
@@ -337,7 +337,7 @@ pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyr
 /// path that has no extension. An existing file is replaced only if it is
 /// already a connection file, so a mistyped path cannot clobber anything
 /// else. Holds no password, since a record has nowhere to keep one.
-pub(crate) fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
+pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
     let path = match path.extension() {
         Some(_) => path.to_path_buf(),
         None => path.with_extension("json"),

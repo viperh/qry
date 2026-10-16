@@ -222,17 +222,17 @@ Write this into CONTRIBUTING (T401). A new parser of untrusted input must come w
 
 ## Acceptance criteria
 
-- [ ] `crates/qry/src/fuzz.rs` exists with the seven `fuzz_*` functions above, and `crates/qry-core/src/fuzz.rs` has stubs for `fuzz_sql_lex` and `fuzz_sql_split` (filled in by T302).
-- [ ] `import::from_bytes` exists, and `from_file` delegates to it.
+- [x] `crates/qry/src/fuzz.rs` exists with the seven `fuzz_*` functions above, and `crates/qry-core/src/fuzz.rs` has stubs for `fuzz_sql_lex` and `fuzz_sql_split` (filled in by T302).
+- [x] `import::from_bytes` exists, and `from_file` delegates to it.
 - [ ] `fuzz/` builds with `cargo +nightly fuzz build`, and `cargo +nightly fuzz list` lists every target named in `fuzz.yml`'s matrix.
-- [ ] The root workspace excludes `fuzz`, and `cargo build --workspace` does not build it.
-- [ ] `fuzz/seed-corpus.sh` is idempotent, and gives every target a non-empty corpus directory.
-- [ ] Every `fuzz_*` function has a proptest twin, and `cargo test --workspace` runs them on stable.
-- [ ] The four property tests in section 3 exist and pass.
+- [x] The root workspace excludes `fuzz`, and `cargo build --workspace` does not build it.
+- [x] `fuzz/seed-corpus.sh` is idempotent, and gives every target a non-empty corpus directory.
+- [x] Every `fuzz_*` function has a proptest twin, and `cargo test --workspace` runs them on stable.
+- [x] The four property tests in section 3 exist and pass.
 - [ ] `fuzz-smoke` in `ci.yml` runs every target for 30 s and is green. A deliberately planted `panic!` in one importer makes it red, with a crash artifact uploaded (verify once on a throwaway branch).
 - [ ] `fuzz.yml` runs nightly and on `workflow_dispatch`, persists the corpus through the cache, and minimises it on success.
-- [ ] Any crash found while doing this task is fixed, with its input added as a regression test (in `tests/fixtures/fuzz-regressions/<target>/` and replayed by a unit test).
-- [ ] `*.proptest-regressions` files are committed.
+- [x] Any crash found while doing this task is fixed, with its input added as a regression test (in `tests/fixtures/fuzz-regressions/<target>/` and replayed by a unit test).
+- [x] `*.proptest-regressions` files are committed.
 
 ## Tests
 
@@ -263,3 +263,51 @@ CI:
 
 - `fuzz-smoke` green on every PR.
 - `fuzz.yml` green on its first scheduled run, linked in the PR follow-up.
+
+## Implementation notes
+
+- **Three boxes stay unticked because this machine has no nightly toolchain and no cargo-fuzz** (and the network and disk were too limited to install them). `fuzz/` is complete, but `cargo +nightly fuzz build`/`list`, the 30 s `fuzz-smoke` run, the planted-panic check on a throwaway branch and the first nightly `fuzz.yml` run have not happened. What was checked: a stable `cargo check --bins` inside `fuzz/` type-checks all 11 targets against `libfuzzer-sys 0.4.13`; `fuzz_inventory` checks that the `[[bin]]`s, the `fuzz.yml` matrix and the `pub fn fuzz_*` entry points name the same 11 targets, and that each target calls its own entry point. The first person with nightly should run `fuzz/seed-corpus.sh && cargo +nightly fuzz build && cargo +nightly fuzz list`, plant a `panic!` in `import::dbeaver` on a throwaway branch to see `fuzz-smoke` go red with a `fuzz-crashes` artifact, and tick the three boxes. T302's "property-tested and fuzzed" box should be ticked once `sql_lex`/`sql_split` have run under libFuzzer.
+- **Targets (11).** `qry::fuzz`: `import_qry`, `import_dbeaver`, `import_sqldeveloper`, `import_auto`, `connections_parse`, `keymap_parse`, `palette_score`. `qry_core::fuzz`: `sql_lex`, `sql_split`, `grid`, `copy_render`. Differences from the spec: `fuzz_style_parse` is gone, because T201 removed `parse_style`. `fuzz_keymap_parse` uses `keymap::chord_to_string` and `keymap::parse_key_sequence` (T102 moved the parser and removed `key_event_to_string`). `palette_score` is T206's matcher: query, NUL, then the text. `grid` and `copy_render` cover T303's groundwork, because a database's answers are untrusted input too. `qry_core::fuzz::result_from_bytes` turns bytes into a `QueryResult`: the column count, a kind per column, two choice bytes, then names and cells split by `0xFF`, with a lone `0xFE` meaning NULL. The SQL bodies are full implementations, not stubs. Both `fuzz` modules are `pub` and `#[doc(hidden)]`.
+- **Invariants checked inside the bodies.**
+  - Imports: every record's `Secret` is one of its four variants, none of which can hold a password, and the serialised record has no key named like a password at any depth (`password`, `passwd`, `pwd`, any case).
+  - Key bindings: the printed chord parses back to the same keys.
+  - Palette: positions are increasing, in bounds, and one per query character.
+  - `sql_lex`: in all four dialects, the tokens are non-empty, contiguous and on char boundaries, and their texts concatenate to the input.
+  - `sql_split`: in all four dialects, spans are in bounds, on char boundaries, ascending, non-overlapping and equal to their `text`, and `is_ddl` and `statement_at` answer. For PostgreSQL and SQLite, every byte that is not whitespace, a comment or `;` is in exactly one statement (an unterminated token's trailing blanks excepted, as T302 defined). MySQL `DELIMITER` lines and Oracle `/` lines are deliberately in no statement, so those two dialects get only the structural checks.
+  - `grid`: widths stay within the cap, `visible_columns` fits the room for any widths and room taken straight from the bytes, the sort is a permutation, and the search finishes, with matches in order that really contain the needle.
+  - `copy_render`: covers every format and dialect, with a row and a column out of range. TSV and Markdown give one line per row plus their header lines.
+- **Bugs found and fixed.**
+  - `grid::sort_permutation` panicked on a numeric column holding `NaN`. `NaN` compared equal to every number, so the comparison was not a total order, and std's sort panics when it detects that. The `grid` proptest twin found it on its first run. `NaN` now sorts with the text, after the numbers. It has its own commit. The input is in `tests/fixtures/fuzz-regressions/grid/nan-in-a-numeric-sort.bin` (21 values, minimised by hand; the replay test fails without the fix), and the unit test is `grid_tests::sort_numeric_with_nan_puts_it_after_the_numbers`.
+  - A qry backup could carry a plaintext password into the connection file. `StoredConnection.extra` keeps unknown keys, so a hand-edited backup's `"password": "…"` was imported and saved. This was found by reasoning about the import invariant, not by a fuzzer run. A `Format::Qry` import now drops every field named like a password, at any depth (`import::strip_passwords`). The input is in `fuzz-regressions/import_qry/` and `import_auto/`, and the unit test is `fuzz_tests::a_password_in_a_hand_edited_backup_is_dropped`. `connections::load_from` still keeps unknown fields of qry's own file as before.
+- **`import::from_bytes(&[u8], Format)`** converts without disk I/O; its errors name "the file". `from_file` reads the file and then calls the same body (`from_named_bytes`) with the real path, so its errors still name the file (the zip and not-UTF-8 checks moved there). To be reached from integration tests, `import::from_file` and `connections::{parse, load_from, save_to, export}` are now `pub` instead of `pub(crate)`.
+- **Proptest twins.** These are `crates/qry/src/fuzz_tests.rs` and `crates/qry-core/src/fuzz_tests.rs`, at 256 cases each. Every twin runs its body over random bytes (up to 4 KiB) and over a structured strategy:
+  - `arb_json_connections()`: DBeaver, SQL Developer and qry shapes with any subset of the real keys, values of every JSON type, out-of-range numbers, unicode, nesting and a table of JDBC URLs.
+  - `arb_key_text()`: the real key names, modifiers in mixed case, both spellings, and junk characters.
+  - `arb_sql()`: dialect pieces such as dollar quotes, `q'[`, `DELIMITER`, `/` lines, PL/SQL words and open quotes, joined by `;`.
+  - `arb_result_bytes()`: NaN, infinities, leading zeros, natural-sort text, NULLs and line breaks.
+
+  A 2,000-case run of every twin found nothing beyond the NaN bug. `known_crash_inputs_stay_fixed` in each crate replays its own targets' directories under `tests/fixtures/fuzz-regressions/`. The `qry` one fails on a directory that names no target. `sql_fixtures_pass_the_fuzz_bodies` runs the SQL fixtures through both SQL bodies.
+- **Structured properties.** `crates/qry/tests/import_props.rs` runs 512 cases: the four tests in section 3 plus `imports_never_carry_a_plaintext_password`. `arb_stored_connection()` generates every field, all four `Secret`s, and `extra` fields named `x_…`, because an import drops keys named like a password and a known field name would not survive the flatten. `arb_key_sequence()` only produces text that must parse; it asserts that the text parses, then that it round-trips. The auto-detection test also compares connections, modulo the freshly minted ids, and the skipped entries.
+- **Fixtures.** `tests/fixtures/sql/` is new. It holds `oracle-plsql.sql` (procedure and anonymous block ended by `/`, `q'[…]'`), `postgres-dollar-quoted.sql` (`$$` and `$body$` bodies, `E''`, nested comment), `mysql-delimiter.sql` and `sqlite-mixed.sql` (brackets, blobs, unicode, an unterminated string). T302's notes named `crates/qry-core/tests/fixtures/sql/`, but CONTRIBUTING and this task use the shared root `tests/fixtures/sql/`, so the files are there.
+- **`fuzz/seed-corpus.sh`.**
+  - It copies the fixtures as the spec lists. qry backups also seed `connections_parse`, and each regression input seeds its own target.
+  - It extracts every binding from `.config/config.json` with `jq`, after dropping its whole-line `//` comments (the file is JSON5).
+  - It adds hand-made seeds for every target, including the grid and copy byte layout.
+  - Each seed has a fixed name: the fixture's own, or `seed-<sha1 prefix>`. A second run gave a byte-identical corpus.
+  - It fails if any target is left empty.
+- **CI.** `fuzz-smoke` follows the spec's snippet: nightly, cargo-fuzz, a cache keyed on `fuzz`, the seed script, then `build` and `run` with `--target x86_64-unknown-linux-gnu`, uploading `fuzz/artifacts` on failure. The T003 presence gate and the `RUSTUP_TOOLCHAIN` override are gone, since `+nightly` overrides `rust-toolchain.toml`. `fuzz.yml` has these triggers and steps:
+  - It runs on `cron "17 3 * * *"` and on `workflow_dispatch` with an input `seconds` (default 600).
+  - It has one matrix job per target, with `fail-fast: false` and `timeout-minutes: 30`.
+  - The corpus is cached with `actions/cache@v4` under key `fuzz-corpus-<target>-<run_id>`, with restore-keys `fuzz-corpus-<target>-`.
+  - It seeds, builds, runs and then runs `cargo +nightly fuzz cmin` on success, uploading `fuzz-crashes-<target>` on failure.
+  - The cache saves at the end of a green job, so after `cmin`.
+- **Proptest regressions.** The existing files stay committed. The one new failure, the NaN case, was a 1 KB random seed. It was replaced by the minimal fixture and unit test above, so no new `*.proptest-regressions` file was added.
+- **CONTRIBUTING** gained a "Property tests and fuzzing" section: committing regression files, running a target, where crash inputs go, and the five-part rule for a new parser, which `fuzz_inventory` enforces.
+- **Checks run locally:**
+  - `cargo fmt --all`. It ran on stable, so the nightly-only import grouping options were skipped.
+  - clippy with `-D warnings`.
+  - `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked`: 413 `qry` unit tests, 3 in `fuzz_inventory`, 5 in `import_props`, 98 in `qry-core`.
+  - The CI docs command with `RUSTDOCFLAGS=-D warnings`.
+  - `cargo check --bins` in `fuzz/` on stable.
+
+  Because the disk was shared and nearly full, these ran with `CARGO_INCREMENTAL=0` and, for clippy and tests, `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`.

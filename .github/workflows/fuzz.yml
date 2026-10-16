@@ -1,0 +1,86 @@
+# Nightly fuzzing: every target for 10 minutes (or `seconds` when run by
+# hand), each from the corpus the previous run left in the cache. A green
+# run minimises the corpus before it is saved; a crash uploads its input.
+# The 30 s smoke run on every PR is `fuzz-smoke` in ci.yml.
+#
+# The matrix must list every [[bin]] in fuzz/Cargo.toml, and nothing else:
+# crates/qry/tests/fuzz_inventory.rs checks it against the targets and the
+# `fuzz_*` entry points.
+name: Fuzz
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds to run each target
+        required: false
+        default: "600"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - import_qry
+          - import_dbeaver
+          - import_sqldeveloper
+          - import_auto
+          - connections_parse
+          - keymap_parse
+          - palette_score
+          - sql_lex
+          - sql_split
+          - grid
+          - copy_render
+    env:
+      SECONDS_PER_TARGET: ${{ github.event.inputs.seconds || '600' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the targets link qry, whose build script runs vergen-gix
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      # A new key every run, so the grown corpus is saved; the newest one
+      # saved for this target is restored.
+      - name: Restore the corpus
+        uses: actions/cache@v4
+        with:
+          path: fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: fuzz-corpus-${{ matrix.target }}-
+      - name: Seed the corpus
+        run: fuzz/seed-corpus.sh
+      - name: Build
+        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu "${{ matrix.target }}"
+      - name: Fuzz for ${{ env.SECONDS_PER_TARGET }} s
+        run: |
+          cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "${{ matrix.target }}" \
+            "fuzz/corpus/${{ matrix.target }}" -- \
+            -max_total_time="$SECONDS_PER_TARGET" -rss_limit_mb=2048 -timeout=10
+      - name: Minimise the corpus
+        if: success()
+        run: cargo +nightly fuzz cmin --target x86_64-unknown-linux-gnu "${{ matrix.target }}" "fuzz/corpus/${{ matrix.target }}"
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.target }}
+          path: fuzz/artifacts/${{ matrix.target }}
+          if-no-files-found: ignore

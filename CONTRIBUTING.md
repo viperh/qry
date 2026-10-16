@@ -102,3 +102,29 @@ No test waits in real time. Use the harness's virtual clock
   in-memory store, so no test prompts for, reads or writes the developer's
   real keychain. The `qry` crate's own unit tests always use the in-memory
   store, whatever the variable says.
+
+### Property tests and fuzzing
+
+- Commit the `*.proptest-regressions` files proptest writes, and never
+  delete them: they replay the cases that once failed.
+- `fuzz/` is a cargo-fuzz workspace of its own, left out of the root one.
+  Each target calls one `fuzz_*` function in `qry::fuzz` or
+  `qry_core::fuzz`, and the sibling `fuzz_tests.rs` runs the same function
+  as a proptest on stable, so the fuzz code cannot rot. With nightly and
+  `cargo install cargo-fuzz`:
+
+  ```sh
+  fuzz/seed-corpus.sh
+  cargo +nightly fuzz run sql_split fuzz/corpus/sql_split -- -max_total_time=60
+  ```
+
+- A crash input goes into `tests/fixtures/fuzz-regressions/<target>/`,
+  where `known_crash_inputs_stay_fixed` replays it, next to the fix.
+- **A new parser of untrusted input** comes with all five of:
+  1. a `fuzz_*` entry point,
+  2. a target in `fuzz/fuzz_targets/` and a `[[bin]]` in `fuzz/Cargo.toml`,
+  3. seeds in `fuzz/seed-corpus.sh`,
+  4. a proptest twin in `fuzz_tests.rs`,
+  5. a line in the matrix of `.github/workflows/fuzz.yml`.
+
+  `crates/qry/tests/fuzz_inventory.rs` fails when the names do not line up.
