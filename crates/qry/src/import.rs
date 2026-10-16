@@ -72,6 +72,13 @@ pub struct Imported {
 pub(crate) fn from_file(path: &str, format: Format) -> color_eyre::Result<Imported> {
     let path = expand_home(path);
     let bytes = std::fs::read(&path).wrap_err_with(|| format!("cannot read {}", path.display()))?;
+    from_bytes(&bytes, format, &path)
+}
+
+/// Converts the contents of a file, which `path` names in errors: what
+/// [`from_file`] does once the file is read. Public for the benchmarks
+/// (`crates/qry/benches/import.rs`) and fuzzing, which have no file.
+pub fn from_bytes(bytes: &[u8], format: Format, path: &Path) -> color_eyre::Result<Imported> {
     if bytes.starts_with(b"PK") {
         bail!(
             "{} is a zip archive, such as a DBeaver project export; \
@@ -79,9 +86,9 @@ pub(crate) fn from_file(path: &str, format: Format) -> color_eyre::Result<Import
             path.display()
         );
     }
-    let text = String::from_utf8(bytes)
+    let text = std::str::from_utf8(bytes)
         .wrap_err_with(|| format!("{} is not a text file", path.display()))?;
-    from_text(&text, format, &path)
+    from_text(text, format, path)
 }
 
 /// Converts the text of a file, which `path` names in errors.
