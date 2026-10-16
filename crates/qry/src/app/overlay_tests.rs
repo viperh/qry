@@ -39,6 +39,7 @@ fn with_saved(h: &mut AppHarness) -> StoredConnection {
     record.secret = Secret::Keyring;
     h.file(FileAnswer::ConnectionsLoaded(vec![record.clone()]));
     h.state_mut().tree.selected = 1;
+    h.state_mut().tree.selected_key = None;
     record
 }
 

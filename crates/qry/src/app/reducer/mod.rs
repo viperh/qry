@@ -28,6 +28,13 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     let mut fx = Vec::new();
     // Nothing on screen follows the tick or the clock.
     state.dirty |= !matches!(event, UiEvent::Tick(_) | UiEvent::Clock(_));
+    // What cannot change the tree's rows leaves them be.
+    let tree_may_change = !matches!(
+        event,
+        UiEvent::Tick(_)
+            | UiEvent::Clock(_)
+            | UiEvent::Timer(Timer::Toast(_) | Timer::Spinner(_) | Timer::Tree(_))
+    );
     match event {
         UiEvent::Started => start(state, &mut fx),
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
@@ -40,12 +47,16 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Timer(Timer::Toast(n)) => notices::expired(state, n, &mut fx),
         UiEvent::Timer(Timer::KeySequence(n)) => keys::timed_out(state, n, &mut fx),
         UiEvent::Timer(Timer::Spinner(n)) => dialogs::spin(state, n, &mut fx),
+        UiEvent::Timer(Timer::Tree(n)) => tree::spin(state, n, &mut fx),
         // A closed session's worker may still answer; nobody is listening.
         UiEvent::Db(id, answer) if state.sessions.get(id).is_some() => {
             db::answer(state, id, answer, &mut fx);
         }
         UiEvent::Db(..) => {}
         UiEvent::File(answer) => files::answer(state, answer, &mut fx),
+    }
+    if tree_may_change {
+        tree::after(state, &mut fx);
     }
     fx
 }

@@ -1,0 +1,24 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+     ▾ Tables  2                        
+       ▸ orders                         
+     ▾ Views  1                         
+       ▸ big_orders                     
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+ filter covers loaded objects only      
+ / ord

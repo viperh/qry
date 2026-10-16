@@ -1,0 +1,10 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+ SCHEMA                 
+▌▾ ● sq  scratch        
+   ▾ a_schema_with_a_ver
+     ▾ Tables  1        
+       ▸ customer_order_
+     ▸ Views  0

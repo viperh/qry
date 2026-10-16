@@ -1,0 +1,36 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: styled(&buffer)
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+       ! permission denied              
+                                        
+                                        
+                                        
+                                        
+                                        
+                                        
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+7,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+0,1 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
+1,1 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD
+3,1 Rgb(159, 211, 138) Rgb(27, 37, 51) BOLD
+5,1 Rgb(79, 193, 201) Rgb(27, 37, 51) BOLD
+9,1 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
+16,1 Reset Reset NONE
+0,2 Reset Reset NONE
+3,2 Rgb(138, 148, 163) Reset NONE
+5,2 Rgb(211, 217, 224) Reset NONE
+9,2 Reset Reset NONE
+0,3 Reset Reset NONE
+7,3 Rgb(242, 139, 107) Reset NONE
+26,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE

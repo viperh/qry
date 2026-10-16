@@ -22,11 +22,9 @@ fn prod() -> AppHarness {
     record.host = Some("db.local".into());
     record.user = Some("app".into());
     record.database = Some("app".into());
-    h.state_mut()
-        .tree
-        .connections
-        .push(crate::app::state::Node::new(record, false));
+    h.file(crate::app::FileAnswer::ConnectionsLoaded(vec![record]));
     h.state_mut().tree.selected = 1;
+    h.state_mut().tree.selected_key = None;
     h.keys("enter");
     h.db(DbAnswer::Connected("app@db.local:5432/app".into()));
     h

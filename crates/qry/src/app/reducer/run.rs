@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use qry_core::{
     QueryResult,
-    sql::{Dialect, TokenKind, lex, split, statement_at},
+    sql::{Dialect, TokenKind, is_ddl, lex, split, statement_at},
 };
 
 use super::{results, tx_change};
@@ -166,6 +166,10 @@ pub(super) fn done(
         session.in_transaction = begins;
     }
     let sql = session.in_flight.take().map(|q| q.sql).unwrap_or_default();
+    // The schema may have changed: what the tree holds of it loads again.
+    if is_ddl(session.dialect(), &sql) {
+        session.schema.clear();
+    }
     let label = label(session.dialect(), &sql, &result);
     results::show(&mut session.new_tab(label).results, result);
     pump(state, id, fx);

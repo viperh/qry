@@ -24,8 +24,8 @@ expression: "styled(&h.render_buffer(80, 24))"
 │                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
-│ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 144–161 of 161 ─┘
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter               │
+└───────────────────────────────────────────────────────────── 153–170 of 170 ─┘
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,0 Rgb(79, 193, 201) Rgb(30, 38, 50) BOLD
@@ -208,13 +208,13 @@ expression: "styled(&h.render_buffer(80, 24))"
 40,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
 44,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 46,22 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-49,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-50,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-56,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-58,22 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-59,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-60,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-66,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+47,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+48,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+54,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+56,22 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+57,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+58,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+64,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 79,22 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,23 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 62,23 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE

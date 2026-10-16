@@ -66,13 +66,25 @@
       "<G>": "Bottom",
       "<home>": "Top",
       "<end>": "Bottom",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
+      // On a table, Enter runs SELECT * FROM it and `s` only inserts it.
       "<enter>": "Open",
       "<shift-enter>": "OpenNewSession",
       "<space>": "Toggle",
+      "<s>": "InsertSelect",
+      "<y>": "CopyName",
+      "<n>": "NewConnection",
       "<e>": "EditConnection",
       "<delete>": "DeleteConnection",
+      "<D>": "DeleteConnection",
+      "<x>": "Disconnect",
       "<r>": "Refresh",
+      "<R>": "RefreshAll",
+      "<.>": "ToggleSystemObjects",
       "</>": "Filter",
+      // Clears the filter; without one, dismisses the toast as elsewhere.
+      "<esc>": "Cancel",
       "<ctrl-s>": "ExportConnections"
     },
     // `?` and `:` are not bound here, so they can be typed.

@@ -463,6 +463,85 @@ impl Theme {
         (self.dim(), label)
     }
 
+    /// The schema browser's driver badge (`pg`, `my`, `ma`, `sq`, `or`):
+    /// dim teal.
+    pub fn tree_badge(&self, driver: Driver) -> (Style, &'static str) {
+        let label = match driver {
+            Driver::Postgres => "pg",
+            Driver::Mysql => "my",
+            Driver::Mariadb => "ma",
+            Driver::Sqlite => "sq",
+            Driver::Oracle => "or",
+        };
+        // Teal, but not the terminal's DIM: that is the backdrop's.
+        let style = self.pick(Style::new().fg(self.teal), Modifier::DIM);
+        (style, label)
+    }
+
+    /// A connection's state in the schema browser: `●` green while open,
+    /// `○` dim without a session, `✗` coral when it failed, and the
+    /// spinner's `frame` in teal while connecting.
+    pub fn tree_state(
+        &self,
+        status: Option<&SessionStatus>,
+        frame: &'static str,
+    ) -> (Style, &'static str) {
+        match status {
+            Some(SessionStatus::Open { .. }) => (self.value_ok(), "●"),
+            Some(SessionStatus::Connecting) => (self.spinner(), frame),
+            Some(SessionStatus::Failed(_)) => (self.value_error(), "✗"),
+            Some(SessionStatus::Closed) | None => (self.dim(), "○"),
+        }
+    }
+
+    /// A folder (`Tables`, `Columns`) in the tree: `fg_dim`.
+    pub fn tree_folder(&self) -> Style {
+        self.pick(Style::new().fg(self.fg_dim), Modifier::empty())
+    }
+
+    /// A folder's item count: dim.
+    pub fn tree_count(&self) -> Style {
+        self.dim()
+    }
+
+    /// A column's type in the tree: `fg_muted`.
+    pub fn tree_column_type(&self) -> Style {
+        self.pick(Style::new().fg(self.fg_muted), Modifier::ITALIC)
+    }
+
+    /// The `PK` marker: amber.
+    pub fn tree_pk(&self) -> Style {
+        self.pick(Style::new().fg(self.amber), Modifier::BOLD)
+    }
+
+    /// The `FK → t.col` marker: purple.
+    pub fn tree_fk(&self) -> Style {
+        self.pick(Style::new().fg(self.purple), Modifier::ITALIC)
+    }
+
+    /// The `NULL` marker of a nullable column: dim.
+    pub fn tree_null(&self) -> Style {
+        self.dim()
+    }
+
+    /// `! error` under a node whose load failed: coral.
+    pub fn tree_error(&self) -> Style {
+        self.pick(Style::new().fg(self.coral), Modifier::BOLD)
+    }
+
+    /// The `▌` gutter next to the active session's connection: amber.
+    pub fn tree_gutter(&self) -> Style {
+        self.pick(Style::new().fg(self.amber), Modifier::BOLD)
+    }
+
+    /// The `/ ` of the tree's filter prompt: bold amber.
+    pub fn tree_filter_prompt(&self) -> Style {
+        self.pick(
+            Style::new().fg(self.amber).add_modifier(Modifier::BOLD),
+            Modifier::BOLD,
+        )
+    }
+
     // ---- grid ----------------------------------------------------------
 
     /// Column name in the grid header: bold, on `surface`.

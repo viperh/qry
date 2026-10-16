@@ -4,7 +4,7 @@ expression: "h.render(160, 48)"
 ---
  qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
  SCHEMA                                 │ QUERY  ln 1, col 1                                                                                                    
- ▸ ● scratch                            │  1 │                                                                                                                  
+▌▸ ● sq  scratch                        │  1 │                                                                                                                  
                                         │                                                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
@@ -49,4 +49,4 @@ expression: "h.render(160, 48)"
                                         │                                                                                                                       
                                         │ ✓ Connected to scratch (:memory:)                                                                                     
  scratch · sqlite · :memory: · auto-commit                                                                                                                      
- Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help
+ Enter open  Space expand  n new conn  Tab next pane  : commands  ctrl-q quit                                                                            ? help

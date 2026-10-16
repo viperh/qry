@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use proptest::prelude::*;
+use qry_core::schema::{Catalog, Children, DbObject, ObjectKind, SchemaPath};
 
 use super::*;
 use crate::{
@@ -47,6 +48,10 @@ fn key() -> impl Strategy<Value = KeyEvent> {
         KeyCode::Char('g'),
         KeyCode::Char('x'),
         KeyCode::Char('1'),
+        KeyCode::Char('/'),
+        KeyCode::Char('.'),
+        KeyCode::Char('D'),
+        KeyCode::Char('R'),
     ];
     let ctrl = [
         'n', 'e', 'o', 's', 'a', 'w', 'x', 'y', 'z', 'c', 'v', 'p', '3',
@@ -93,11 +98,34 @@ fn db_answer() -> impl Strategy<Value = DbAnswer> {
             .prop_map(|(rows, cols)| DbAnswer::QueryDone(Arc::new(grid(rows, cols)))),
         Just(DbAnswer::Exported("rows.csv".into())),
         Just(DbAnswer::ExportFailed("cannot write".into())),
-        Just(DbAnswer::TablesLoaded(vec![
-            "users".into(),
-            "orders".into()
-        ])),
-        Just(DbAnswer::TablesFailed("connection lost".into())),
+        (0..4u64).prop_map(|generation| DbAnswer::Schema {
+            path: SchemaPath::Catalogs,
+            generation,
+            outcome: Ok(Children::Catalogs(vec![Catalog {
+                name: "main".into(),
+                is_default: true,
+                is_system: false,
+            }])),
+        }),
+        (0..4u64).prop_map(|generation| DbAnswer::Schema {
+            path: SchemaPath::objects("main"),
+            generation,
+            outcome: Ok(Children::Objects(
+                ["users", "orders"]
+                    .into_iter()
+                    .map(|name| DbObject {
+                        catalog: "main".into(),
+                        name: name.into(),
+                        kind: ObjectKind::Table,
+                    })
+                    .collect()
+            )),
+        }),
+        (0..4u64).prop_map(|generation| DbAnswer::Schema {
+            path: SchemaPath::details("main", "users"),
+            generation,
+            outcome: Err("connection lost".into()),
+        }),
         Just(DbAnswer::Notice(crate::notice::Notice::error("e"))),
         Just(DbAnswer::WorkerStopped),
     ]
@@ -130,6 +158,7 @@ fn event() -> impl Strategy<Value = UiEvent> {
         1 => (0..10_000u64).prop_map(|ms| UiEvent::Tick(instant(ms))),
         // The live key-sequence timer, or a stale or future one.
         1 => (0..6u64).prop_map(|n| UiEvent::Timer(Timer::KeySequence(n))),
+        1 => (0..6u64).prop_map(|n| UiEvent::Timer(Timer::Tree(n))),
         2 => db_answer().prop_map(|answer| UiEvent::Db(SessionId::FIRST, answer)),
         1 => file_answer().prop_map(UiEvent::File),
         1 => Just(UiEvent::Started),

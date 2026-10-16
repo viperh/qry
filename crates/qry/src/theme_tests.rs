@@ -288,6 +288,28 @@ fn helpers() -> Vec<(&'static str, Helper)> {
             t.session_dot(&SessionStatus::Failed("x".into())).0
         }),
         ("driver_badge", |t| t.driver_badge(Driver::Postgres).0),
+        ("tree_badge", |t| t.tree_badge(Driver::Postgres).0),
+        ("tree_state(Open)", |t| {
+            t.tree_state(Some(&SessionStatus::Open { label: "x".into() }), "⠋")
+                .0
+        }),
+        ("tree_state(Connecting)", |t| {
+            t.tree_state(Some(&SessionStatus::Connecting), "⠋").0
+        }),
+        ("tree_state(Failed)", |t| {
+            t.tree_state(Some(&SessionStatus::Failed("x".into())), "⠋")
+                .0
+        }),
+        ("tree_state(None)", |t| t.tree_state(None, "⠋").0),
+        ("tree_folder", Theme::tree_folder),
+        ("tree_count", Theme::tree_count),
+        ("tree_column_type", Theme::tree_column_type),
+        ("tree_pk", Theme::tree_pk),
+        ("tree_fk", Theme::tree_fk),
+        ("tree_null", Theme::tree_null),
+        ("tree_error", Theme::tree_error),
+        ("tree_gutter", Theme::tree_gutter),
+        ("tree_filter_prompt", Theme::tree_filter_prompt),
         ("header", Theme::header),
         ("header_type", Theme::header_type),
         ("header_active", Theme::header_active),

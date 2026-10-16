@@ -4,7 +4,7 @@ expression: "h.render(120, 40)"
 ---
  qry  1 scratch                                                                            sqlite · :memory:   COMMAND  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ◌ scratch                  │  1 │                                                                                    
+▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
             │ › export csv                                                                    needs <path> │            
             │ export csv <path>                             results                                        │            

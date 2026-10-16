@@ -22,23 +22,23 @@ expression: "h.render(w, ht)"
 │ Tree                                                       /          search the results                             │
 │ ?                    show / hide the help                  y          copy the cell                                  │
 │ :                    command palette                       Y          copy the row                                   │
-│ e                    edit this connection                  Enter      inspect the value                              │
-│ Del                  forget this connection                i          show / hide the inspector                      │
-│ ctrl-s               export connections                    Results · Other                                           │
-│ k ↑                  up                                    ?          show / hide the help                           │
-│ j ↓                  down                                  :          command palette                                │
-│ h ←                  left                                                                                            │
-│ l →                  right                                 Inspector                                                 │
-│ g g Home             to the top                            ?          show / hide the help                           │
-│ G End                to the bottom                         :          command palette                                │
-│ Space                expand / collapse                     k ↑        up                                             │
-│ Enter                connect / switch to its session       j ↓        down                                           │
-│ shift-Enter          open another session on it            h ←        left                                           │
-│ r                    read the tables again                 l →        right                                          │
-│ /                    filter the tree                       g g        to the top                                     │
-│                                                            G          to the bottom                                  │
-│ Editor · Editing                                                                                                     │
+│ n                    new connection                        Enter      inspect the value                              │
+│ e                    edit this connection                  i          show / hide the inspector                      │
+│ D Del                forget this connection                Results · Other                                           │
+│ ctrl-s               export connections                    ?          show / hide the help                           │
+│ k ↑                  up                                    :          command palette                                │
+│ j ↓                  down                                                                                            │
+│ h ←                  left                                  Inspector                                                 │
+│ l →                  right                                 ?          show / hide the help                           │
+│ PgUp                 up a page                             :          command palette                                │
+│ PgDn                 down a page                           k ↑        up                                             │
+│ g g Home             to the top                            j ↓        down                                           │
+│ G End                to the bottom                         h ←        left                                           │
+│ Space                expand / collapse                     l →        right                                          │
+│ Enter                connect / switch to its session       g g        to the top                                     │
+│ shift-Enter          open another session on it            G          to the bottom                                  │
+│ r                    refresh the node                                                                                │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value       │
-│ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                     │
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │
 └─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────── 1–35 of 85 ─┘

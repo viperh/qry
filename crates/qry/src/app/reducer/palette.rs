@@ -62,6 +62,31 @@ pub(crate) fn items(state: &State) -> Vec<PaletteItem> {
             target: PaletteTarget::Action(action),
         }
     }));
+    // The tables and views the active session has loaded.
+    let session = state.sessions.active();
+    let qualify = session.schema.catalogs().is_some_and(|c| c.len() > 1);
+    items.extend(session.schema.loaded_objects().map(|object| {
+        let kind = if object.kind.is_view() {
+            "View"
+        } else {
+            "Table"
+        };
+        let name = if qualify {
+            format!("{}.{}", object.catalog, object.name)
+        } else {
+            object.name.clone()
+        };
+        PaletteItem {
+            label: format!("{kind}: {name}"),
+            category: "table",
+            key: None,
+            target: PaletteTarget::Table {
+                session: session.id,
+                catalog: object.catalog.clone(),
+                object: object.name.clone(),
+            },
+        }
+    }));
     items.extend(PaletteItem::arguments());
     items
 }
@@ -166,6 +191,7 @@ pub(super) fn run_key(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
 enum Run {
     Action(Action),
     OpenConnection(String),
+    Table(crate::app::state::SessionId, String, String),
     Export(qry_core::ExportConfig),
     Goto(usize),
     Theme(String),
@@ -178,6 +204,11 @@ fn pick(palette: &PaletteState) -> Result<(String, Run), String> {
     let run = match &item.target {
         PaletteTarget::Action(action) => Run::Action(*action),
         PaletteTarget::OpenConnection(id) => Run::OpenConnection(id.clone()),
+        PaletteTarget::Table {
+            session,
+            catalog,
+            object,
+        } => Run::Table(*session, catalog.clone(), object.clone()),
         PaletteTarget::Argument { hint, kind, .. } => {
             let arg = palette.argument().map(|(_, arg)| arg.trim()).unwrap_or("");
             if arg.is_empty() {
@@ -229,6 +260,9 @@ fn submit(state: &mut State, fx: &mut Vec<Effect>) {
                 let record = state.tree.connections[i].record.clone();
                 sessions::open_or_switch(state, &record, fx);
             }
+        }
+        Run::Table(session, catalog, object) => {
+            super::tree::select_object(state, session, &catalog, &object, true, fx);
         }
         Run::Export(config) => {
             fx.push(Effect::Db(state.sessions.active, DbCommand::Export(config)));

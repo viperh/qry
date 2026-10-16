@@ -49,4 +49,4 @@ expression: "h.render(160, 48)"
                                         │                                                                                                                       
                                         │                                                                                                                       
  connecting to scratch… · sqlite · :memory:                                                                                                                     
- Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help
+ Enter open  Space expand  n new conn  Tab next pane  : commands  ctrl-q quit                                                                            ? help

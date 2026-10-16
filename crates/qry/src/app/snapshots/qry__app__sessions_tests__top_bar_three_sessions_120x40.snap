@@ -4,9 +4,9 @@ expression: "s.h.render(120, 40)"
 ---
  qry  1 scratch  2 prod ◐  3 analytics                                                    sqlite · analytics.db   EDIT  
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
- ▸ ● scratch                  │  1 │                                                                                    
- ▸ ● prod                     │                                                                                         
- ▸ ● analytics                │                                                                                         
+ ▸ ● sq  scratch              │  1 │                                                                                    
+ ▸ ● sq  prod                 │                                                                                         
+▌▸ ● sq  analytics            │                                                                                         
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

@@ -45,8 +45,11 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
         }
         DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export(id)),
         DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export(id), &message),
-        DbAnswer::TablesLoaded(tables) => tree::tables_loaded(state, id, tables),
-        DbAnswer::TablesFailed(_) => tree::tables_failed(state, id),
+        DbAnswer::Schema {
+            path,
+            generation,
+            outcome,
+        } => tree::schema_loaded(state, id, path, generation, outcome),
         DbAnswer::Notice(notice) => notices::notify(state, notice, fx),
         // Nothing sent to it will be answered, so nothing is running there
         // any more; the status line says why.

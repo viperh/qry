@@ -22,33 +22,33 @@ expression: "styled(&h.render_buffer(w, ht))"
 │ Tree                                                 shift-→              select right                    connection                                         │
 │ ?            show / hide the help                    shift-↑              select up                                                                          │
 │ :            command palette                         shift-↓              select down                     Dialogs                                            │
-│ e            edit this connection                    ctrl-shift-←         select the previous word        ctrl-q     quit                                    │
-│ Del          forget this connection                  ctrl-shift-→         select the next word            F1         show / hide the help                    │
-│ ctrl-s       export connections                      shift-Home           select to the start of the l…   ←          left                                    │
-│ k ↑          up                                      shift-End            select to the end of the line   →          right                                   │
-│ j ↓          down                                    ctrl-a               select all                      Home       start of the line                       │
-│ h ←          left                                    Backspace            delete the character before     End        end of the line                         │
-│ l →          right                                   Del                  delete the character after      Esc        cancel / close                          │
-│ g g Home     to the top                              ctrl-w               delete the word before          Enter      submit                                  │
-│ G End        to the bottom                           alt-d                delete the word after           Tab        next field                              │
-│ Space        expand / collapse                       ctrl-k               delete to the end of the line   shift-Tab  previous field                          │
-│ Enter        connect / switch to its session         ctrl-z               undo                            Space      next choice                             │
-│ shift-Enter  open another session on it              ctrl-y ctrl-shift-z  redo                            Backspace  delete the character before             │
-│ r            read the tables again                   ctrl-x               cut                             Del        delete the character after              │
-│ /            filter the tree                         ctrl-v               paste                                                                              │
-│                                                                                                           Command palette                                    │
-│                                                      Editor · Running                                     ctrl-q     quit                                    │
-│                                                      F5 ctrl-Enter        run the statement               F1         show / hide the help                    │
-│                                                      F8                   run everything                  ctrl-p     command palette                         │
-│                                                      ctrl-e               run the selection               ↑ ctrl-k   up                                      │
-│                                                      ctrl-c               cancel the query (copy when …   ↓ ctrl-j   down                                    │
-│                                                      Editor · Other                                       ←          left                                    │
-│                                                      F6                   next pane                       →          right                                   │
-│                                                      shift-Tab            dedent                          PgUp       up a page                               │
+│ n            new connection                          ctrl-shift-←         select the previous word        ctrl-q     quit                                    │
+│ e            edit this connection                    ctrl-shift-→         select the next word            F1         show / hide the help                    │
+│ D Del        forget this connection                  shift-Home           select to the start of the l…   ←          left                                    │
+│ ctrl-s       export connections                      shift-End            select to the end of the line   →          right                                   │
+│ k ↑          up                                      ctrl-a               select all                      Home       start of the line                       │
+│ j ↓          down                                    Backspace            delete the character before     End        end of the line                         │
+│ h ←          left                                    Del                  delete the character after      Esc        cancel / close                          │
+│ l →          right                                   ctrl-w               delete the word before          Enter      submit                                  │
+│ PgUp         up a page                               alt-d                delete the word after           Tab        next field                              │
+│ PgDn         down a page                             ctrl-k               delete to the end of the line   shift-Tab  previous field                          │
+│ g g Home     to the top                              ctrl-z               undo                            Space      next choice                             │
+│ G End        to the bottom                           ctrl-y ctrl-shift-z  redo                            Backspace  delete the character before             │
+│ Space        expand / collapse                       ctrl-x               cut                             Del        delete the character after              │
+│ Enter        connect / switch to its session         ctrl-v               paste                                                                              │
+│ shift-Enter  open another session on it                                                                   Command palette                                    │
+│ r            refresh the node                        Editor · Running                                     ctrl-q     quit                                    │
+│ R            refresh the whole connection            F5 ctrl-Enter        run the statement               F1         show / hide the help                    │
+│ /            filter the tree                         F8                   run everything                  ctrl-p     command palette                         │
+│ .            show / hide system objects              ctrl-e               run the selection               ↑ ctrl-k   up                                      │
+│ s            insert SELECT * FROM the table          ctrl-c               cancel the query (copy when …   ↓ ctrl-j   down                                    │
+│ y            copy the qualified name                 Editor · Other                                       ←          left                                    │
+│ x            disconnect its session                  F6                   next pane                       →          right                                   │
+│ Esc          clear the filter                        shift-Tab            dedent                          PgUp       up a page                               │
 │                                                                                                           PgDn       down a page                             │
 │                                                                                                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value                                               │
-│ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                                                             │
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                                                               │
 └─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────────────────────────────────────────────── 1–43 of 67 ─┘
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
@@ -316,7 +316,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 2,20 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 3,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,20 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-35,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,20 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 67,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,20 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -329,9 +329,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,21 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,21 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-5,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+3,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,21 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-37,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+35,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,21 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 67,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,21 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -344,9 +344,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,22 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,22 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-8,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+7,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-33,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+37,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,22 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 65,22 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,22 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -359,9 +359,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,23 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,23 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-5,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+8,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,23 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-17,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+33,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,23 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 64,23 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,23 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -376,7 +376,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 2,24 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 5,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,24 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-19,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+17,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,24 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,24 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,24 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -406,7 +406,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 2,26 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 5,26 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,26 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-20,26 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+19,26 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,26 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 58,26 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,26 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -419,9 +419,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,27 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,27 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-10,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+5,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,27 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-25,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+20,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,27 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,27 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,27 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -434,9 +434,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,28 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,28 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-7,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,28 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-28,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+24,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,28 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 60,28 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,28 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -449,9 +449,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,29 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,29 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-7,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,29 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-32,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+26,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,29 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,29 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,29 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -464,9 +464,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,30 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,30 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-7,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+10,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,30 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-46,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+25,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,30 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,30 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,30 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -479,9 +479,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,31 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,31 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-13,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+7,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,31 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-41,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+28,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,31 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 74,31 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,31 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -494,9 +494,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,32 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,32 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-3,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+7,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,32 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-36,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+32,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,32 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,32 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,32 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -509,9 +509,9 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,33 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,33 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-3,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+7,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 15,33 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-30,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+46,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,33 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,33 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,33 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -519,11 +519,19 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,33 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,34 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,34 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,34 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+13,34 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,34 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+41,34 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 108,34 Rgb(79, 193, 201) Rgb(22, 28, 37) BOLD
 123,34 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 159,34 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,35 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,35 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,35 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,35 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,35 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,35 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,35 Rgb(79, 193, 201) Rgb(22, 28, 37) BOLD
 71,35 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 108,35 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
@@ -533,6 +541,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,35 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,36 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,36 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,36 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,36 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,36 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+43,36 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,36 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 68,36 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,36 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -544,6 +556,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,36 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,37 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,37 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,37 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,37 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,37 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+30,37 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,37 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 57,37 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,37 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -555,6 +571,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,37 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,38 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,38 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,38 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,38 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,38 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+41,38 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,38 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,38 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,38 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -566,6 +586,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,38 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,39 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,39 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,39 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,39 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,39 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+45,39 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,39 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,39 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,39 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -577,6 +601,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,39 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,40 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,40 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,40 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,40 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,40 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+38,40 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,40 Rgb(79, 193, 201) Rgb(22, 28, 37) BOLD
 69,40 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 108,40 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
@@ -586,6 +614,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,40 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,41 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,41 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+3,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,41 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+37,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,41 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 57,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,41 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -597,6 +629,10 @@ expression: "styled(&h.render_buffer(w, ht))"
 159,41 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,42 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+2,42 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+5,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,42 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,42 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 64,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 76,42 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -668,13 +704,13 @@ expression: "styled(&h.render_buffer(w, ht))"
 40,46 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
 44,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 46,46 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-49,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-50,46 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-56,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-58,46 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-59,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-60,46 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-66,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+47,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+48,46 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+54,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+56,46 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+57,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+58,46 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+64,46 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 159,46 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,47 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 3,47 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
