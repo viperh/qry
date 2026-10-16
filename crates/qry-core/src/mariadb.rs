@@ -1,12 +1,13 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use mysql_async::{Conn, OptsBuilder, Row, Value, prelude::*};
+use mysql_async::{Conn, OptsBuilder, Row, prelude::*};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseType,
-    shared::{ColumnMeta, QueryResult, SslMode},
+    mysql::{TABLES_SQL, cell, column_meta},
+    shared::{ColumnMeta, QueryResult, SslMode, first_column},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,18 +77,6 @@ impl MariaDb {
     }
 }
 
-fn value_to_string(value: Value) -> Option<String> {
-    match value {
-        Value::NULL => None,
-        Value::Bytes(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
-        Value::Int(n) => Some(n.to_string()),
-        Value::UInt(n) => Some(n.to_string()),
-        Value::Float(n) => Some(n.to_string()),
-        Value::Double(n) => Some(n.to_string()),
-        other => Some(other.as_sql(true).trim_matches('\'').to_string()),
-    }
-}
-
 #[async_trait]
 impl Database for MariaDb {
     fn kind(&self) -> DatabaseType {
@@ -106,17 +95,20 @@ impl Database for MariaDb {
         let mut result = conn.query_iter(sql).await?;
 
         // `MYSQL_TYPE_LONG` and the like, which `ValueKind` reads.
-        let columns = result
-            .columns_ref()
-            .iter()
-            .map(|c| ColumnMeta::new(c.name_str().into_owned(), format!("{:?}", c.column_type())))
-            .collect();
+        let (columns, shown): (Vec<ColumnMeta>, Vec<_>) =
+            result.columns_ref().iter().map(column_meta).unzip();
 
         let rows = result
             .collect::<Row>()
             .await?
             .into_iter()
-            .map(|row| row.unwrap().into_iter().map(value_to_string).collect())
+            .map(|row| {
+                row.unwrap()
+                    .into_iter()
+                    .zip(&shown)
+                    .map(|(value, &shown)| cell(value, shown))
+                    .collect()
+            })
             .collect();
 
         let affected = result.affected_rows();
@@ -135,5 +127,9 @@ impl Database for MariaDb {
         let mut conn = self.conn.lock().await;
         conn.query_drop(sql).await?;
         Ok(conn.affected_rows())
+    }
+
+    async fn tables(&self) -> Result<Vec<String>> {
+        Ok(first_column(self.query(TABLES_SQL).await?))
     }
 }

@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use shared::QueryResult;
 use tokio_rusqlite::{Connection, OpenFlags, rusqlite, types::ValueRef};
 
-use crate::{DatabaseType, shared, shared::Database};
+use crate::{
+    DatabaseType, shared,
+    shared::{Database, first_column},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SqliteConfig {
@@ -96,7 +99,14 @@ impl Database for Sqlite {
                     rows.push(cells);
                 }
 
-                let affected = rows.len() as u64;
+                drop(cursor);
+                // A statement without columns (INSERT, UPDATE, DDL) reports
+                // the rows it changed; a query, the rows it returned.
+                let affected = if names.is_empty() {
+                    conn.changes()
+                } else {
+                    rows.len() as u64
+                };
                 let columns = names
                     .into_iter()
                     .zip(types)
@@ -129,6 +139,16 @@ impl Database for Sqlite {
 
         Ok(affected)
     }
+
+    async fn tables(&self) -> Result<Vec<String>> {
+        let result = self
+            .query(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') \
+                 AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            )
+            .await?;
+        Ok(first_column(result))
+    }
 }
 
 fn render(value: ValueRef<'_>) -> Option<String> {
@@ -137,7 +157,9 @@ fn render(value: ValueRef<'_>) -> Option<String> {
         ValueRef::Integer(i) => Some(i.to_string()),
         ValueRef::Real(f) => Some(f.to_string()),
         ValueRef::Text(t) => Some(String::from_utf8_lossy(t).into_owned()),
-        ValueRef::Blob(b) => Some(format!("x'{}'", encode(b))),
+        // `\x` and lowercase hex, as Postgres writes a `bytea`: every
+        // backend shows binary the same way.
+        ValueRef::Blob(b) => Some(format!("\\x{}", encode(b))),
     }
 }
 
