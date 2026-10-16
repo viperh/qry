@@ -7,6 +7,7 @@ mod dialogs;
 mod editor;
 mod files;
 pub(crate) mod help;
+mod inspector;
 mod jobs;
 mod keys;
 mod mouse;
@@ -41,7 +42,10 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Paste(text) => paste(state, &text),
-        UiEvent::Resize(w, h) => state.size = (w, h),
+        UiEvent::Resize(w, h) => {
+            state.size = (w, h);
+            inspector::resized(state);
+        }
         UiEvent::Tick(at) => {
             let epoch = *state.epoch.get_or_insert(at);
             state.now = at.saturating_duration_since(epoch);
@@ -66,6 +70,10 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     }
     if tree_may_change {
         tree::after(state, &mut fx);
+    }
+    // The inspector counts its column a batch per event, ticks included.
+    if inspector::step_profile(state) {
+        state.dirty = true;
     }
     fx
 }
@@ -99,7 +107,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::ShowMessages if notices::showing_messages(state) => notices::act(state, action),
         Action::ShowMessages => notices::show_messages(state),
         Action::DismissToast => notices::dismiss(state, fx),
-        Action::FocusNext => state.focus = state.focus.next(),
+        Action::FocusNext => state.focus = inspector::focus_next(state),
         Action::FocusPrev => state.focus = state.focus.prev(),
         Action::FocusTree => state.focus = Focus::Tree,
         Action::FocusEditor => state.focus = Focus::Editor,
@@ -116,7 +124,8 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             chrome::run(state, action);
         }
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
-        Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
+        Action::ToggleInspector => inspector::toggle(state),
+        Action::Inspect if context != KeyContext::Help => inspector::open_popup(state),
         Action::Palette => palette::toggle(state),
         Action::ToggleJobs => jobs::toggle(state),
         // Sent like any statement, so the transaction state follows.
@@ -134,10 +143,14 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Results => results::run(state, action, fx),
             KeyContext::Dialog => dialogs::act(state, action, fx),
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
+            KeyContext::Help if inspector::showing_popup(state) => {
+                inspector::popup_act(state, action)
+            }
             KeyContext::Help => help::act(state, action),
             KeyContext::Palette => palette::run_key(state, action, fx),
             KeyContext::Jobs => jobs::run(state, action, fx),
-            KeyContext::Global | KeyContext::Inspector => {}
+            KeyContext::Inspector => inspector::run(state, action, fx),
+            KeyContext::Global => {}
         },
     }
 }

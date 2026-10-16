@@ -158,6 +158,7 @@ expression: "Config::embedded().effective_json()"
     "Inspector": {
       "?": "Help",
       ":": "Palette",
+      "Esc": "FocusResults",
       "k": "Up",
       "↑": "Up",
       "j": "Down",
@@ -167,7 +168,10 @@ expression: "Config::embedded().effective_json()"
       "l": "Right",
       "→": "Right",
       "g g": "Top",
-      "G": "Bottom"
+      "G": "Bottom",
+      "y": "CopyCell",
+      "Enter": "Inspect",
+      "i": "ToggleInspector"
     },
     "Dialog": {
       "ctrl-q": "Quit",

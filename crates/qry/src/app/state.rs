@@ -441,14 +441,19 @@ pub(crate) enum Focus {
     Tree,
     Editor,
     Results,
+    /// The record inspector, while it is shown (T304).
+    Inspector,
 }
 
 impl Focus {
+    /// The next pane round. The inspector is only in the ring while it is
+    /// shown, which the reducer decides; from it, Tab goes back to the grid.
     pub(crate) fn next(self) -> Self {
         match self {
             Focus::Tree => Focus::Editor,
             Focus::Editor => Focus::Results,
             Focus::Results => Focus::Tree,
+            Focus::Inspector => Focus::Results,
         }
     }
 
@@ -457,6 +462,7 @@ impl Focus {
             Focus::Tree => Focus::Results,
             Focus::Editor => Focus::Tree,
             Focus::Results => Focus::Editor,
+            Focus::Inspector => Focus::Results,
         }
     }
 
@@ -466,6 +472,7 @@ impl Focus {
             Focus::Tree => KeyContext::Tree,
             Focus::Editor => KeyContext::Editor,
             Focus::Results => KeyContext::Results,
+            Focus::Inspector => KeyContext::Inspector,
         }
     }
 }
@@ -478,6 +485,8 @@ pub(crate) enum Overlay {
     Help(HelpState),
     Messages(MessagesState),
     Palette(crate::palette::PaletteState),
+    /// One cell's whole value (T304).
+    Value(ValuePopup),
 }
 
 /// The Messages dialog: which entry of the history, newest first, is
@@ -667,21 +676,27 @@ impl State {
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) | Overlay::Value(_) => {
+                None
+            }
         })
     }
 
     pub(crate) fn dialog_mut(&mut self) -> Option<&mut DialogState> {
         self.overlays.iter_mut().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) | Overlay::Value(_) => {
+                None
+            }
         })
     }
 
     pub(crate) fn help(&self) -> Option<&HelpState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Help(help) => Some(help),
-            Overlay::Dialog(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Dialog(_) | Overlay::Messages(_) | Overlay::Palette(_) | Overlay::Value(_) => {
+                None
+            }
         })
     }
 
@@ -701,8 +716,11 @@ impl State {
     /// overlay's alone, or the focused pane's and then `Global`.
     pub fn contexts(&self) -> Vec<KeyContext> {
         match self.overlays.last() {
-            // The Messages dialog scrolls and closes with the help's keys.
-            Some(Overlay::Help(_) | Overlay::Messages(_)) => vec![KeyContext::Help],
+            // The Messages dialog and the value popup scroll and close with
+            // the help's keys.
+            Some(Overlay::Help(_) | Overlay::Messages(_) | Overlay::Value(_)) => {
+                vec![KeyContext::Help]
+            }
             Some(Overlay::Palette(_)) => vec![KeyContext::Palette],
             Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
             None if self.drawer.is_some() => vec![KeyContext::Jobs, KeyContext::Global],
@@ -715,7 +733,7 @@ impl State {
     /// the pill of what is underneath.
     pub fn pill(&self) -> Pill {
         let overlays = self.overlays.iter().rev().map(|overlay| match overlay {
-            Overlay::Help(_) | Overlay::Messages(_) => KeyContext::Help,
+            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Value(_) => KeyContext::Help,
             Overlay::Palette(_) => KeyContext::Palette,
             Overlay::Dialog(_) => KeyContext::Dialog,
         });
@@ -901,6 +919,10 @@ pub(crate) struct ResultsState {
     pub(crate) search: Option<GridSearch>,
     /// The first column stays put while the others scroll.
     pub(crate) frozen: bool,
+    /// The inspector's count of the cursor's column, under way or done.
+    pub(crate) profile: Option<qry_core::inspect::Profiler>,
+    /// The inspector's first RECORD field in view; kept by the view.
+    pub(crate) record_scroll: Cell<usize>,
 }
 
 impl ResultsState {
@@ -943,4 +965,23 @@ pub(crate) struct HelpState {
     /// Lines that fit, and the largest useful `scroll`, from the last draw.
     pub(crate) page: Cell<usize>,
     pub(crate) max_scroll: Cell<usize>,
+}
+
+/// The value popup: one cell's whole value, laid out for the popup's width
+/// when it opens, when `w` or `f` is pressed and when the terminal resizes.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ValuePopup {
+    /// `users.notes · text · row 3`.
+    pub(crate) title: String,
+    /// The value in full, for copying.
+    pub(crate) value: Option<String>,
+    pub(crate) kind: qry_core::ValueKind,
+    /// It is shown as JSON, so `f` switches between pretty and raw.
+    pub(crate) json: bool,
+    pub(crate) wrap: bool,
+    pub(crate) pretty: bool,
+    pub(crate) rendered: qry_core::inspect::Rendered,
+    /// The first line and display column in view.
+    pub(crate) scroll: usize,
+    pub(crate) hscroll: usize,
 }

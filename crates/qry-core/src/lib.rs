@@ -6,6 +6,7 @@ pub mod exporter;
 #[doc(hidden)]
 pub mod fuzz;
 pub mod grid;
+pub mod inspect;
 pub mod jobs;
 pub mod mariadb;
 pub mod mysql;

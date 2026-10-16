@@ -50,8 +50,10 @@ pub(crate) fn table(context: KeyContext) -> &'static [Hint] {
             (&[Action::ToggleJobs], "close"),
         ],
         KeyContext::Inspector => &[
-            (&[Action::Down, Action::Up], "move"),
-            (&[Action::FocusNext], "next pane"),
+            (&[Action::Down, Action::Up], "field"),
+            (&[Action::Inspect], "value"),
+            (&[Action::CopyCell], "copy"),
+            (&[Action::FocusResults], "grid"),
             (&[Action::Quit], "quit"),
         ],
         KeyContext::Dialog => &[

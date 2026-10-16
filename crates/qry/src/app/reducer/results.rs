@@ -38,6 +38,8 @@ pub(super) fn show(results: &mut ResultsState, result: Arc<QueryResult>) {
     results.sort.clear();
     results.order = None;
     results.search = None;
+    results.profile = None;
+    results.record_scroll.set(0);
 }
 
 /// What a `Results` binding does.

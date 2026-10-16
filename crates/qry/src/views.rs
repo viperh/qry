@@ -7,6 +7,7 @@ pub(crate) mod editor;
 pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
+pub(crate) mod inspector;
 pub(crate) mod jobs;
 pub(crate) mod layout;
 pub(crate) mod messages;
@@ -20,6 +21,7 @@ mod swatch;
 pub(crate) mod toast;
 pub(crate) mod top_bar;
 pub(crate) mod tree;
+pub(crate) mod value_popup;
 
 use ratatui::{prelude::*, widgets::Block};
 
@@ -80,13 +82,8 @@ pub fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
         results::draw_tabs(state, theme, frame, screen.results_title);
         results::draw(state, theme, frame, screen.results);
     }
-    if let (Some(divider_area), Some(inspector)) = (screen.inspector_divider, screen.inspector) {
-        layout::render_vertical_divider(frame, divider_area, theme.divider());
-        // T304 fills it.
-        let [title, _] =
-            Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(inspector);
-        pane_title::draw("INSPECTOR", "", false, theme, frame, title);
-    }
+    // Docked in its slot, or over the right half of a narrower body.
+    inspector::draw_placed(state, theme, frame, &screen, area);
     if let Some(drawer) = screen.jobs {
         jobs::draw(state, theme, frame, drawer);
     }
@@ -122,6 +119,7 @@ fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
             Overlay::Help(help) => help::draw(help, theme, frame, area),
             Overlay::Messages(messages) => messages::draw(messages, state, theme, frame, area),
             Overlay::Palette(open) => palette::draw(open, theme, frame, area),
+            Overlay::Value(popup) => value_popup::draw(popup, theme, frame, area),
         }
     }
 }

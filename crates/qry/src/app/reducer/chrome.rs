@@ -24,8 +24,8 @@ pub(super) fn run(state: &mut State, action: Action) {
                 (Some(_), _) => None,
                 (None, Focus::Editor) => Some(Region::Editor),
                 (None, Focus::Results) => Some(Region::Results),
-                // The tree is not a right-hand region.
-                (None, Focus::Tree) => None,
+                // Neither the tree nor the inspector is a right-hand region.
+                (None, Focus::Tree | Focus::Inspector) => None,
             };
         }
         _ => {}
