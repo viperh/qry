@@ -1,16 +1,60 @@
 # Contributing to qry
 
+## Setting up
+
+- The toolchain is pinned in `rust-toolchain.toml`; `rustup` picks it up.
+- With [direnv](https://direnv.net), `.envrc` keeps the config, data and
+  logs of a development run inside the repository.
+- `nix develop` gives a shell with everything, if you use Nix.
+- For the database suites, `docker compose -f deploy/docker-compose.test.yml
+  up -d` starts PostgreSQL, MySQL, MariaDB and Oracle; see
+  [docs/testing.md](docs/testing.md).
+
+## The checks
+
 Before sending a change, run what CI runs:
 
 ```sh
 cargo fmt --all --check
-cargo clippy --all-targets --all-features --workspace --locked -- -D warnings
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 QRY_KEYRING=off cargo test --workspace --all-features --locked
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items --all-features --locked
 cargo deny --all-features check
+python3 scripts/check-layering.py
 ```
 
-Commits use conventional-commit prefixes (`feat:`, `fix:`, `perf:`,
-`refactor:`, `docs:`, `test:`, `ci:`, `build:`, `chore:`).
+The database suites are opt-in locally:
+
+```sh
+QRY_TEST_POSTGRES_URL=… QRY_TEST_MYSQL_URL=… QRY_TEST_MARIADB_URL=… \
+QRY_TEST_ORACLE_URL=… cargo test -p qry-core --tests
+```
+
+## Rules for changes
+
+- **Colours** come from `Theme` helpers only; no view writes a colour of
+  its own (`tests/no_raw_colors.rs`).
+- **Layering**: `qry-core` must not depend on `ratatui`, `crossterm` or
+  `clap` (`scripts/check-layering.py`, cargo-deny wrappers).
+- **Purity**: the reducer and the views do no I/O and read no clock
+  (`app/purity_tests.rs`); anything with an outcome is an `Effect`.
+- **Parsers** of untrusted input get a fuzz target, seeds in
+  `fuzz/seed-corpus.sh`, a proptest twin and a line in `fuzz.yml`'s matrix
+  (see below).
+- **Performance-sensitive code** gets a bench with a gate in
+  `scripts/bench-gates.toml` (see [docs/testing.md](docs/testing.md)).
+- **Generated docs** ([docs/keybindings.md](docs/keybindings.md), the table
+  in [docs/config.md](docs/config.md), `docs/config.schema.json` and the
+  README's screenshot) are regenerated with `QRY_BLESS=1 cargo test -p qry
+  docs` after a change to the bindings, the config or the screen.
+
+## Commits and the changelog
+
+Commits use conventional-commit prefixes. `feat:`, `fix:`, `perf:`,
+`refactor:` and `docs:` are user-visible and get an entry under
+`## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) in the same change;
+`test:`, `ci:`, `build:` and `chore:` do not. Releases follow
+[docs/release.md](docs/release.md).
 
 ## Writing tests
 

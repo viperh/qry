@@ -1,120 +1,114 @@
 # qry
 
 [![CI](https://github.com/viperh/qry/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/viperh/qry/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/viperh/qry)](https://github.com/viperh/qry/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/rust-1.96%2B-orange.svg)](Cargo.toml)
 
-A starting point for terminal user interfaces in Rust, built on
-[ratatui](https://ratatui.rs) with an async [tokio](https://tokio.rs) event
-loop, layered configuration, file logging and cross-platform release builds.
+A fast, keyboard-driven terminal SQL client for PostgreSQL, MySQL, MariaDB,
+SQLite and Oracle.
 
-## Layout
+![qry: the schema browser, the editor and a result grid](docs/assets/qry-main.svg)
 
-The workspace deliberately splits the UI from everything else:
+## Features
 
-```
-Cargo.toml              workspace manifest — all dependency versions live here
-.config/config.json     default theme and key bindings, baked into the binary
-.envrc                  direnv: keep config/data/logs inside the repo
-crates/
-  qry/                  the binary: terminal, rendering, input, config, logging
-    build.rs            vergen — stamps git/build info into the version string
-    src/
-      main.rs           entry point
-      app/              the pure reducer: State, UiEvent -> App::handle -> Vec<Effect>
-        state.rs        everything the views draw, as plain data
-        event.rs        UiEvent, and the worker's and files' answers
-        effects.rs      Effect: what the runtime should do
-        reducer/        how each event changes the state, one file per concern
-        dialogs/        the modal forms
-      views.rs, views/  free functions drawing the State with a Theme
-      runtime.rs        the event loop: terminal, tasks, files, keychain, effects
-      action.rs         Action: the one command vocabulary keys are bound to
-      keymap.rs         key contexts, chord parsing and display, lookup
-      db.rs             the database worker
-      cli.rs            clap argument parsing
-      config.rs         layered config: theme and key bindings
-      config_migrate.rs reads the pre-context keybinding format
-      errors.rs         panic hooks, color-eyre, human-panic
-      logging.rs        tracing subscriber writing to a log file
-      tui.rs            terminal setup/teardown and the crossterm event stream
-  qry-core/             domain logic, no terminal dependencies
-    src/lib.rs
-```
+- **Schema browser**: connections, schemas, tables, views, columns (with
+  primary and foreign keys) and indexes, loaded as you open them, with a
+  filter.
+- **SQL editor** with highlighting per dialect; `ctrl-Enter` runs the
+  statement under the cursor, F8 runs them all, and a failed statement is
+  marked where the server stopped.
+- **Result grid** with typed columns, one tab per statement, sorting on
+  several columns, incremental search, column resizing, a frozen first
+  column and copying as CSV, TSV, JSON, Markdown or SQL `INSERT`s.
+- **Inspector**: the selected record, a column's profile, and a popup for
+  long values (JSON pretty-printed, binaries as hex).
+- **Jobs**: a spinner and timer while a statement runs, `ctrl-c` to cancel
+  it on the server, a row limit, and a drawer (`J`) listing what ran.
+- **Transactions**: a `TX` pill while one is open, Commit and Rollback in
+  the palette, and a question before quitting with one open.
+- **History and snippets**: every statement per connection (`ctrl-r`),
+  with passwords redacted, and named snippets.
+- **Exports** of a result to a file.
+- **Several sessions** at once, each with its own connection, editor and
+  results.
+- **Passwords** in the OS keychain, an environment variable or a prompt;
+  never in qry's files.
+- **Import** connections from DBeaver and Oracle SQL Developer.
+- A **command palette** (`ctrl-p`), a **help** overlay (`?`, F1) built from
+  your key bindings, and **NO_COLOR** support.
 
-`qry-core` must never depend on `ratatui`, `crossterm` or `clap`. Keeping the
-domain there means it can be unit tested without a TTY, and it stays reusable
-if you later add a second front end (a CLI, a daemon, a web UI).
+## Install
 
-## Running
+| Channel | Command |
+| --- | --- |
+| Prebuilt binaries | [GitHub releases](https://github.com/viperh/qry/releases): Linux (static, x86_64 and aarch64), macOS (universal), Windows |
+| Cargo | `cargo install qry --locked` |
+| Arch Linux (AUR) | `yay -S qry-bin`, or `qry` to build from source |
+| Homebrew | `brew install viperh/tap/qry` |
+| Scoop | `scoop bucket add viperh https://github.com/viperh/scoop-bucket` then `scoop install qry` |
+| Nix | `nix run github:viperh/qry` |
+
+Release archives include the man page (`qry.1`) and completions for bash,
+zsh, fish and PowerShell; `qry generate man` and
+`qry generate completions <shell>` print them too.
+
+## Quick start
 
 ```sh
-cargo run -p qry
+qry
 ```
 
-`Ctrl-q` quits and `F1` lists the keys; the defaults are in
-`.config/config.json`.
+qry opens on a scratch in-memory SQLite database, so you can type SQL at
+once:
 
-```sh
-cargo run -p qry -- --tick-rate 4 --frame-rate 60
-cargo run -p qry -- --version    # prints git info and the resolved directories
-cargo run -p qry -- --print-config # prints the config in effect
-```
+- `Tab` moves between the tree, the editor and the results.
+- `ctrl-Enter` (or F5) runs the statement under the cursor.
+- `ctrl-n` adds a connection; Enter on it in the tree connects.
+- `ctrl-p` opens the command palette, `?` the help, `ctrl-q` quits.
+
+Every key is listed in [docs/keybindings.md](docs/keybindings.md).
 
 ## Configuration
 
-Defaults are compiled in from `.config/config.json`. At startup the app also
-looks in the per-user config directory (printed by `--version`) for
-`config.json5`, `config.json`, `config.yaml`, `config.toml` or `config.ini`,
-and layers whatever it finds on top. Set `QRY_CONFIG` to override that
-directory outright.
+qry layers a user config (`config.json5`, `config.json`, `config.yaml`,
+`config.toml` or `config.ini`) over its built-in defaults. It is read from
+`$QRY_CONFIG`, else the platform's config directory; `qry --version` prints
+the directories, and `qry --print-config` the config in effect. A file only
+needs what it changes:
 
-Key bindings are keyed by context (`Global`, `Tree`, `Editor`, `Results`,
-`Dialog`, `Help`, …), then by key: `"<ctrl-a>"` for a single chord, `"<g><g>"`
-for a sequence. Every value must name an `Action` variant, or be `null` to
-unbind a default. A user file only needs the keys it changes. A config in the
-old per-mode format is converted with a warning. `qry --print-config` prints
-the bindings in effect.
-
-## Logging
-
-Logs go to `<data dir>/qry.log`. Set `QRY_LOG_LEVEL` (or `RUST_LOG`) to change
-the filter, and `QRY_DATA` to change the directory.
-
-## Checks
-
-The local equivalents of the CI jobs in `.github/workflows/ci.yml`:
-
-```sh
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-QRY_KEYRING=off cargo test --workspace --all-features --locked
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace --locked
-cargo deny --all-features check advisories bans licenses sources
-python3 scripts/check-layering.py
+```json5
+{
+  "theme": "dark",
+  "max_rows": 5000,
+  "keybindings": { "Editor": { "<alt-r>": "RunStatement" } }
+}
 ```
 
-CI also checks the MSRV (`rust-version` in `Cargo.toml`), builds on Windows
-and runs the database drivers against real servers.
+`QRY_DATA` moves the data directory (connections, history, the log) and
+`QRY_LOG_LEVEL` sets the log's level. Every key is in
+[docs/config.md](docs/config.md).
 
-`Cargo.lock` is committed on purpose — CI builds with `--locked`.
+## Security
 
-## Releases
+- Passwords live only in the OS keychain, an environment variable, or are
+  asked for at connect. They are never written to `connections.json`, the
+  history, the log or an export, and never imported from other tools.
+- The history replaces the string after words such as `PASSWORD` and
+  `IDENTIFIED BY` with `'•••'` (config `history.redact`).
+- A connection labelled `prod` asks before the first write of each session.
 
-Pushing a tag `vX.Y.Z` that matches `workspace.package.version` runs
-`.github/workflows/cd.yml`. It builds static Linux binaries (musl, x86_64 and
-aarch64), a universal macOS binary and a Windows binary, packs them into
-reproducible archives with the man page and shell completions, and publishes
-a GitHub release with `SHA256SUMS` and notes from [CHANGELOG.md](CHANGELOG.md).
-It then updates the AUR, Homebrew and Scoop packages from `packaging/`. A
-manual run of the workflow is a dry run. The checklist is
-[docs/release.md](docs/release.md).
+More in [docs/connections.md](docs/connections.md).
 
-```sh
-brew install viperh/tap/qry      # macOS, Linux
-yay -S qry-bin                   # Arch (or `qry` to build from source)
-scoop install qry                # Windows, after adding the bucket
-nix run github:viperh/qry        # Nix
-```
+## Documentation
+
+- [Key bindings](docs/keybindings.md) and [configuration](docs/config.md)
+- [Connections and passwords](docs/connections.md)
+- [Theme and terminals](docs/theme.md)
+- [Architecture](docs/architecture.md) and [testing](docs/testing.md)
+- [Contributing](CONTRIBUTING.md), [changelog](CHANGELOG.md) and the
+  [release checklist](docs/release.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT; see [LICENSE](LICENSE).

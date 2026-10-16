@@ -21,6 +21,7 @@ pub mod config;
 pub mod config_migrate;
 pub mod connections;
 pub mod db;
+pub mod docs;
 pub mod errors;
 #[doc(hidden)]
 pub mod fuzz;

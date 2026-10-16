@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1008" height="510" font-family="'JetBrains Mono','DejaVu Sans Mono',Menlo,Consolas,monospace" font-size="14">
+<rect width="100%" height="100%" fill="#0e1116"/>
+<rect x="0.0" y="0.0" width="42.0" height="17" fill="#131820"/>
+<rect x="134.4" y="0.0" width="798.0" height="17" fill="#131820"/>
+<rect x="932.4" y="0.0" width="67.2" height="17" fill="#4fc1c9"/>
+<rect x="999.6" y="0.0" width="8.4" height="17" fill="#131820"/>
+<text x="8.4" y="13.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="25.2">qry</text>
+<text x="50.4" y="13.0" fill="#d3d9e0" text-decoration="underline" xml:space="preserve" textLength="75.6">1 scratch</text>
+<text x="772.8" y="13.0" fill="#8a94a3" xml:space="preserve" textLength="142.8">sqlite · :memory:</text>
+<text x="940.8" y="13.0" fill="#0e1116" font-weight="bold" xml:space="preserve" textLength="50.4">NORMAL</text>
+<rect x="0.0" y="17.0" width="252.0" height="17" fill="#131820"/>
+<rect x="260.4" y="17.0" width="747.6" height="17" fill="#131820"/>
+<text x="8.4" y="30.0" fill="#8a94a3" xml:space="preserve" textLength="50.4">SCHEMA</text>
+<text x="252.0" y="30.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="268.8" y="30.0" fill="#8a94a3" xml:space="preserve" textLength="159.6">QUERY  ln 3, col 17</text>
+<rect x="0.0" y="34.0" width="134.4" height="17" fill="#1b2533"/>
+<text x="0.0" y="47.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="8.4">▌</text>
+<text x="8.4" y="47.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="8.4">▾</text>
+<text x="25.2" y="47.0" fill="#9fd38a" font-weight="bold" xml:space="preserve" textLength="8.4">●</text>
+<text x="42.0" y="47.0" fill="#4fc1c9" font-weight="bold" xml:space="preserve" textLength="16.8">sq</text>
+<text x="75.6" y="47.0" fill="#d3d9e0" font-weight="bold" xml:space="preserve" textLength="58.8">scratch</text>
+<text x="252.0" y="47.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="47.0" fill="#f2b04a" xml:space="preserve" textLength="8.4">▌</text>
+<text x="277.2" y="47.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">1</text>
+<text x="294.0" y="47.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="47.0" fill="#4fc1c9" xml:space="preserve" textLength="50.4">select</text>
+<text x="369.6" y="47.0" fill="#d3d9e0" xml:space="preserve" textLength="285.6">id, name, email, created_at, total</text>
+<text x="25.2" y="64.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">▾</text>
+<text x="42.0" y="64.0" fill="#d3d9e0" xml:space="preserve" textLength="33.6">main</text>
+<text x="252.0" y="64.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="64.0" fill="#f2b04a" xml:space="preserve" textLength="8.4">▌</text>
+<text x="277.2" y="64.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">2</text>
+<text x="294.0" y="64.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="64.0" fill="#4fc1c9" xml:space="preserve" textLength="33.6">from</text>
+<text x="352.8" y="64.0" fill="#d3d9e0" xml:space="preserve" textLength="42.0">users</text>
+<text x="42.0" y="81.0" fill="#8a94a3" xml:space="preserve" textLength="92.4">▾ Tables  3</text>
+<text x="252.0" y="81.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="81.0" fill="#f2b04a" xml:space="preserve" textLength="25.2">▌ 3</text>
+<text x="294.0" y="81.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="81.0" fill="#4fc1c9" xml:space="preserve" textLength="42.0">where</text>
+<text x="361.2" y="81.0" fill="#d3d9e0" xml:space="preserve" textLength="42.0">total</text>
+<text x="411.6" y="81.0" fill="#4fc1c9" xml:space="preserve" textLength="8.4">&gt;</text>
+<text x="428.4" y="81.0" fill="#c7a6ff" xml:space="preserve" textLength="8.4">0</text>
+<text x="436.8" y="81.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">;</text>
+<text x="58.8" y="98.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">▸</text>
+<text x="75.6" y="98.0" fill="#a9b4c2" xml:space="preserve" textLength="50.4">orders</text>
+<text x="252.0" y="98.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="58.8" y="115.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">▸</text>
+<text x="75.6" y="115.0" fill="#a9b4c2" xml:space="preserve" textLength="67.2">products</text>
+<text x="252.0" y="115.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="58.8" y="132.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">▸</text>
+<text x="75.6" y="132.0" fill="#a9b4c2" xml:space="preserve" textLength="42.0">users</text>
+<text x="252.0" y="132.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="42.0" y="149.0" fill="#8a94a3" xml:space="preserve" textLength="84.0">▸ Views  1</text>
+<text x="252.0" y="149.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="166.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="183.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="200.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<rect x="260.4" y="204.0" width="747.6" height="17" fill="#131820"/>
+<text x="252.0" y="217.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="268.8" y="217.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="58.8">RESULTS</text>
+<text x="344.4" y="217.0" fill="#8a94a3" xml:space="preserve" textLength="117.6">5 rows · 38 ms</text>
+<rect x="260.4" y="221.0" width="747.6" height="17" fill="#131820"/>
+<text x="252.0" y="234.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="277.2" y="234.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="285.6" y="234.0" fill="#d3d9e0" font-weight="bold" xml:space="preserve" textLength="16.8">id</text>
+<text x="319.2" y="234.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="234.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="33.6">name</text>
+<text x="369.6" y="234.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="234.0" fill="#d3d9e0" font-weight="bold" xml:space="preserve" textLength="42.0">email</text>
+<text x="520.8" y="234.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="234.0" fill="#d3d9e0" font-weight="bold" xml:space="preserve" textLength="84.0">created_at</text>
+<text x="688.8" y="234.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="697.2" y="234.0" fill="#d3d9e0" font-weight="bold" xml:space="preserve" textLength="42.0">total</text>
+<rect x="260.4" y="238.0" width="747.6" height="17" fill="#131820"/>
+<text x="252.0" y="251.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="277.2" y="251.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="285.6" y="251.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="33.6">int8</text>
+<text x="319.2" y="251.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="251.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="33.6">text</text>
+<text x="369.6" y="251.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="251.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="33.6">text</text>
+<text x="520.8" y="251.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="251.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="92.4">timestamptz</text>
+<text x="688.8" y="251.0" fill="#232a34" font-weight="bold" xml:space="preserve" textLength="8.4">│</text>
+<text x="697.2" y="251.0" fill="#8a94a3" font-weight="bold" xml:space="preserve" textLength="58.8">numeric</text>
+<text x="252.0" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="268.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">1</text>
+<text x="277.2" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="268.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">1</text>
+<text x="319.2" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="268.0" fill="#d3d9e0" xml:space="preserve" textLength="42.0">alice</text>
+<text x="369.6" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="268.0" fill="#d3d9e0" xml:space="preserve" textLength="142.8">alice@example.com</text>
+<text x="520.8" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="268.0" fill="#d3d9e0" xml:space="preserve" textLength="159.6">2026-10-01 09:12:44</text>
+<text x="688.8" y="268.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="714.0" y="268.0" fill="#d3d9e0" xml:space="preserve" textLength="42.0">12.50</text>
+<rect x="260.4" y="272.0" width="747.6" height="17" fill="#10141a"/>
+<text x="252.0" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="285.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">2</text>
+<text x="277.2" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="285.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">2</text>
+<text x="319.2" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="285.0" fill="#d3d9e0" xml:space="preserve" textLength="25.2">bob</text>
+<text x="369.6" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="285.0" fill="#8a94a3" font-style="italic" xml:space="preserve" textLength="33.6">NULL</text>
+<text x="520.8" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="285.0" fill="#d3d9e0" xml:space="preserve" textLength="159.6">2026-10-02 10:00:01</text>
+<text x="688.8" y="285.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="705.6" y="285.0" fill="#d3d9e0" xml:space="preserve" textLength="50.4">100.00</text>
+<rect x="260.4" y="289.0" width="67.2" height="17" fill="#1b2533"/>
+<rect x="327.6" y="289.0" width="42.0" height="17" fill="#f2b04a"/>
+<rect x="369.6" y="289.0" width="638.4" height="17" fill="#1b2533"/>
+<text x="252.0" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="302.0" fill="#f2b04a" xml:space="preserve" textLength="8.4">3</text>
+<text x="277.2" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="302.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">3</text>
+<text x="319.2" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="302.0" fill="#0e1116" font-weight="bold" xml:space="preserve" textLength="42.0">carol</text>
+<text x="369.6" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="302.0" fill="#d3d9e0" xml:space="preserve" textLength="142.8">carol@example.com</text>
+<text x="520.8" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="302.0" fill="#d3d9e0" xml:space="preserve" textLength="159.6">2026-10-03 11:30:00</text>
+<text x="688.8" y="302.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="722.4" y="302.0" fill="#d3d9e0" xml:space="preserve" textLength="33.6">7.25</text>
+<rect x="260.4" y="306.0" width="747.6" height="17" fill="#10141a"/>
+<text x="252.0" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="319.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">4</text>
+<text x="277.2" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="319.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">4</text>
+<text x="319.2" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="319.0" fill="#d3d9e0" xml:space="preserve" textLength="33.6">dave</text>
+<text x="369.6" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="319.0" fill="#d3d9e0" xml:space="preserve" textLength="134.4">dave@example.com</text>
+<text x="520.8" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="319.0" fill="#d3d9e0" xml:space="preserve" textLength="159.6">2026-10-04 08:45:10</text>
+<text x="688.8" y="319.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="714.0" y="319.0" fill="#d3d9e0" xml:space="preserve" textLength="42.0">42.00</text>
+<text x="252.0" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="260.4" y="336.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">5</text>
+<text x="277.2" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="310.8" y="336.0" fill="#d3d9e0" xml:space="preserve" textLength="8.4">5</text>
+<text x="319.2" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="327.6" y="336.0" fill="#d3d9e0" xml:space="preserve" textLength="33.6">erin</text>
+<text x="369.6" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="378.0" y="336.0" fill="#d3d9e0" xml:space="preserve" textLength="134.4">erin@example.com</text>
+<text x="520.8" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="529.2" y="336.0" fill="#d3d9e0" xml:space="preserve" textLength="159.6">2026-10-05 17:02:33</text>
+<text x="688.8" y="336.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="722.4" y="336.0" fill="#d3d9e0" xml:space="preserve" textLength="33.6">3.99</text>
+<text x="252.0" y="353.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="370.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="387.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="404.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="421.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="438.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="455.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<text x="252.0" y="472.0" fill="#232a34" xml:space="preserve" textLength="8.4">│</text>
+<rect x="0.0" y="476.0" width="1008.0" height="17" fill="#1a212b"/>
+<text x="8.4" y="489.0" fill="#4fc1c9" font-weight="bold" xml:space="preserve" textLength="58.8">scratch</text>
+<text x="75.6" y="489.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">·</text>
+<text x="92.4" y="489.0" fill="#d3d9e0" xml:space="preserve" textLength="50.4">sqlite</text>
+<text x="151.2" y="489.0" fill="#8a94a3" xml:space="preserve" textLength="8.4">·</text>
+<text x="168.0" y="489.0" fill="#d3d9e0" xml:space="preserve" textLength="67.2">:memory:</text>
+<text x="243.6" y="489.0" fill="#8a94a3" xml:space="preserve" textLength="50.4">· auto</text>
+<text x="882.0" y="489.0" fill="#d3d9e0" xml:space="preserve" textLength="117.6">R 3 / 5  C 2/5</text>
+<text x="8.4" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="42.0">Enter</text>
+<text x="58.8" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="58.8">inspect</text>
+<text x="134.4" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="8.4">y</text>
+<text x="151.2" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="33.6">copy</text>
+<text x="201.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="50.4">ctrl-s</text>
+<text x="260.4" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="50.4">export</text>
+<text x="327.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="25.2">Tab</text>
+<text x="361.2" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="75.6">next pane</text>
+<text x="453.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="8.4">:</text>
+<text x="470.4" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="67.2">commands</text>
+<text x="554.4" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="50.4">ctrl-q</text>
+<text x="613.2" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="33.6">quit</text>
+<text x="949.2" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="8.4">?</text>
+<text x="966.0" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="33.6">help</text>
+</svg>

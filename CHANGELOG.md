@@ -25,8 +25,30 @@ The interface redesign. Everything below lands in the first release after
 - Toasts and a message history instead of the single status message.
 - A full-screen, multi-column help overlay built from the live key map.
 - A fuzzy command palette with live key hints and parametrised commands.
-- A highlighted SQL editor that runs one statement at a time.
-- Typed result columns, grid logic and copy writers.
+- A highlighted SQL editor: `ctrl-Enter` runs the statement under the
+  cursor, F8 runs them all, the selection runs on its own, and a failed
+  statement is marked where the server stopped.
+- A result grid with typed columns, one tab per statement, multi-column
+  sorting, incremental search, goto row, column resizing, a frozen first
+  column, and a copy menu (CSV, TSV, JSON, Markdown, SQL `INSERT`).
+- A schema browser: catalogs, tables, views, columns with key markers and
+  indexes, loaded lazily with bound catalog queries, with a filter, system
+  schemas on demand, and `SELECT *` on Enter.
+- A record inspector and a value popup (pretty JSON, hex dumps, word wrap)
+  with a column profile.
+- Query jobs: a spinner and elapsed time while running, `ctrl-c` cancels on
+  the server (Postgres, MySQL, MariaDB, SQLite), a `max_rows` limit (1000 by
+  default) with a fetch-all, and a jobs drawer (`J`).
+- A transaction pill in the status line, Commit and Rollback in the
+  palette, and a confirmation before quitting or closing a session with an
+  open transaction.
+- Query history per connection (`ctrl-r`, `alt-↑`/`alt-↓`) with passwords
+  redacted, and saved snippets.
+- Connection dialogs with per-driver fields, a connection test, labels
+  (`dev`, `staging`, `prod`, which asks before the first write), duplicate,
+  and an import preview.
+- Generated reference docs (key bindings, config, JSON Schema) kept in sync
+  by tests.
 - Key bindings grouped by context, with key sequences (`<g><g>`) on a
   timer; configs in the old per-mode format are converted with a warning.
 - `--print-config` prints the config in effect.
@@ -60,7 +82,7 @@ The interface redesign. Everything below lands in the first release after
 - Deleting a connection drops the tree's indexes to it instead of keeping
   stale ones.
 
-## [0.1.0]
+## [0.1.0] - 2026-10-13
 
 The first version, before the redesign.
 

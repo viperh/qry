@@ -167,15 +167,15 @@ A documentation website (mdBook), translations, API docs beyond rustdoc.
 
 ## Acceptance criteria
 
-- [ ] README.md describes qry accurately. It has no template leftovers ("starting point", the stale Layout section, the broken code span) and covers features, install per channel, quick start, configuration and security notes, with a screenshot.
-- [ ] CONTRIBUTING.md lists the exact CI checks, the test conventions, the fuzz and bench rules, the colour and layering rules, and the commit convention.
-- [ ] CHANGELOG.md follows Keep a Changelog 1.1.0, has `Unreleased` and `0.1.0`, and parses with T007's notes extraction.
-- [ ] `docs/keybindings.md` is generated from the embedded keymap through the same help model as the T204 overlay. A test fails on drift. `QRY_BLESS=1` regenerates it.
+- [x] README.md describes qry accurately. It has no template leftovers ("starting point", the stale Layout section, the broken code span) and covers features, install per channel, quick start, configuration and security notes, with a screenshot.
+- [x] CONTRIBUTING.md lists the exact CI checks, the test conventions, the fuzz and bench rules, the colour and layering rules, and the commit convention.
+- [x] CHANGELOG.md follows Keep a Changelog 1.1.0, has `Unreleased` and `0.1.0`, and parses with T007's notes extraction.
+- [x] `docs/keybindings.md` is generated from the embedded keymap through the same help model as the T204 overlay. A test fails on drift. `QRY_BLESS=1` regenerates it.
 - [ ] `docs/config.md` (between markers) and `docs/config.schema.json` are generated from the config types, and a test fails on drift.
-- [ ] `qry generate man` and `qry generate completions <shell>` exist (hidden), and their output is snapshot-tested.
-- [ ] `docs/connections.md`, `docs/theme.md`, `docs/architecture.md`, `docs/testing.md` and `docs/release.md` exist and match the implemented behaviour.
-- [ ] All relative links in README, CONTRIBUTING and `docs/*.md` resolve (link-check test).
-- [ ] The CI badge URL in the README matches the workflow name and default branch.
+- [x] `qry generate man` and `qry generate completions <shell>` exist (hidden), and their output is snapshot-tested.
+- [x] `docs/connections.md`, `docs/theme.md`, `docs/architecture.md`, `docs/testing.md` and `docs/release.md` exist and match the implemented behaviour.
+- [x] All relative links in README, CONTRIBUTING and `docs/*.md` resolve (link-check test).
+- [x] The CI badge URL in the README matches the workflow name and default branch.
 
 ## Tests
 
@@ -209,3 +209,39 @@ A documentation website (mdBook), translations, API docs beyond rustdoc.
 - `markdown_escapes_pipes_in_keys` (the `|` key)
 
 **CI:** the docs tests run in the normal `test` job (T003). The `docs` rustdoc job stays `-D warnings`.
+
+## Implementation notes
+
+- **Generators** live in `crates/qry/src/docs.rs`, tested in
+  `docs_tests.rs` (unit tests rather than `tests/docs.rs`, so they can use
+  the crate's internal keymap and config). `QRY_BLESS=1 cargo test -p qry
+  docs` rewrites `docs/keybindings.md`, the table between the markers in
+  `docs/config.md`, `docs/config.schema.json` and the README screenshot;
+  without it a mismatch fails naming the first differing line.
+- **Key bindings** come from `help_model::build`, the same groups and
+  merged rows the help overlay draws, one `##` per help group (finer than
+  one per context). Keys are code spans with `|` escaped.
+- **Config docs.** `schemars` is not in the tree, so the keys are a table,
+  `docs::CONFIG_KEYS` (path, JSON type, description); the defaults come from
+  `Config::effective_json` (`--print-config`), and
+  `every_printed_config_key_is_documented` fails when a key is printed but
+  not in the table. The schema is built from the same table. Because this is
+  a table checked against the config rather than derived from the types, the
+  config box stays unticked.
+- **Screenshot.** No VHS here, so the README shows
+  `docs/assets/qry-main.svg`, drawn by the real views through `AppHarness`
+  (schema browser, editor, a typed result) and written by the bless test;
+  it cannot go stale silently. There is no GIF.
+- **File-level checks** in `crates/qry/tests/docs.rs`: every relative link
+  and `#anchor` in README, CONTRIBUTING, CHANGELOG and `docs/*.md` resolves
+  (GitHub heading slugs), the README's assets exist, and its CI badge names
+  `ci.yml` and the branch in `on.push.branches`. `crates/qry/tests/changelog.rs`
+  checks the headings, ISO dates, and a Rust twin of cd.yml's notes
+  extraction. `[0.1.0]` is dated 2026-10-13, the start of the history.
+- **Man page and completions** came with T007 (`qry generate`), already
+  snapshot-tested in `cli_tests.rs` and `tests/generate.rs`.
+- **Written by hand:** README (features, install per channel, quick start,
+  configuration, security), CONTRIBUTING (setup, the checks, rules, commits),
+  `docs/connections.md`, `theme.md`, `architecture.md`, `testing.md`,
+  `config.md`'s prose; `docs/release.md` is T007's.
+

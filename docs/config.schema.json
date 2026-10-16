@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "confirm_writes_on_prod": {
+      "default": true,
+      "description": "The first write of a session on a connection labelled prod asks first.",
+      "type": "boolean"
+    },
+    "continue_on_error": {
+      "default": false,
+      "description": "Run all (F8) keeps going after a statement fails, instead of stopping.",
+      "type": "boolean"
+    },
+    "history": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Record the statements run, per connection.",
+          "type": "boolean"
+        },
+        "ephemeral_to_disk": {
+          "default": false,
+          "description": "Write the scratch database's history to disk too, instead of only keeping it for the run.",
+          "type": "boolean"
+        },
+        "max_entries": {
+          "default": 1000,
+          "description": "The most history entries one connection keeps.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "redact": {
+          "default": [
+            "PASSWORD",
+            "IDENTIFIED BY",
+            "SECRET"
+          ],
+          "description": "Words whose string literal is stored as '•••' in the history, such as PASSWORD.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "keybindings": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": "object"
+      },
+      "description": "Per context, a key (such as <ctrl-enter>) mapped to an action name, or to null to unbind it. See keybindings.md.",
+      "type": "object"
+    },
+    "max_rows": {
+      "default": 1000,
+      "description": "The most rows a query keeps; more are not read. 0 keeps every row.",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "theme": {
+      "default": "dark",
+      "description": "The colour theme; --theme wins over it. Only dark exists for now.",
+      "type": "string"
+    }
+  },
+  "title": "qry configuration",
+  "type": "object"
+}
