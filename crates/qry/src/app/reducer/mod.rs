@@ -7,6 +7,7 @@ mod dialogs;
 mod editor;
 mod files;
 pub(crate) mod help;
+mod inspector;
 mod keys;
 mod mouse;
 pub(crate) mod notices;
@@ -33,7 +34,10 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Paste(text) => paste(state, &text),
-        UiEvent::Resize(w, h) => state.size = (w, h),
+        UiEvent::Resize(w, h) => {
+            state.size = (w, h);
+            inspector::resized(state);
+        }
         UiEvent::Tick(_) => {
             // A long search goes on a batch at a time.
             if results::step_searches(state) {
@@ -51,6 +55,10 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         }
         UiEvent::Db(..) => {}
         UiEvent::File(answer) => files::answer(state, answer, &mut fx),
+    }
+    // The inspector counts its column a batch per event, ticks included.
+    if inspector::step_profile(state) {
+        state.dirty = true;
     }
     fx
 }
@@ -84,7 +92,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::ShowMessages if notices::showing_messages(state) => notices::act(state, action),
         Action::ShowMessages => notices::show_messages(state),
         Action::DismissToast => notices::dismiss(state, fx),
-        Action::FocusNext => state.focus = state.focus.next(),
+        Action::FocusNext => state.focus = inspector::focus_next(state),
         Action::FocusPrev => state.focus = state.focus.prev(),
         Action::FocusTree => state.focus = Focus::Tree,
         Action::FocusEditor => state.focus = Focus::Editor,
@@ -101,7 +109,8 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             chrome::run(state, action);
         }
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
-        Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
+        Action::ToggleInspector => inspector::toggle(state),
+        Action::Inspect if context != KeyContext::Help => inspector::open_popup(state),
         Action::Palette => palette::toggle(state),
         // The jobs drawer comes with T305.
         Action::ToggleJobs => {}
@@ -111,9 +120,13 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Results => results::run(state, action, fx),
             KeyContext::Dialog => dialogs::act(state, action, fx),
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
+            KeyContext::Help if inspector::showing_popup(state) => {
+                inspector::popup_act(state, action)
+            }
             KeyContext::Help => help::act(state, action),
             KeyContext::Palette => palette::run_key(state, action, fx),
-            KeyContext::Global | KeyContext::Inspector | KeyContext::Jobs => {}
+            KeyContext::Inspector => inspector::run(state, action, fx),
+            KeyContext::Global | KeyContext::Jobs => {}
         },
     }
 }

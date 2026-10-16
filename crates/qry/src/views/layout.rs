@@ -20,7 +20,8 @@ pub(crate) const MIN_SIZE: (u16, u16) = (80, 24);
 /// [`TREE_WIDTH`] columns.
 pub(crate) const WIDE: u16 = 160;
 pub(crate) const TREE_WIDTH: u16 = 30;
-/// The inspector is only shown from this width.
+/// The inspector is docked from this width; below it, it is drawn over
+/// the right half of the body.
 pub(crate) const INSPECTOR_MIN_WIDTH: u16 = 140;
 pub(crate) const INSPECTOR_WIDTH: u16 = 40;
 /// The fewest body rows the editor and the results each keep.

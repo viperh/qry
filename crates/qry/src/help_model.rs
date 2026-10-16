@@ -148,7 +148,9 @@ const GROUPS: &[GroupSpec] = &[
         Pick::Except(&[RESULTS_NAV, RESULTS_COPY]),
     )
     .continuing(),
-    GroupSpec::new("Inspector", KeyContext::Inspector, Pick::All),
+    GroupSpec::new("Inspector", KeyContext::Inspector, Pick::All).with_notes(&[
+        "In the value popup: y copies the whole value, w wraps, f formats JSON, h/l pan, q closes",
+    ]),
     GroupSpec::new("Sessions", KeyContext::Global, Pick::Only(SESSIONS))
         .with_notes(&["shift-Enter in the tree opens another session on a connection"]),
     GroupSpec::new("Dialogs", KeyContext::Dialog, Pick::All),

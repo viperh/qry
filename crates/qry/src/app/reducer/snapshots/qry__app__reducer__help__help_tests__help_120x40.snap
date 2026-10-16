@@ -27,17 +27,17 @@ expression: "h.render(w, ht)"
 │ ctrl-s               export connections                    Inspector                                                 │
 │ k ↑                  up                                    ?          show / hide the help                           │
 │ j ↓                  down                                  :          command palette                                │
-│ h ←                  left                                  k ↑        up                                             │
-│ l →                  right                                 j ↓        down                                           │
-│ g g Home             to the top                            h ←        left                                           │
-│ G End                to the bottom                         l →        right                                          │
-│ Space                expand / collapse                     g g        to the top                                     │
-│ Enter                connect / switch to its session       G          to the bottom                                  │
-│ shift-Enter          open another session on it                                                                      │
-│ r                    read the tables again                 Sessions                                                  │
-│ /                    filter the tree                       ctrl-1–9   switch to session N                            │
-│                                                            ctrl-PgDn  next session                                   │
-│ Editor · Editing                                           ctrl-PgUp  previous session                               │
+│ h ←                  left                                  Esc        go to the results                              │
+│ l →                  right                                 k ↑        up                                             │
+│ g g Home             to the top                            j ↓        down                                           │
+│ G End                to the bottom                         h ←        left                                           │
+│ Space                expand / collapse                     l →        right                                          │
+│ Enter                connect / switch to its session       g g        to the top                                     │
+│ shift-Enter          open another session on it            G          to the bottom                                  │
+│ r                    read the tables again                 y          copy the cell                                  │
+│ /                    filter the tree                       Enter      inspect the value                              │
+│                                                            i          show / hide the inspector                      │
+│ Editor · Editing                                           In the value popup: y copies the whole value, w wraps, f  │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value       │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                     │

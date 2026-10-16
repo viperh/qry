@@ -125,16 +125,16 @@ Editing values, image previews, histograms for numeric columns (a follow-up may 
 
 ## Acceptance criteria
 
-- [ ] `i` toggles a 40-column docked inspector at ≥140 columns and an overlay below that.
-- [ ] COLUMN shows name, type, position, nulls and distinct, computed incrementally with a spinner, without blocking input on 1M rows.
-- [ ] TOP VALUES shows up to five values with eighth-block bars, and is hidden when every value is distinct.
-- [ ] RECORD lists every field of the selected row and follows the grid cursor.
-- [ ] Focused section labels are amber bold; unfocused ones are dim.
-- [ ] RECORD navigation, `Enter` to the popup and `y` to copy work when the inspector is focused.
+- [x] `i` toggles a 40-column docked inspector at ≥140 columns and an overlay below that.
+- [x] COLUMN shows name, type, position, nulls and distinct, computed incrementally with a spinner, without blocking input on 1M rows.
+- [x] TOP VALUES shows up to five values with eighth-block bars, and is hidden when every value is distinct.
+- [x] RECORD lists every field of the selected row and follows the grid cursor.
+- [x] Focused section labels are amber bold; unfocused ones are dim.
+- [x] RECORD navigation, `Enter` to the popup and `y` to copy work when the inspector is focused.
 - [ ] Describe mode shows table structure from the schema cache. `Esc` leaves it.
-- [ ] The value popup renders text (wrap/no-wrap), pretty JSON (toggle `f`), hex for binary, and NULL. `y` copies the full value.
-- [ ] The popup's bottom border shows its keys and a scroll position, as in the T204 help overlay.
-- [ ] All styles come from `Theme` helpers.
+- [x] The value popup renders text (wrap/no-wrap), pretty JSON (toggle `f`), hex for binary, and NULL. `y` copies the full value.
+- [x] The popup's bottom border shows its keys and a scroll position, as in the T204 help overlay.
+- [x] All styles come from `Theme` helpers.
 
 ## Tests
 
@@ -185,3 +185,58 @@ Editing values, image previews, histograms for numeric columns (a follow-up may 
 - `popup_scrolled_80x24`
 
 **AppHarness flow:** run a query returning a JSON column, then `h.keys("enter f y esc")`. Assert a clipboard effect with the exact full value, a toast `copied value`, and a popup that is closed.
+
+## Implementation notes
+
+- **qry-core** (`inspect.rs`). `ColumnProfile`, `Profiler` (`new`, `step`,
+  plus `column`, `profile` and `steps` for the view), `Rendered`,
+  `JsonTok`, `render_value`, `hex_dump`, `wrap_words` as specified, and
+  `is_json` / `binary_bytes`. NULLs never count as top values. JSON is
+  parsed by a small hand-written parser that keeps key order and number
+  text as written (no new dependency); nesting past 256 levels is shown as
+  text. Binary text from the backends (`x'…'` from SQLite and Oracle,
+  `\x…` from Postgres, `0x…`) is decoded before the dump; anything else is
+  dumped as its bytes. `wrap_words` collapses whitespace runs, and a
+  character wider than the line still gets a line of its own.
+- **State.** `Focus::Inspector`, `Overlay::Value(ValuePopup)`, and
+  `ResultsState::{profile, record_scroll}` (reset with each new result, so
+  a new result starts on its first row). The value popup uses the `Help`
+  context for scrolling and Esc, like the Messages dialog, and its own
+  letters (`y w f h l g q`) are unbound shortcuts.
+- **Reducer** (`app/reducer/inspector.rs`). `i` toggles the panel (hiding
+  it while focused gives the grid the focus back). Tab goes Results →
+  Inspector while it is shown, and Tab, shift-Tab or Esc go back to the
+  grid. The RECORD selection *is* the grid's cursor column, so the panel
+  always follows the grid: `↑↓` in the inspector move the grid's column
+  and `←→` its row. Profiling runs `PROFILE_BUDGET` = 20 000 rows after
+  every event (ticks included) while the panel is shown, up to
+  `PROFILE_CAP` = 100 000 rows, so a 1M-row result takes five events and
+  never blocks input; moving to another column starts a new profiler. The
+  popup is laid out in the reducer when it opens, on `w`/`f` and on resize
+  (its size follows from `State::size`), not on every frame.
+- **Views.** `views/inspector.rs` (docked in the T202 slot from 140
+  columns, or over the right half of the body below that, behind a `│`
+  divider in either case) and `views/value_popup.rs` (`dialog_frame` with
+  the teal accent, 80% of the screen capped at 120×40, keys and
+  ` a–b of n ` in the bottom border as the help overlay draws them). JSON
+  uses the SQL helpers (`sql_identifier` keys, `sql_string`, `sql_number`,
+  `sql_keyword` literals, `sql_punct`). The bars use `gauge(theme.teal)`
+  (teal fill on `track`) rather than new `bar_fill`/`bar_track` helpers.
+  Inspector hints: `j field  Enter value  y copy  Esc grid`.
+- **Keys.** Inspector context gained `Enter` Inspect, `y` CopyCell, `i`
+  ToggleInspector and `Esc` FocusResults (`print_config_default` and the
+  help snapshots were re-accepted); the help's Inspector group has a note
+  listing the popup's letters. Copying a NULL copies nothing and says so.
+- **Deviations.** Tests live in `views/inspector_tests.rs`,
+  `views/value_popup_tests.rs` and `app/reducer/inspector_tests.rs` (there
+  is no `components/`). The spinner snapshot is `160x24`: 160×20 is below
+  the 80×24 minimum and draws only the too-small message. JSON lines are
+  never wrapped (pan with `h`/`l`). A huge value is laid out whole once
+  per open/toggle/resize rather than lazily line by line.
+- **Not done.** Describe mode (box unticked, and no
+  `describe_mode_from_tree_and_esc_returns` test): it needs T301's
+  `SchemaCache` and its `d` key, neither of which exists yet. The
+  `fuzz/fuzz_targets/render_value.rs` target: there is no `fuzz/` crate
+  until T005; its twin, `fuzz_render_value`, is in `inspect_tests.rs`. A
+  mouse click on the inspector does not focus it. No `arboard` fallback
+  (copying is OSC 52, as in T303).

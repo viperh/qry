@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub mod copy;
 pub mod exporter;
 pub mod grid;
+pub mod inspect;
 pub mod mariadb;
 pub mod mysql;
 pub mod oracle;

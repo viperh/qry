@@ -43,7 +43,14 @@ pub(crate) fn table(context: KeyContext) -> &'static [Hint] {
             (&[Action::Palette], "commands"),
             (&[Action::Quit], "quit"),
         ],
-        KeyContext::Inspector | KeyContext::Jobs => &[
+        KeyContext::Inspector => &[
+            (&[Action::Down, Action::Up], "field"),
+            (&[Action::Inspect], "value"),
+            (&[Action::CopyCell], "copy"),
+            (&[Action::FocusResults], "grid"),
+            (&[Action::Quit], "quit"),
+        ],
+        KeyContext::Jobs => &[
             (&[Action::Down, Action::Up], "move"),
             (&[Action::FocusNext], "next pane"),
             (&[Action::Quit], "quit"),

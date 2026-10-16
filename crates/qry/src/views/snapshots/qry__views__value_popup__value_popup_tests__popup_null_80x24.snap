@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/value_popup_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 20                             
+ ▸ ● scratch                  │▌ 1 │ select * from users                        
+        ┌ users.v · text · row 1 ──────────────────────────────────────┐        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                             NULL                             │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        │                                                              │        
+        └─ y copy  w wrap  Esc close ──────────────────────────────────┘        
+ scratch · sqlite · :memory: · auto-commit                       R 1 / 1  C 1/1 
+ j scroll  Esc close                                                     ? help

@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/views/inspector_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
+ SCHEMA                                 │ QUERY  ln 1, col 20                                                          │ INSPECTOR                              
+ ▸ ● scratch                            │▌ 1 │ select * from users                                                     │ COLUMN                                 
+                                        │                                                                              │ email · text · col 3/5                 
+                                        │                                                                              │ nulls 1 / 6 · distinct 2               
+                                        │                                                                              │                                        
+                                        │                                                                              │ TOP VALUES · 6 fetched rows            
+                                        │                                                                              │ alice@example.com           ████████ 3 
+                                        │                                                                              │ bob@example.com             █████▍   2 
+                                        │                                                                              │                                        
+                                        │                                                                              │ RECORD · row 3 / 6                     
+                                        │                                                                              │ id          3                          
+                                        │                                                                              │ name        carol                      
+                                        │                                                                              │ email       alice@example.com          
+                                        │                                                                              │ created_at  2026-10-03 11:30:00        
+                                        │                                                                              │ notes       first line↵second line th… 
+                                        │ RESULTS  6 rows                                                              │                                        
+                                        │  │id  │name │email            │created_at         │notes                     │                                        
+                                        │  │int8│text │text             │timestamp          │text                      │                                        
+                                        │1 │   1│alice│alice@example.com│2026-10-01 09:00:00│NULL                      │                                        
+                                        │2 │   2│bob  │bob@example.com  │2026-10-02 10:15:00│ok                        │                                        
+                                        │3 │   3│carol│alice@example.com│2026-10-03 11:30:00│first line↵second line th…│                                        
+                                        │4 │   4│dave │NULL             │2026-10-04 12:45:00│NULL                      │                                        
+                                        │5 │   5│erin │bob@example.com  │2026-10-05 14:00:00│NULL                      │                                        
+                                        │6 │   6│frank│alice@example.com│2026-10-06 15:30:00│NULL                      │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+                                        │                                                                              │                                        
+ scratch · sqlite · :memory: · auto-commit                                                                                                       R 3 / 6  C 3/5 
+ j field  Enter value  y copy  Esc grid  ctrl-q quit                                                                                                     ? help

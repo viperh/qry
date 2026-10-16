@@ -161,6 +161,8 @@
       "<enter>": "Inspect",
       "<ctrl-s>": "ExportResults"
     },
+    // The RECORD fields go up and down, and the records left and right.
+    // Tab and Esc go back to the grid.
     "Inspector": {
       "<?>": "Help",
       "<:>": "Palette",
@@ -173,7 +175,11 @@
       "<l>": "Right",
       "<right>": "Right",
       "<g><g>": "Top",
-      "<G>": "Bottom"
+      "<G>": "Bottom",
+      "<enter>": "Inspect",
+      "<y>": "CopyCell",
+      "<i>": "ToggleInspector",
+      "<esc>": "FocusResults"
     },
     "Jobs": {
       "<?>": "Help",
