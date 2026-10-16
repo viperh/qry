@@ -9,11 +9,13 @@ use crossterm::event::{KeyEvent, MouseEvent};
 use qry_core::{
     QueryResult,
     schema::{Children, SchemaPath},
+    snippets::Snippet,
 };
 
 use super::state::SessionId;
 use crate::{
     connections::StoredConnection,
+    history_store::Loaded,
     import::Imported,
     notice::{Notice, TimeOfDay},
 };
@@ -35,6 +37,9 @@ pub enum UiEvent {
     /// The wall-clock time of day, sent as it changes, for the timestamps
     /// of the message history.
     Clock(TimeOfDay),
+    /// The wall-clock time, sent with every `Clock`, for the query
+    /// history's timestamps.
+    WallClock(WallClock),
     /// Something the runtime has to tell the user, such as a keychain that
     /// would not forget a password. It is logged too.
     Notice(Notice),
@@ -57,6 +62,15 @@ pub enum UiEvent {
 pub struct Tested {
     pub millis: u64,
     pub version: String,
+}
+
+/// The date and time, and the local zone, as the runtime saw it last.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct WallClock {
+    /// Seconds since the Unix epoch, UTC.
+    pub unix: i64,
+    /// The local zone's offset, in seconds east of UTC.
+    pub offset: i32,
 }
 
 /// Which timer ran out. The reducer tells a stale one from the live one by
@@ -100,6 +114,12 @@ pub enum FileAnswer {
     /// The backup's file is already there (the path as written), so it was
     /// left alone until the user says to replace it.
     ConnectionsExportExists(String),
+    /// Every connection's query history, as read at startup.
+    HistoryLoaded(Vec<Loaded>),
+    /// A history file could not be written; the runtime has logged why.
+    HistoryWriteFailed(String),
+    /// The saved snippets, as read at startup.
+    SnippetsLoaded(Vec<Snippet>),
 }
 
 /// The database worker's answer to a [`DbCommand`](crate::db::DbCommand).

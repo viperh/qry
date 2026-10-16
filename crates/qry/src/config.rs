@@ -51,6 +51,8 @@ pub struct Config {
     pub(crate) max_rows: usize,
     /// The first write of a session on a `prod` connection asks first.
     pub(crate) confirm_writes_on_prod: bool,
+    /// What the query history records, and how much of it.
+    pub(crate) history: HistoryConfig,
     /// Problems that did not stop the config from loading; see
     /// [`Config::warnings`].
     warnings: Vec<String>,
@@ -66,6 +68,7 @@ struct RawFile {
     #[serde(default)]
     max_rows: Option<usize>,
     confirm_writes_on_prod: Option<bool>,
+    history: Option<RawHistory>,
     /// `{ context: { chord: action or null } }`.
     #[serde(default)]
     keybindings: Option<Map<String, Value>>,
@@ -76,6 +79,47 @@ struct RawFile {
     /// only noticed, to warn that it is ignored.
     #[serde(default)]
     styles: Option<IgnoredAny>,
+}
+
+/// The query history's settings; see [`crate::history_store`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryConfig {
+    /// Record statements at all.
+    pub(crate) enabled: bool,
+    /// The most entries one connection keeps.
+    pub(crate) max_entries: usize,
+    /// Write the scratch database's history to disk too, instead of only
+    /// keeping it for the run.
+    pub(crate) ephemeral_to_disk: bool,
+    /// The words whose string literal is stored as `'•••'`.
+    pub(crate) redact: Vec<String>,
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_entries: qry_core::history::DEFAULT_CAP,
+            ephemeral_to_disk: false,
+            redact: qry_core::history::DEFAULT_REDACT
+                .iter()
+                .map(|w| (*w).to_string())
+                .collect(),
+        }
+    }
+}
+
+/// The `history` section as written: each key is optional.
+#[derive(Debug, Default, Deserialize)]
+struct RawHistory {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    max_entries: Option<usize>,
+    #[serde(default)]
+    ephemeral_to_disk: Option<bool>,
+    #[serde(default)]
+    redact: Option<Vec<String>>,
 }
 
 /// Upper-cased crate name, used as the prefix for the `*_DATA`, `*_CONFIG`
@@ -152,6 +196,15 @@ impl Config {
         }
         if let Some(ask) = file.confirm_writes_on_prod {
             self.confirm_writes_on_prod = ask;
+        }
+        if let Some(history) = file.history {
+            let h = &mut self.history;
+            h.enabled = history.enabled.unwrap_or(h.enabled);
+            h.max_entries = history.max_entries.unwrap_or(h.max_entries).max(1);
+            h.ephemeral_to_disk = history.ephemeral_to_disk.unwrap_or(h.ephemeral_to_disk);
+            if let Some(redact) = history.redact {
+                h.redact = redact;
+            }
         }
 
         let mut old = Migrated::default();
@@ -272,6 +325,16 @@ impl Config {
         out.push_str(&format!(
             "  \"confirm_writes_on_prod\": {},\n",
             self.confirm_writes_on_prod
+        ));
+        let h = &self.history;
+        let redact: Vec<String> = h.redact.iter().map(|w| quote(w)).collect();
+        out.push_str(&format!(
+            "  \"history\": {{\n    \"enabled\": {},\n    \"max_entries\": {},\n    \
+             \"ephemeral_to_disk\": {},\n    \"redact\": [{}]\n  }},\n",
+            h.enabled,
+            h.max_entries,
+            h.ephemeral_to_disk,
+            redact.join(", ")
         ));
         out.push_str("  \"keybindings\": {");
         for (i, context) in KeyContext::iter().enumerate() {

@@ -52,6 +52,43 @@ async fn runtime_executes_save_off_the_loop() {
 }
 
 #[tokio::test]
+async fn history_and_snippets_are_written_and_read_off_the_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = crate::history_store::MemoryStore::default();
+    let (executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
+    let mut executor = executor
+        .with_config_dir(dir.path().join("config"))
+        .with_history(Arc::new(store.clone()));
+    let line = "{\"sql\":\"SELECT 1\",\"ok\":true,\"ms\":1}\n".to_string();
+    finished(executor.execute(Effect::History(HistoryWrite::Append {
+        connection: "c1".into(),
+        line: line.clone(),
+    })))
+    .await;
+    assert_eq!(store.file("c1"), Some(line));
+    finished(executor.execute(Effect::LoadHistory)).await;
+    let Ok(UiEvent::File(FileAnswer::HistoryLoaded(loaded))) = events.try_recv() else {
+        panic!("expected HistoryLoaded");
+    };
+    assert_eq!(loaded[0].connection, "c1");
+    assert_eq!(loaded[0].history.len(), 1);
+
+    let snippet = qry_core::snippets::Snippet {
+        name: "one".into(),
+        sql: "SELECT 1".into(),
+        connection: None,
+        tags: Vec::new(),
+    };
+    finished(executor.execute(Effect::SaveSnippets(vec![snippet.clone()]))).await;
+    assert!(dir.path().join("config/snippets.json").exists());
+    finished(executor.execute(Effect::LoadSnippets)).await;
+    assert_eq!(
+        events.try_recv().unwrap(),
+        UiEvent::File(FileAnswer::SnippetsLoaded(vec![snippet]))
+    );
+}
+
+#[tokio::test]
 async fn loading_reads_the_saved_connections() {
     let dir = tempfile::tempdir().unwrap();
     let saved = sqlite("app", "app.db");

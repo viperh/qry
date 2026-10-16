@@ -6,7 +6,9 @@ pub mod copy;
 pub mod exporter;
 #[doc(hidden)]
 pub mod fuzz;
+pub mod fuzzy;
 pub mod grid;
+pub mod history;
 pub mod inspect;
 pub mod jobs;
 pub mod mariadb;
@@ -15,6 +17,7 @@ pub mod oracle;
 pub mod postgres;
 pub mod schema;
 pub mod shared;
+pub mod snippets;
 pub mod sql;
 pub mod sqlite;
 /// Fakes and fixtures for tests; never in a release build.

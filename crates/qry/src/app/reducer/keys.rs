@@ -69,6 +69,13 @@ pub(super) fn key(state: &mut State, key: KeyEvent, fx: &mut Vec<Effect>) {
         super::palette::type_char(state, c);
         return;
     }
+    // And the history dialog's.
+    if matches!(state.overlays.last(), Some(Overlay::History(_)))
+        && let Some(c) = typed_char(key)
+    {
+        super::history::type_char(state, c);
+        return;
+    }
 
     let contexts = state.contexts();
     state.pending_keys.push(normalise(key));
@@ -130,9 +137,9 @@ fn typing_into_dialog(state: &State, key: KeyEvent) -> bool {
 }
 
 /// A key bound to nothing: the editor types it, a confirm dialog takes
-/// `y` and `n`, the Messages dialog `y` and `c`, and the value popup its
-/// letters. (A dialog's text field took its characters before the
-/// lookup.)
+/// `y` and `n`, the Messages dialog `y` and `c`, the value popup its
+/// letters, and Manage snippets `r`, `d` and `e`. (A dialog's text field
+/// took its characters before the lookup.)
 fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<Effect>) {
     let Some(c) = typed_char(key) else {
         return;
@@ -147,6 +154,7 @@ fn unbound(state: &mut State, context: KeyContext, key: KeyEvent, fx: &mut Vec<E
             _ = super::inspector::popup_shortcut(state, c, fx);
         }
         KeyContext::Help => _ = super::notices::shortcut(state, c, fx),
+        KeyContext::Palette => _ = super::snippets::shortcut(state, c),
         _ => {}
     }
 }

@@ -6,7 +6,7 @@
 //! [`Effect`]s that come back and draws when something changed. Every
 //! decision is the reducer's; this only does what it is told.
 
-use std::{path::PathBuf, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use ratatui::prelude::Rect;
 use tokio::{
@@ -16,10 +16,11 @@ use tokio::{
 use tracing::debug;
 
 use crate::{
-    app::{App, DbAnswer, Effect, FileAnswer, SessionId, UiEvent},
-    config::{Config, get_data_dir},
+    app::{App, DbAnswer, Effect, FileAnswer, SessionId, UiEvent, WallClock},
+    config::{Config, get_config_dir, get_data_dir},
     connections::{self, StoredConnection},
     db::Answers,
+    history_store::{self, FileStore, HistoryStore, HistoryWrite},
     import::Format,
     notice::{Notice, TimeOfDay},
     secrets,
@@ -63,6 +64,7 @@ impl Runtime {
         }
         let theme = theme::resolve(theme, config.theme.as_deref(), ColorSupport::detect())?;
         let (executor, answers, events) = Executor::new(get_data_dir(), config.max_rows);
+        let executor = executor.with_config_dir(get_config_dir());
         Ok(Self {
             app: App::new(config, theme, connections::id_seed()),
             tick_rate,
@@ -86,6 +88,7 @@ impl Runtime {
         let size = tui.terminal.size()?;
         let mut clock = time_of_day();
         let mut queued = vec![
+            UiEvent::WallClock(wall_clock()),
             UiEvent::Clock(clock),
             UiEvent::Resize(size.width, size.height),
         ];
@@ -116,6 +119,7 @@ impl Runtime {
                             if now != clock {
                                 clock = now;
                                 queued.push(UiEvent::Clock(now));
+                                queued.push(UiEvent::WallClock(wall_clock()));
                             }
                             UiEvent::Tick(Instant::now())
                         }
@@ -175,6 +179,15 @@ pub(crate) fn time_of_day() -> TimeOfDay {
     TimeOfDay(chrono::Local::now().num_seconds_from_midnight())
 }
 
+/// The date and time, with the local zone's offset.
+pub(crate) fn wall_clock() -> WallClock {
+    let now = chrono::Local::now();
+    WallClock {
+        unix: now.timestamp(),
+        offset: now.offset().local_minus_utc(),
+    }
+}
+
 /// What woke the loop.
 enum Incoming {
     Terminal(Option<Event>),
@@ -220,6 +233,10 @@ pub(crate) enum Executed {
 pub(crate) struct Executor {
     /// Where the connections file lives.
     data_dir: PathBuf,
+    /// Where the snippets file lives.
+    config_dir: PathBuf,
+    /// The query history's files.
+    history: Arc<dyn HistoryStore>,
     /// The open sessions' workers.
     pub(crate) sessions: SessionManager,
     /// Where every worker sends its answers.
@@ -241,12 +258,27 @@ impl Executor {
         let (answers_tx, answers) = mpsc::unbounded_channel();
         let (events_tx, events) = mpsc::unbounded_channel();
         let executor = Self {
+            history: Arc::new(FileStore::new(&data_dir)),
+            config_dir: data_dir.clone(),
             data_dir,
             sessions: SessionManager::new(max_rows),
             answers: answers_tx,
             events: events_tx,
         };
         (executor, answers, events)
+    }
+
+    /// Keeps the snippets in `config_dir` rather than the data directory.
+    pub(crate) fn with_config_dir(mut self, config_dir: PathBuf) -> Self {
+        self.config_dir = config_dir;
+        self
+    }
+
+    /// Writes the history through `store` instead of the files.
+    #[cfg(test)]
+    pub(crate) fn with_history(mut self, store: Arc<dyn HistoryStore>) -> Self {
+        self.history = store;
+        self
     }
 
     pub(crate) fn execute(&mut self, effect: Effect) -> Executed {
@@ -322,6 +354,10 @@ impl Executor {
                     let _ = events.send(UiEvent::Timer(timer));
                 }))
             }
+            Effect::LoadHistory => Executed::Spawned(self.load_history()),
+            Effect::History(write) => Executed::Spawned(self.write_history(write)),
+            Effect::LoadSnippets => Executed::Spawned(self.load_snippets()),
+            Effect::SaveSnippets(list) => Executed::Spawned(self.save_snippets(list)),
             effect @ (Effect::ClearScreen
             | Effect::Suspend
             | Effect::Quit
@@ -363,6 +399,62 @@ impl Executor {
                 }
             };
             let _ = events.send(UiEvent::File(answer));
+        })
+    }
+
+    /// Reads every connection's history off the event loop.
+    fn load_history(&self) -> JoinHandle<()> {
+        let (store, events) = (self.history.clone(), self.events.clone());
+        tokio::task::spawn_blocking(move || {
+            let answer = match history_store::load(store.as_ref()) {
+                Ok(loaded) => FileAnswer::HistoryLoaded(loaded),
+                Err(e) => {
+                    let message = format!("cannot read the query history: {e}");
+                    tracing::error!("{message}");
+                    FileAnswer::HistoryWriteFailed(message)
+                }
+            };
+            let _ = events.send(UiEvent::File(answer));
+        })
+    }
+
+    /// Appends to or rewrites a history file off the event loop.
+    fn write_history(&self, write: HistoryWrite) -> JoinHandle<()> {
+        let (store, events) = (self.history.clone(), self.events.clone());
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = history_store::perform(store.as_ref(), &write) {
+                let message = format!("cannot write the query history: {e}");
+                tracing::error!("{message}");
+                let _ = events.send(UiEvent::File(FileAnswer::HistoryWriteFailed(message)));
+            }
+        })
+    }
+
+    /// Reads the saved snippets off the event loop.
+    fn load_snippets(&self) -> JoinHandle<()> {
+        let (dir, events) = (self.config_dir.clone(), self.events.clone());
+        tokio::task::spawn_blocking(move || {
+            let answer = match history_store::load_snippets(&dir) {
+                Ok(list) => FileAnswer::SnippetsLoaded(list),
+                Err(e) => {
+                    let message = format!("{e:#}");
+                    tracing::error!("{message}");
+                    FileAnswer::LoadFailed(message)
+                }
+            };
+            let _ = events.send(UiEvent::File(answer));
+        })
+    }
+
+    /// Writes the snippets off the event loop.
+    fn save_snippets(&self, list: Vec<qry_core::snippets::Snippet>) -> JoinHandle<()> {
+        let (dir, events) = (self.config_dir.clone(), self.events.clone());
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = history_store::save_snippets(&dir, &list) {
+                let message = format!("cannot save the snippets: {e}");
+                tracing::error!("{message}");
+                let _ = events.send(UiEvent::File(FileAnswer::SaveFailed(message)));
+            }
         })
     }
 

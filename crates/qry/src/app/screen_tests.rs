@@ -125,6 +125,7 @@ fn main_screen_has_no_boxes() {
         "overlay.rs",
         "confirm.rs",
         "palette.rs",
+        "history.rs",
     ];
     for (path, text) in crate::testing::sources(&["views"]) {
         let name = path.file_name().unwrap().to_string_lossy().to_string();

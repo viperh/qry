@@ -6,7 +6,7 @@ expression: "styled(&h.render_buffer(120, 40))"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › exp                                                                                 6 / 63 │            
+            │ › exp                                                                                 6 / 66 │            
             │ Export connections…                           connection                                     │            
             │ Export results                                results                                 ctrl-s │            
             │ export csv <path>                             results                                        │            

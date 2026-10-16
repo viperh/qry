@@ -25,6 +25,7 @@ pub mod errors;
 #[doc(hidden)]
 pub mod fuzz;
 pub mod help_model;
+pub mod history_store;
 pub mod import;
 pub mod keymap;
 pub mod logging;

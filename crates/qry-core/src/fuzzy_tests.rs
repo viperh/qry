@@ -46,6 +46,30 @@ fn positions_are_char_indices_for_unicode_labels() {
 }
 
 #[test]
+fn prefix_beats_scattered() {
+    let prefix = score("sel", "SELECT * FROM users").unwrap();
+    let scattered = score("sel", "SHOW TABLES WHERE name LIKE 'x'").unwrap();
+    assert!(
+        prefix.score > scattered.score,
+        "{prefix:?} vs {scattered:?}"
+    );
+    assert_eq!(prefix.positions, [0, 1, 2]);
+}
+
+#[test]
+fn no_match_is_none() {
+    assert_eq!(score("xyz", "SELECT 1"), None);
+    assert_eq!(score("a", ""), None);
+}
+
+#[test]
+fn match_positions_are_char_indices_not_bytes() {
+    // `é` is two bytes: a byte index would put `u` at 2.
+    let m = score("u", "éu").unwrap();
+    assert_eq!(m.positions, [1]);
+}
+
+#[test]
 fn empty_query_matches_everything() {
     assert_eq!(
         score("", "anything").unwrap().positions,

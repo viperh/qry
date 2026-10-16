@@ -11,7 +11,7 @@ use qry_core::{
 
 use qry_core::jobs::{Cancelled, JobId, JobKind, JobState};
 
-use super::{notices::notify, results, tx_change};
+use super::{history, notices::notify, results, tx_change};
 use crate::{
     app::{
         dialogs::{DialogState, confirm::Confirm},
@@ -281,7 +281,8 @@ fn label(dialect: Dialect, sql: &str, result: &QueryResult) -> String {
     format!("{name} · {}", result.rows.len())
 }
 
-/// Session `id`'s statement finished with `result`.
+/// Session `id`'s statement finished with `result`. It goes into the
+/// history too.
 pub(super) fn done(
     state: &mut State,
     id: SessionId,
@@ -321,8 +322,20 @@ pub(super) fn done(
     let table = table_name(session.dialect(), &sql);
     let tab = session.new_tab(label);
     tab.table = table;
-    tab.sql = sql;
+    tab.sql = sql.clone();
+    let outcome = history::Outcome {
+        ok: true,
+        // The rows it returned, or else those it changed.
+        rows: if result.columns.is_empty() {
+            result.affected
+        } else {
+            u64::try_from(result.rows.len()).ok()
+        },
+        ms: u64::try_from(result.elapsed.as_millis()).unwrap_or(u64::MAX),
+        error: None,
+    };
     results::show(&mut tab.results, result);
+    history::record(state, id, &sql, outcome, fx);
     pump(state, id, fx);
 }
 
@@ -366,9 +379,9 @@ pub(super) fn failed(
     }
     let sql = queued.map(|q| q.sql).unwrap_or_default();
     session.new_tab("✗ error".into()).error = Some(TabError {
-        message,
+        message: message.clone(),
         position,
-        sql,
+        sql: sql.clone(),
     });
     if !keep_going {
         // The rest of the run is dropped, never sent.
@@ -378,6 +391,18 @@ pub(super) fn failed(
             }
         }
     }
+    // How long it ran, on the job's clock (ticks, so coarse).
+    let ms = job
+        .and_then(|j| state.jobs.get(j))
+        .and_then(|j| j.elapsed(state.now))
+        .map_or(0, |e| u64::try_from(e.as_millis()).unwrap_or(u64::MAX));
+    let outcome = history::Outcome {
+        ok: false,
+        rows: None,
+        ms,
+        error: Some(message),
+    };
+    history::record(state, id, &sql, outcome, fx);
     pump(state, id, fx);
 }
 

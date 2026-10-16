@@ -13,6 +13,7 @@ pub(crate) mod gotoform;
 pub(crate) mod importdialog;
 pub(crate) mod importform;
 pub(crate) mod passwordform;
+pub(crate) mod snippetform;
 pub(crate) mod textinput;
 
 use qry_core::ExportConfig;
@@ -28,6 +29,7 @@ use self::{
     importdialog::ImportPreview,
     importform::ImportForm,
     passwordform::PasswordForm,
+    snippetform::{SnippetForm, SnippetSave},
 };
 use super::state::SessionId;
 use crate::{connections::StoredConnection, import::Format, secrets::Password};
@@ -44,11 +46,13 @@ pub(crate) enum DialogState {
     Copy(CopyForm),
     Goto(GotoForm),
     ImportPreview(ImportPreview),
+    Snippet(SnippetForm),
 }
 
 impl DialogState {
     pub(crate) fn form(&self) -> &dyn Form {
         match self {
+            Self::Snippet(form) => form,
             Self::Connection(form) => &**form,
             Self::Export(form) => form,
             Self::Password(form) => form,
@@ -63,6 +67,7 @@ impl DialogState {
 
     pub(crate) fn form_mut(&mut self) -> &mut dyn Form {
         match self {
+            Self::Snippet(form) => form,
             Self::Connection(form) => &mut **form,
             Self::Export(form) => form,
             Self::Password(form) => form,
@@ -113,6 +118,8 @@ pub(crate) enum Submission {
     },
     /// Go to this row of the results: `N` or `N%`.
     Goto(String),
+    /// Save or rename a snippet.
+    SaveSnippet(SnippetSave),
 }
 
 /// The form helpers (`key`, `press`, `type_str`, `render`), shared by every

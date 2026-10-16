@@ -99,7 +99,13 @@ fn startup_has_scratch_session_one() {
     assert_eq!(SessionId::FIRST, SessionId(1));
     h.send(UiEvent::Started);
     let effects = h.take_effects();
-    let [Effect::LoadConnections, Effect::OpenSession(id, scratch)] = effects.as_slice() else {
+    let [
+        Effect::LoadConnections,
+        Effect::LoadHistory,
+        Effect::LoadSnippets,
+        Effect::OpenSession(id, scratch),
+    ] = effects.as_slice()
+    else {
         panic!("expected the scratch session, got {effects:?}");
     };
     assert_eq!(*id, SessionId(1));

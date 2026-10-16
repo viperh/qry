@@ -25,6 +25,11 @@ pub(crate) enum OnConfirm {
     OverwriteConnections { path: String, ids: Vec<String> },
     /// Roll back these sessions' open transactions, then quit.
     QuitRollingBack(Vec<SessionId>),
+    /// Delete the snippet with this name and scope.
+    DeleteSnippet {
+        name: String,
+        connection: Option<String>,
+    },
 }
 
 /// What a confirm's checkbox decides.
@@ -123,6 +128,20 @@ impl Confirm {
             "Close",
             true,
             OnConfirm::CloseSession(session),
+        )
+    }
+
+    /// Asks before deleting a snippet.
+    pub(crate) fn delete_snippet(name: &str, connection: Option<String>) -> Self {
+        Self::new(
+            "Delete Snippet",
+            format!("Delete the snippet \"{name}\"? This cannot be undone."),
+            "Delete",
+            true,
+            OnConfirm::DeleteSnippet {
+                name: name.to_string(),
+                connection,
+            },
         )
     }
 

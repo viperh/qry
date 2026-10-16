@@ -13,6 +13,7 @@
 pub(crate) mod dialogs;
 pub mod effects;
 pub mod event;
+pub(crate) mod history;
 mod reducer;
 pub(crate) mod schematree;
 pub mod state;
@@ -21,7 +22,7 @@ use std::sync::Arc;
 
 pub use self::{
     effects::Effect,
-    event::{DbAnswer, FileAnswer, Timer, UiEvent},
+    event::{DbAnswer, FileAnswer, Timer, UiEvent, WallClock},
     state::{SessionId, SessionStatus, State},
 };
 use crate::{config::Config, theme::Theme};

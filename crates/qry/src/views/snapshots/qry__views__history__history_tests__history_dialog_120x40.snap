@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/views/history_tests.rs
+expression: "h.render(120, 40)"
+---
+ qry  1 scratch                                                                            sqlite · :memory:   COMMAND  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+▌▸ ⠋ sq  scratch              │  1 │                                                                                    
+            ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
+            │ ›                                                                        scratch · 4 entries │            
+            │ ✓ 09:12  SELECT *                                                                1 row  4 ms │            
+            │ ✓ 09:00  SELECT u.name, count(*) FROM users u JOIN orders o ON o.user_id = …   42 rows 31 ms │            
+            │ ✗ yday   SELECT * FROM user_s                                                          error │            
+            │ ✓ Oct 03 SELECT * FROM orders                                                   7 rows 12 ms │            
+            └─ Enter insert  ctrl-Enter run  Tab all connections  ctrl-d delete  Esc close ────────────────┘            
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS                                                                                 
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ connecting to scratch… · sqlite · :memory:                                                                             
+ Enter run  ↓ move  Esc close                                                                                   F1 help

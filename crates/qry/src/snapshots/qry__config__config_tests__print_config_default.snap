@@ -7,6 +7,12 @@ expression: "Config::embedded().effective_json()"
   "continue_on_error": false,
   "max_rows": 1000,
   "confirm_writes_on_prod": true,
+  "history": {
+    "enabled": true,
+    "max_entries": 1000,
+    "ephemeral_to_disk": false,
+    "redact": ["PASSWORD", "IDENTIFIED BY", "SECRET"]
+  },
   "keybindings": {
     "Global": {
       "ctrl-q": "Quit",
@@ -78,6 +84,10 @@ expression: "Config::embedded().effective_json()"
       "F8": "RunAll",
       "ctrl-e": "RunSelection",
       "ctrl-c": "CancelQuery",
+      "ctrl-r": "History",
+      "alt-↑": "RecallPrev",
+      "alt-↓": "RecallNext",
+      "ctrl-s": "SaveSnippet",
       "↑": "Up",
       "↓": "Down",
       "←": "Left",
@@ -216,6 +226,8 @@ expression: "Config::embedded().effective_json()"
       "ctrl-q": "Quit",
       "F1": "Help",
       "ctrl-p": "Palette",
+      "ctrl-Enter": "SubmitAndRun",
+      "ctrl-d": "DeleteEntry",
       "↑": "Up",
       "ctrl-k": "Up",
       "↓": "Down",

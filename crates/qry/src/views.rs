@@ -7,6 +7,7 @@ pub(crate) mod editor;
 pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
+pub(crate) mod history;
 pub(crate) mod import_preview;
 pub(crate) mod inspector;
 pub(crate) mod jobs;
@@ -124,6 +125,8 @@ fn draw_overlays(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
             Overlay::Messages(messages) => messages::draw(messages, state, theme, frame, area),
             Overlay::Palette(open) => palette::draw(open, theme, frame, area),
             Overlay::Value(popup) => value_popup::draw(popup, theme, frame, area),
+            Overlay::History(open) => history::draw(open, state, theme, frame, area),
+            Overlay::Snippets(open) => history::draw_snippets(open, state, theme, frame, area),
         }
     }
 }

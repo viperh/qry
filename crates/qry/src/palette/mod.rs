@@ -42,6 +42,9 @@ pub enum PaletteTarget {
         catalog: String,
         object: String,
     },
+    /// Insert the saved snippet with this index into the editor; ctrl-enter
+    /// runs it too.
+    Snippet(usize),
     /// A command that takes the text typed after `prefix`.
     Argument {
         prefix: &'static str,

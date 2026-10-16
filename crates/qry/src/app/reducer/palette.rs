@@ -87,6 +87,17 @@ pub(crate) fn items(state: &State) -> Vec<PaletteItem> {
             },
         }
     }));
+    let here = &state.sessions.active().connection_id;
+    items.extend(
+        qry_core::snippets::for_connection(&state.snippets, here)
+            .into_iter()
+            .map(|(i, snippet)| PaletteItem {
+                label: format!("snippet: {}", snippet.name),
+                category: "snippets",
+                key: None,
+                target: PaletteTarget::Snippet(i),
+            }),
+    );
     items.extend(PaletteItem::arguments());
     items
 }
@@ -177,7 +188,12 @@ pub(super) fn run_key(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
             return;
         }
         Action::Submit => {
-            submit(state, fx);
+            submit(state, false, fx);
+            return;
+        }
+        // A snippet is inserted and run; anything else runs as on Enter.
+        Action::SubmitAndRun => {
+            submit(state, true, fx);
             return;
         }
         _ => false,
@@ -192,6 +208,7 @@ enum Run {
     Action(Action),
     OpenConnection(String),
     Table(crate::app::state::SessionId, String, String),
+    Snippet(usize),
     Export(qry_core::ExportConfig),
     Goto(usize),
     Theme(String),
@@ -209,6 +226,7 @@ fn pick(palette: &PaletteState) -> Result<(String, Run), String> {
             catalog,
             object,
         } => Run::Table(*session, catalog.clone(), object.clone()),
+        PaletteTarget::Snippet(i) => Run::Snippet(*i),
         PaletteTarget::Argument { hint, kind, .. } => {
             let arg = palette.argument().map(|(_, arg)| arg.trim()).unwrap_or("");
             if arg.is_empty() {
@@ -238,8 +256,8 @@ fn pick(palette: &PaletteState) -> Result<(String, Run), String> {
 }
 
 /// Runs the selected item and closes the palette, or keeps it open with
-/// why it cannot.
-fn submit(state: &mut State, fx: &mut Vec<Effect>) {
+/// why it cannot. A snippet is inserted, and run too if `run`.
+fn submit(state: &mut State, run_snippet: bool, fx: &mut Vec<Effect>) {
     let Some(palette) = palette_mut(state) else {
         return;
     };
@@ -264,6 +282,7 @@ fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         Run::Table(session, catalog, object) => {
             super::tree::select_object(state, session, &catalog, &object, true, fx);
         }
+        Run::Snippet(i) => super::snippets::insert(state, i, run_snippet, fx),
         Run::Export(config) => {
             fx.push(Effect::Db(state.sessions.active, DbCommand::Export(config)));
         }

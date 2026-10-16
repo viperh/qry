@@ -45,5 +45,10 @@ pub(super) fn answer(state: &mut State, answer: FileAnswer, fx: &mut Vec<Effect>
             dialogs::failed(state, Awaiting::ExportConnections, &message);
             notify(state, Notice::error(message), fx);
         }
+        FileAnswer::HistoryLoaded(files) => super::history::loaded(state, files),
+        FileAnswer::HistoryWriteFailed(message) => {
+            super::history::write_failed(state, message, fx);
+        }
+        FileAnswer::SnippetsLoaded(list) => super::snippets::loaded(state, list),
     }
 }
