@@ -160,7 +160,7 @@ async fn query_result_comes_back_as_db_answers() {
     let Some(DbAnswer::QueryDone(result)) = answers.recv().await else {
         panic!("expected QueryDone");
     };
-    assert_eq!(result.columns, ["one"]);
+    assert_eq!(result.column_names(), ["one"]);
     let Some(DbAnswer::Notice(Notice {
         level: Level::Success,
         text: message,

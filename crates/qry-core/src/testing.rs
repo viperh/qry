@@ -22,7 +22,7 @@ use std::{
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 
-use crate::{DatabaseType, QueryResult, shared::Database};
+use crate::{ColumnMeta, DatabaseType, QueryResult, shared::Database};
 
 /// One scripted answer from a [`FakeDatabase`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,11 +134,7 @@ async fn resolve(reply: Reply) -> Result<QueryResult> {
         match reply {
             Reply::Rows(result) => return Ok(result),
             Reply::Affected(count) => {
-                return Ok(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    affected: Some(count),
-                });
+                return Ok(QueryResult::affected(count));
             }
             Reply::Error(message) => return Err(anyhow!(message)),
             Reply::Delay(after, inner) => {
@@ -174,6 +170,17 @@ impl Database for FakeDatabase {
     }
 }
 
+/// A result whose columns have these `(name, database type)`s, and these
+/// rows.
+pub fn typed_result(columns: &[(&str, &str)], rows: &[&[Option<&str>]]) -> QueryResult {
+    let mut result = result(&[], rows);
+    result.columns = columns
+        .iter()
+        .map(|(name, type_name)| ColumnMeta::new(*name, *type_name))
+        .collect();
+    result
+}
+
 /// A result with these columns and rows, for readable fixtures. `None` is a
 /// SQL `NULL`.
 ///
@@ -182,12 +189,14 @@ impl Database for FakeDatabase {
 /// ```
 pub fn result(columns: &[&str], rows: &[&[Option<&str>]]) -> QueryResult {
     QueryResult {
-        columns: columns.iter().map(|c| c.to_string()).collect(),
+        columns: columns.iter().map(|c| ColumnMeta::untyped(*c)).collect(),
         rows: rows
             .iter()
             .map(|row| row.iter().map(|cell| cell.map(str::to_string)).collect())
             .collect(),
         affected: None,
+        elapsed: std::time::Duration::ZERO,
+        truncated: false,
     }
 }
 
@@ -195,11 +204,15 @@ pub fn result(columns: &[&str], rows: &[&[Option<&str>]]) -> QueryResult {
 /// tests that need a result of a given size more than particular values.
 pub fn grid(rows: usize, cols: usize) -> QueryResult {
     QueryResult {
-        columns: (0..cols).map(|c| format!("c{c}")).collect(),
+        columns: (0..cols)
+            .map(|c| ColumnMeta::untyped(format!("c{c}")))
+            .collect(),
         rows: (0..rows)
             .map(|r| (0..cols).map(|c| Some(format!("r{r}c{c}"))).collect())
             .collect(),
         affected: None,
+        elapsed: std::time::Duration::ZERO,
+        truncated: false,
     }
 }
 

@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseType,
-    shared::{QueryResult, SslMode},
+    shared::{ColumnMeta, QueryResult, SslMode},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,10 +105,11 @@ impl Database for MySql {
         let mut conn = self.conn.lock().await;
         let mut result = conn.query_iter(sql).await?;
 
+        // `MYSQL_TYPE_LONG` and the like, which `ValueKind` reads.
         let columns = result
             .columns_ref()
             .iter()
-            .map(|c| c.name_str().into_owned())
+            .map(|c| ColumnMeta::new(c.name_str().into_owned(), format!("{:?}", c.column_type())))
             .collect();
 
         let rows = result
@@ -125,6 +126,8 @@ impl Database for MySql {
             columns,
             rows,
             affected: Some(affected),
+            elapsed: std::time::Duration::ZERO,
+            truncated: false,
         })
     }
 

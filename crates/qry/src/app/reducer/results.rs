@@ -79,7 +79,7 @@ fn column_widths(result: &QueryResult) -> Vec<u16> {
                         .and_then(Option::as_deref)
                         .map_or(width("NULL"), width)
                 })
-                .fold(width(name), usize::max);
+                .fold(width(&name.name), usize::max);
             u16::try_from(widest)
                 .unwrap_or(u16::MAX)
                 .clamp(1, MAX_COLUMN_WIDTH)

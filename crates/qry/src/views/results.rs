@@ -138,7 +138,7 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     let visible = visible_columns(&results.widths, col_offset, inner.width);
 
     let header = Row::new(visible.iter().map(|&(c, _)| {
-        let name = Cell::from(result.columns[c].as_str());
+        let name = Cell::from(result.columns[c].name.as_str());
         if c == col {
             name.style(theme.header_active())
         } else {

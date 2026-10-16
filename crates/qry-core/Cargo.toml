@@ -32,6 +32,7 @@ serde = { workspace = true }
 tokio = { workspace = true }
 tokio-postgres = { workspace = true }
 tokio-rusqlite = { workspace = true }
+unicode-width = { workspace = true }
 
 [dev-dependencies]
 # A TLS server for the Oracle tests.

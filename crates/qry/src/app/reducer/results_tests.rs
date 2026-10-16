@@ -16,6 +16,7 @@ fn columns_are_as_wide_as_their_widest_value_up_to_a_cap() {
         columns: vec!["id".into(), "n".into(), "long".into()],
         rows: vec![vec![Some("12345".into()), None, Some("x".repeat(100))]],
         affected: None,
+        ..QueryResult::affected(0)
     };
     assert_eq!(column_widths(&result), [5, 4, MAX_COLUMN_WIDTH]);
 }

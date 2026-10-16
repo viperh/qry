@@ -96,7 +96,7 @@ async fn db_worker_answers_with_db_answer() {
     let Some((_, DbAnswer::QueryDone(result))) = answers.recv().await else {
         panic!("expected QueryDone");
     };
-    assert_eq!(result.columns, ["one"]);
+    assert_eq!(result.column_names(), ["one"]);
 }
 
 #[tokio::test]

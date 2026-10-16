@@ -23,7 +23,13 @@ impl Exporter {
     /// Takes the column names as the header row, then every row.
     pub fn from_result(result: &QueryResult, config: &ExportConfig) -> Self {
         let mut data = Vec::with_capacity(result.rows.len() + 1);
-        data.push(result.columns.iter().cloned().map(Some).collect());
+        data.push(
+            result
+                .columns
+                .iter()
+                .map(|c| Some(c.name.clone()))
+                .collect(),
+        );
         data.extend(result.rows.iter().cloned());
 
         let mut exporter = Self {

@@ -6,8 +6,7 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 use crate::{
     Database, DatabaseType,
-    shared::QueryError,
-    shared::{QueryResult, SslMode},
+    shared::{ColumnMeta, QueryError, QueryResult, SslMode},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +104,15 @@ impl Database for Postgres {
         )
     }
     async fn query(&self, sql: &str) -> Result<QueryResult> {
+        // Preparing first gives the columns' types, and their names even
+        // when no row comes back. The simple protocol still runs it, as it
+        // takes what preparing refuses (COPY, several commands).
+        let described: Option<Vec<ColumnMeta>> = self.client.prepare(sql).await.ok().map(|st| {
+            st.columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.type_().name()))
+                .collect()
+        });
         let messages = self.client.simple_query(sql).await.map_err(|e| {
             let Some(db) = e.as_db_error() else {
                 return anyhow::Error::new(e);
@@ -129,7 +137,11 @@ impl Database for Postgres {
             match message {
                 SimpleQueryMessage::Row(row) => {
                     if columns.is_empty() {
-                        columns = row.columns().iter().map(|c| c.name().to_string()).collect();
+                        columns = row
+                            .columns()
+                            .iter()
+                            .map(|c| ColumnMeta::untyped(c.name()))
+                            .collect();
                     }
                     rows.push(
                         (0..row.len())
@@ -142,10 +154,17 @@ impl Database for Postgres {
             }
         }
 
+        if let Some(described) = described
+            && (columns.is_empty() || described.len() == columns.len())
+        {
+            columns = described;
+        }
         Ok(QueryResult {
             columns,
             rows,
             affected: Some(affected),
+            elapsed: std::time::Duration::ZERO,
+            truncated: false,
         })
     }
 

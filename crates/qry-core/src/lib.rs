@@ -1,7 +1,9 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
+pub mod copy;
 pub mod exporter;
+pub mod grid;
 pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
@@ -18,7 +20,7 @@ use mariadb::{MariaDb, MariadbConfig};
 use mysql::{MySql, MySqlConfig};
 use oracle::{Oracle, OracleConfig};
 use postgres::{Postgres, PostgresConfig};
-pub use shared::{Database, QueryResult, SslMode};
+pub use shared::{ColumnMeta, Database, QueryResult, SslMode, ValueKind};
 use sqlite::{Sqlite, SqliteConfig};
 
 #[derive(Debug, Clone)]

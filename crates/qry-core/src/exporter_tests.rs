@@ -37,6 +37,8 @@ fn result() -> QueryResult {
             vec![Some("3".into()), None],
         ],
         affected: Some(3),
+        elapsed: std::time::Duration::ZERO,
+        truncated: false,
     }
 }
 

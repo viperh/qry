@@ -14,7 +14,7 @@ async fn fake_answers_in_script_order_and_records_calls() {
     let driver = Driver::with_database(Box::new(db.clone()));
 
     let first = driver.query("SELECT id FROM t").await.unwrap();
-    assert_eq!(first.columns, ["id"]);
+    assert_eq!(first.column_names(), ["id"]);
     assert_eq!(first.rows, [vec![Some("1".to_string())], vec![None]]);
 
     let second = driver.query("DELETE FROM t").await.unwrap();
@@ -68,7 +68,7 @@ async fn fake_error_surfaces_as_query_error() {
 #[test]
 fn grid_names_columns_and_cells_by_position() {
     let grid = grid(2, 3);
-    assert_eq!(grid.columns, ["c0", "c1", "c2"]);
+    assert_eq!(grid.column_names(), ["c0", "c1", "c2"]);
     assert_eq!(grid.rows[1][2].as_deref(), Some("r1c2"));
     assert_eq!(grid.rows.len(), 2);
 }

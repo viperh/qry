@@ -65,6 +65,7 @@ fn query_done_renders_header_rows_and_null() {
             vec![Some("2".into()), None],
         ],
         affected: Some(2),
+        ..QueryResult::affected(0)
     });
 
     let lines = render(&results);
@@ -88,6 +89,7 @@ fn statement_without_columns_says_executed() {
         columns: vec![],
         rows: vec![],
         affected: Some(0),
+        ..QueryResult::affected(0)
     });
 
     assert!(

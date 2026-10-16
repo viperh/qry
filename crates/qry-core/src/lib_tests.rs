@@ -22,7 +22,7 @@ async fn sqlite_round_trip() {
         .query("WITH t(id, name) AS (VALUES (1, 'alice'), (2, NULL)) SELECT * FROM t")
         .await
         .unwrap();
-    assert_eq!(result.columns, ["id", "name"]);
+    assert_eq!(result.column_names(), ["id", "name"]);
     assert_eq!(
         result.rows,
         [
@@ -141,4 +141,50 @@ async fn sqlite_reports_where_a_statement_went_wrong() {
         Some("t"),
         "{positioned:?}"
     );
+}
+
+#[test]
+fn value_kinds_come_from_every_backends_type_names() {
+    use shared::ValueKind as K;
+    for (name, kind) in [
+        ("int8", K::Integer),
+        ("MYSQL_TYPE_LONGLONG", K::Integer),
+        ("NUMBER(10,2)", K::Decimal),
+        ("numeric", K::Decimal),
+        ("MYSQL_TYPE_NEWDECIMAL", K::Decimal),
+        ("float8", K::Float),
+        ("BINARY_DOUBLE", K::Float),
+        ("VARCHAR2(20)", K::Text),
+        ("text", K::Text),
+        ("bool", K::Bool),
+        ("timestamptz", K::Timestamp),
+        ("MYSQL_TYPE_DATETIME", K::Timestamp),
+        ("date", K::Date),
+        ("jsonb", K::Json),
+        ("bytea", K::Binary),
+        ("blob", K::Binary),
+        ("interval", K::Other),
+        ("", K::Other),
+    ] {
+        assert_eq!(K::from_type_name(name), kind, "{name}");
+    }
+    assert!(K::Decimal.is_numeric() && !K::Text.is_numeric());
+}
+
+#[tokio::test]
+async fn sqlite_columns_take_the_type_of_their_first_value() {
+    let mut driver = Driver::new();
+    driver
+        .connect(ConnectionConfig::Sqlite(sqlite::SqliteConfig::new(
+            ":memory:", false,
+        )))
+        .await
+        .unwrap();
+    let result = driver
+        .query("SELECT 1 AS n, 2.5 AS f, 'x' AS s, NULL AS z")
+        .await
+        .unwrap();
+    let kinds: Vec<_> = result.columns.iter().map(|c| c.kind).collect();
+    use shared::ValueKind as K;
+    assert_eq!(kinds, [K::Integer, K::Float, K::Text, K::Other]);
 }

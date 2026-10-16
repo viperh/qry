@@ -385,11 +385,7 @@ impl AppHarness {
             match reply {
                 Reply::Rows(result) => break Ok(result),
                 Reply::Affected(count) => {
-                    break Ok(QueryResult {
-                        columns: Vec::new(),
-                        rows: Vec::new(),
-                        affected: Some(count),
-                    });
+                    break Ok(QueryResult::affected(count));
                 }
                 Reply::Error(message) => break Err(message),
                 Reply::Delay(delay, inner) => {

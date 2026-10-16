@@ -85,11 +85,128 @@ pub trait Database: Send + Sync {
     }
 }
 
+/// What kind of value a column holds, as far as showing it goes: numbers
+/// are right-aligned and sort as numbers, dates sort as text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ValueKind {
+    Integer,
+    Decimal,
+    Float,
+    Text,
+    Bool,
+    Date,
+    Time,
+    Timestamp,
+    Json,
+    Binary,
+    #[default]
+    Other,
+}
+
+impl ValueKind {
+    /// The kind of a column whose database type is called `name` (`int8`,
+    /// `VARCHAR(20)`, `MYSQL_TYPE_LONG`, `NUMBER(10,2)`), across the five
+    /// backends. A name it does not know is `Other`.
+    pub fn from_type_name(name: &str) -> Self {
+        let lower = name.to_ascii_lowercase();
+        let name = lower
+            .trim_start_matches("mysql_type_")
+            .split(['(', ' '])
+            .next()
+            .unwrap_or("");
+        match name {
+            "int" | "integer" | "int2" | "int4" | "int8" | "bigint" | "smallint" | "tinyint"
+            | "mediumint" | "serial" | "bigserial" | "smallserial" | "long" | "longlong"
+            | "short" | "tiny" | "int24" | "year" | "oid" => Self::Integer,
+            "numeric" | "decimal" | "newdecimal" | "number" | "money" => Self::Decimal,
+            "float" | "float4" | "float8" | "double" | "real" | "binary_float"
+            | "binary_double" => Self::Float,
+            "bool" | "boolean" | "bit" => Self::Bool,
+            "date" | "newdate" => Self::Date,
+            "time" | "timetz" | "time2" => Self::Time,
+            "timestamp" | "timestamptz" | "datetime" | "datetime2" | "timestamp2" => {
+                Self::Timestamp
+            }
+            "json" | "jsonb" => Self::Json,
+            "bytea" | "blob" | "tiny_blob" | "medium_blob" | "long_blob" | "binary"
+            | "varbinary" | "raw" | "long raw" | "bfile" => Self::Binary,
+            "text" | "varchar" | "char" | "bpchar" | "character" | "string" | "var_string"
+            | "varchar2" | "nvarchar2" | "nchar" | "clob" | "nclob" | "name" | "uuid" | "enum"
+            | "set" | "citext" => Self::Text,
+            _ => Self::Other,
+        }
+    }
+
+    /// Whether values of this kind are numbers: right-aligned, sorted as
+    /// numbers, written unquoted.
+    pub fn is_numeric(self) -> bool {
+        matches!(self, Self::Integer | Self::Decimal | Self::Float)
+    }
+}
+
+/// A result column: its name, its database type and what kind that is.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColumnMeta {
+    pub name: String,
+    /// The type as the database calls it; empty when it did not say.
+    pub type_name: String,
+    pub kind: ValueKind,
+}
+
+impl ColumnMeta {
+    /// A column of this database type.
+    pub fn new(name: impl Into<String>, type_name: impl Into<String>) -> Self {
+        let type_name = type_name.into();
+        Self {
+            name: name.into(),
+            kind: ValueKind::from_type_name(&type_name),
+            type_name,
+        }
+    }
+
+    /// A column whose type is unknown.
+    pub fn untyped(name: impl Into<String>) -> Self {
+        Self::new(name, "")
+    }
+}
+
+/// An untyped column of this name.
+impl From<&str> for ColumnMeta {
+    fn from(name: &str) -> Self {
+        Self::untyped(name)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueryResult {
-    pub columns: Vec<String>,
+    pub columns: Vec<ColumnMeta>,
     pub rows: Vec<Vec<Option<String>>>,
     pub affected: Option<u64>,
+    /// How long the statement took, filled in by the worker.
+    #[serde(default)]
+    pub elapsed: std::time::Duration,
+    /// More rows exist than were fetched (T305).
+    #[serde(default)]
+    pub truncated: bool,
+}
+
+impl QueryResult {
+    /// A result with no rows and no columns, as a statement that changed
+    /// `affected` rows gives.
+    pub fn affected(affected: u64) -> Self {
+        Self {
+            columns: Vec::new(),
+            rows: Vec::new(),
+            affected: Some(affected),
+            elapsed: std::time::Duration::ZERO,
+            truncated: false,
+        }
+    }
+
+    /// The columns' names.
+    pub fn column_names(&self) -> Vec<&str> {
+        self.columns.iter().map(|c| c.name.as_str()).collect()
+    }
 }
 
 /// A statement the server refused, and where in it, when the server says:

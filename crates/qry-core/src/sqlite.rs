@@ -69,25 +69,45 @@ impl Database for Sqlite {
             .conn
             .call(move |conn| {
                 let mut stmt = conn.prepare(&sql)?;
-                let columns: Vec<String> =
+                let names: Vec<String> =
                     stmt.column_names().iter().map(|s| s.to_string()).collect();
+                // SQLite types values, not columns: a column's type is that
+                // of its first value that is not NULL.
+                let mut types: Vec<&'static str> = vec![""; names.len()];
 
                 let mut rows = Vec::new();
                 let mut cursor = stmt.query([])?;
 
                 while let Some(row) = cursor.next()? {
-                    let mut cells = Vec::with_capacity(columns.len());
-                    for i in 0..columns.len() {
-                        cells.push(render(row.get_ref(i)?));
+                    let mut cells = Vec::with_capacity(names.len());
+                    for (i, type_name) in types.iter_mut().enumerate() {
+                        let value = row.get_ref(i)?;
+                        if type_name.is_empty() {
+                            *type_name = match value {
+                                ValueRef::Null => "",
+                                ValueRef::Integer(_) => "integer",
+                                ValueRef::Real(_) => "real",
+                                ValueRef::Text(_) => "text",
+                                ValueRef::Blob(_) => "blob",
+                            };
+                        }
+                        cells.push(render(value));
                     }
                     rows.push(cells);
                 }
 
                 let affected = rows.len() as u64;
+                let columns = names
+                    .into_iter()
+                    .zip(types)
+                    .map(|(name, type_name)| shared::ColumnMeta::new(name, type_name))
+                    .collect();
                 Ok::<_, tokio_rusqlite::Error>(QueryResult {
                     columns,
                     rows,
                     affected: Some(affected),
+                    elapsed: std::time::Duration::ZERO,
+                    truncated: false,
                 })
             })
             .await

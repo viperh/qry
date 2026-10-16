@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     DatabaseType,
-    shared::{Database, QueryResult, SslMode},
+    shared::{ColumnMeta, Database, QueryResult, SslMode},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -354,18 +354,14 @@ impl Database for Oracle {
             if !stmt.is_query() {
                 let affected = stmt.execute(&[]).ora()?.rows_affected();
                 conn.commit().ora()?;
-                return Ok(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    affected: Some(affected),
-                });
+                return Ok(QueryResult::affected(affected));
             }
             let cursor = stmt.query(&[]).ora()?;
 
-            let columns: Vec<String> = cursor
+            let columns: Vec<ColumnMeta> = cursor
                 .columns()
                 .iter()
-                .map(|c| c.name().to_string())
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
                 .collect();
 
             let mut rows: Vec<Vec<Option<String>>> = Vec::new();
@@ -383,6 +379,8 @@ impl Database for Oracle {
                 columns,
                 rows,
                 affected: Some(affected),
+                elapsed: std::time::Duration::ZERO,
+                truncated: false,
             })
         })
         .await
