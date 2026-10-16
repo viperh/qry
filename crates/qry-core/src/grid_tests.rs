@@ -192,3 +192,13 @@ proptest! {
         prop_assert_eq!(asc, desc);
     }
 }
+
+#[test]
+fn visible_columns_fill_the_widest_view_without_overflowing() {
+    // The first column takes every cell; the gap before the next must not
+    // wrap around.
+    assert_eq!(
+        visible_columns(&[u16::MAX, 3], 0, false, u16::MAX),
+        [(0, u16::MAX)]
+    );
+}

@@ -9,8 +9,18 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 use crate::{
     Database, DatabaseType,
-    shared::{CancelHandle, ColumnMeta, QueryError, QueryResult, SslMode},
+    shared::{CancelHandle, ColumnMeta, QueryError, QueryResult, SslMode, ValueKind, first_column},
 };
+
+/// A boolean as the text protocol writes it (`t`, `f`), as `true` or
+/// `false`. Anything else is left alone.
+fn bool_text(value: String) -> String {
+    match value.as_str() {
+        "t" => "true".into(),
+        "f" => "false".into(),
+        _ => value,
+    }
+}
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostgresConfig {
@@ -128,7 +138,7 @@ impl Database for Postgres {
         pin_mut!(stream);
 
         let mut columns = Vec::new();
-        let mut rows = Vec::new();
+        let mut rows: Vec<Vec<Option<String>>> = Vec::new();
         let mut affected = 0;
         let mut truncated = false;
 
@@ -163,6 +173,17 @@ impl Database for Postgres {
         {
             columns = described;
         }
+        // The text protocol writes booleans as `t` and `f`; every backend
+        // shows them as `true` and `false`.
+        for (i, column) in columns.iter().enumerate() {
+            if column.kind == ValueKind::Bool {
+                for row in &mut rows {
+                    if let Some(cell) = row.get_mut(i) {
+                        *cell = cell.take().map(bool_text);
+                    }
+                }
+            }
+        }
         Ok(QueryResult {
             columns,
             rows,
@@ -185,6 +206,16 @@ impl Database for Postgres {
             }
         }
         Ok(affected)
+    }
+
+    async fn tables(&self) -> Result<Vec<String>> {
+        let result = self
+            .query(
+                "SELECT table_name FROM information_schema.tables \
+                 WHERE table_schema = current_schema() ORDER BY table_name",
+            )
+            .await?;
+        Ok(first_column(result))
     }
 }
 

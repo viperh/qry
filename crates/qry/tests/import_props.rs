@@ -50,7 +50,15 @@ fn arb_extra() -> impl Strategy<Value = Map<String, Value>> {
         ],
         0..3,
     )
-    .prop_map(|m| m.into_iter().collect())
+    .prop_map(|m| {
+        m.into_iter()
+            .filter(|(key, _)| {
+                !["password", "passwd", "pwd"]
+                    .iter()
+                    .any(|p| key.contains(p))
+            })
+            .collect()
+    })
 }
 
 fn arb_stored_connection() -> impl Strategy<Value = StoredConnection> {

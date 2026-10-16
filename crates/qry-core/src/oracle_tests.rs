@@ -276,3 +276,58 @@ async fn an_unreachable_server_is_an_error_not_a_panic() {
     };
     assert!(Oracle::connect(config).await.is_err());
 }
+
+#[test]
+fn numbers_keep_the_scale_of_their_column() {
+    assert_eq!(number_text("-12.5".into(), 2), "-12.50");
+    assert_eq!(number_text("1000".into(), 2), "1000.00");
+    assert_eq!(number_text("0".into(), 2), "0.00");
+    assert_eq!(number_text("42.1".into(), 2), "42.10");
+    assert_eq!(number_text("3.14159".into(), 2), "3.14159");
+    // No scale, a negative one (`NUMBER(5,-2)`), or an exponent: as is.
+    assert_eq!(number_text("7".into(), 0), "7");
+    assert_eq!(number_text("1200".into(), -2), "1200");
+    assert_eq!(number_text("1.5e+40".into(), 2), "1.5e+40");
+}
+
+#[test]
+fn dates_and_timestamps_are_iso_8601_with_a_space() {
+    let midnight = OracleTimestamp::new_date(1990, 4, 1);
+    assert_eq!(temporal_text(&midnight, Temporal::Date), "1990-04-01");
+    assert_eq!(
+        temporal_text(&midnight, Temporal::Timestamp),
+        "1990-04-01 00:00:00"
+    );
+
+    let afternoon = OracleTimestamp::new_timestamp(2001, 2, 3, 16, 5, 6, 0);
+    assert_eq!(
+        temporal_text(&afternoon, Temporal::Date),
+        "2001-02-03 16:05:06"
+    );
+
+    let fraction = OracleTimestamp::new_timestamp(2001, 2, 3, 4, 5, 6, 500_000_000);
+    assert_eq!(
+        temporal_text(&fraction, Temporal::Timestamp),
+        "2001-02-03 04:05:06.5"
+    );
+
+    let zoned = OracleTimestamp::new_timestamp_tz(2001, 2, 3, 4, 5, 6, 0, -3, -30);
+    assert_eq!(
+        temporal_text(&zoned, Temporal::TimestampTz),
+        "2001-02-03 04:05:06-03:30"
+    );
+}
+
+#[test]
+fn the_column_type_says_how_a_timestamp_is_written() {
+    assert_eq!(Temporal::of("DATE"), Temporal::Date);
+    assert_eq!(Temporal::of("TIMESTAMP(6)"), Temporal::Timestamp);
+    assert_eq!(
+        Temporal::of("TIMESTAMP(6) WITH TIME ZONE"),
+        Temporal::TimestampTz
+    );
+    assert_eq!(
+        Temporal::of("TIMESTAMP(6) WITH LOCAL TIME ZONE"),
+        Temporal::Timestamp
+    );
+}

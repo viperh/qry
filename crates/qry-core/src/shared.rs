@@ -86,32 +86,21 @@ pub trait Database: Send + Sync {
         None
     }
 
-    /// The tables and views this connection can see, for the tree. Each
-    /// backend keeps its list somewhere else, so the query differs; a
-    /// backend with a cheaper way of its own can override this.
-    async fn tables(&self) -> Result<Vec<String>> {
-        let sql = match self.kind() {
-            DatabaseType::Sqlite => {
-                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') \
-                 AND name NOT LIKE 'sqlite_%' ORDER BY name"
-            }
-            DatabaseType::Postgres => {
-                "SELECT table_name FROM information_schema.tables \
-                 WHERE table_schema = current_schema() ORDER BY table_name"
-            }
-            DatabaseType::Mysql | DatabaseType::MariaDb => {
-                "SELECT table_name FROM information_schema.tables \
-                 WHERE table_schema = DATABASE() ORDER BY table_name"
-            }
-            DatabaseType::Oracle => bail!("listing tables is not supported for this database"),
-        };
-        let result = self.query(sql).await?;
-        Ok(result
-            .rows
-            .iter()
-            .filter_map(|row| row.first().cloned().flatten())
-            .collect())
-    }
+    /// The tables and views this connection can see, sorted, for the
+    /// tree. Each backend keeps its list somewhere else, so each backend
+    /// runs its own query (and Oracle, with no `information_schema`, its
+    /// own catalog views).
+    async fn tables(&self) -> Result<Vec<String>>;
+}
+
+/// The first column of each row, NULLs left out: what a backend's
+/// [`Database::tables`] query gives back as names.
+pub(crate) fn first_column(result: QueryResult) -> Vec<String> {
+    result
+        .rows
+        .into_iter()
+        .filter_map(|row| row.into_iter().next().flatten())
+        .collect()
 }
 
 /// What kind of value a column holds, as far as showing it goes: numbers

@@ -29,7 +29,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     DatabaseType,
-    shared::{ColumnMeta, Database, QueryResult, SslMode},
+    shared::{ColumnMeta, Database, QueryError, QueryResult, SslMode, first_column},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -155,6 +155,96 @@ impl<T> OraResult<T> for std::result::Result<T, oracledb::Error> {
     }
 }
 
+/// A failed statement as a [`QueryError`], with the position the server
+/// reported. Oracle counts it from 0, in characters, and sends 0 when it
+/// has none, so a statement that fails at its very first character gets no
+/// position.
+fn query_error(e: oracledb::Error, sql: &str) -> anyhow::Error {
+    match e.kind() {
+        oracledb::ErrorKind::DbError(db) => anyhow::Error::new(QueryError {
+            message: e.to_string(),
+            position: match db.offset() {
+                0 => None,
+                offset => QueryError::char_position(sql, offset + 1),
+            },
+        }),
+        _ => anyhow!("{e}"),
+    }
+}
+
+/// How a date or timestamp column's values are written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Temporal {
+    /// `DATE`: always has a time of day, written only when it is not
+    /// midnight.
+    Date,
+    Timestamp,
+    /// `TIMESTAMP WITH TIME ZONE`: the offset follows, as `+02:00`.
+    TimestampTz,
+}
+
+impl Temporal {
+    /// From the column's type as `Metadata::data_type` writes it.
+    fn of(data_type: &str) -> Self {
+        if data_type.starts_with("DATE") {
+            Self::Date
+        } else if data_type.ends_with("WITH TIME ZONE") && !data_type.contains("LOCAL") {
+            Self::TimestampTz
+        } else {
+            Self::Timestamp
+        }
+    }
+}
+
+/// `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM:SS[.fff]`: the form every backend
+/// shows dates and timestamps in. The driver's own `Display` writes
+/// `1990-04-01T00:00:00.000000000Z`, even for a `DATE`.
+fn temporal_text(ts: &OracleTimestamp, kind: Temporal) -> String {
+    let date = format!("{:04}-{:02}-{:02}", ts.year(), ts.month(), ts.day());
+    let (hour, minute, second, nanos) = (ts.hour(), ts.minute(), ts.second(), ts.nanoseconds());
+    if kind == Temporal::Date && (hour, minute, second, nanos) == (0, 0, 0, 0) {
+        return date;
+    }
+    let mut out = format!("{date} {hour:02}:{minute:02}:{second:02}");
+    if nanos > 0 {
+        let fraction = format!("{nanos:09}");
+        out.push('.');
+        out.push_str(fraction.trim_end_matches('0'));
+    }
+    if kind == Temporal::TimestampTz {
+        let _ = write!(
+            out,
+            "{:+03}:{:02}",
+            ts.tz_hour_offset(),
+            ts.tz_minute_offset().unsigned_abs()
+        );
+    }
+    out
+}
+
+/// A `NUMBER(p,s)` with its `s` decimals, as the other backends write a
+/// `numeric(p,s)`: `-12.50`, not the driver's `-12.5`.
+fn number_text(text: String, scale: i8) -> String {
+    let Ok(scale) = usize::try_from(scale) else {
+        return text;
+    };
+    if scale == 0 || text.contains(['e', 'E']) {
+        return text;
+    }
+    let decimals = text
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    if decimals >= scale {
+        return text;
+    }
+    let mut out = text;
+    if decimals == 0 {
+        out.push('.');
+    }
+    out.extend(std::iter::repeat_n('0', scale - decimals));
+    out
+}
+
 /// Quotes an identifier for use in SQL, e.g. `my"schema` → `"my""schema"`.
 fn quote_ident(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
@@ -172,20 +262,27 @@ fn cell(row: &Row, i: usize) -> Result<Option<String>> {
             }
         };
     }
+    let column = &row.columns()[i];
     try_as!(String, |v| v);
-    try_as!(OracleNumber, |v| v.to_string());
+    // `precision` 0 is a `NUMBER` without one, whose scale means nothing.
+    let scale = if column.precision() == 0 {
+        0
+    } else {
+        column.scale()
+    };
+    try_as!(OracleNumber, |v| number_text(v.to_string(), scale));
     try_as!(f64, |v| v.to_string());
     try_as!(f32, |v| v.to_string());
-    try_as!(OracleTimestamp, |v| v.to_string());
+    let temporal = Temporal::of(&column.data_type());
+    try_as!(OracleTimestamp, |v| temporal_text(&v, temporal));
     try_as!(OracleIntervalDS, |v| v.to_string());
     try_as!(OracleIntervalYM, |v| v.to_string());
     try_as!(bool, |v| v.to_string());
-    // Written the way the SQLite backend writes a BLOB.
-    try_as!(Vec<u8>, |v| format!("x'{}'", encode(v)));
+    // `\x` and lowercase hex, as Postgres writes a `bytea`.
+    try_as!(Vec<u8>, |v| format!("\\x{}", encode(v)));
     try_as!(JsonValue, |v| json(&v));
     try_as!(Vector, |v| format!("{v:?}"));
 
-    let column = &row.columns()[i];
     bail!(
         "column {} has type {}, which qry cannot show",
         column.name(),
@@ -347,16 +444,21 @@ impl Database for Oracle {
     async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
         self.with_conn(move |conn| {
-            let mut stmt = conn.statement(&sql).ora()?.build().ora()?;
+            let failed = |e| query_error(e, &sql);
+            let mut stmt = conn
+                .statement(&sql)
+                .map_err(failed)?
+                .build()
+                .map_err(failed)?;
             // The driver refuses to run anything but a query through
             // `query`. The editor sends every statement through here, so a
             // CREATE or an INSERT is run instead of rejected.
             if !stmt.is_query() {
-                let affected = stmt.execute(&[]).ora()?.rows_affected();
+                let affected = stmt.execute(&[]).map_err(failed)?.rows_affected();
                 conn.commit().ora()?;
                 return Ok(QueryResult::affected(affected));
             }
-            let cursor = stmt.query(&[]).ora()?;
+            let cursor = stmt.query(&[]).map_err(failed)?;
 
             let columns: Vec<ColumnMeta> = cursor
                 .columns()
@@ -372,7 +474,7 @@ impl Database for Oracle {
                     truncated = true;
                     break;
                 }
-                let row = row.ora()?;
+                let row = row.map_err(failed)?;
                 let mut cells = Vec::with_capacity(columns.len());
                 for i in 0..columns.len() {
                     cells.push(cell(&row, i)?);
@@ -413,11 +515,7 @@ impl Database for Oracle {
                  ORDER BY 1",
             )
             .await?;
-        Ok(result
-            .rows
-            .iter()
-            .filter_map(|row| row.first().cloned().flatten())
-            .collect())
+        Ok(first_column(result))
     }
 }
 

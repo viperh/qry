@@ -93,13 +93,14 @@ pub fn visible_columns(
         } else {
             COLUMN_SPACING
         };
-        let room = available.saturating_sub(used + gap);
+        // `used` can reach `available` exactly, so the gap must not wrap.
+        let room = available.saturating_sub(used.saturating_add(gap));
         if room == 0 {
             break;
         }
         let w = widths[c].min(room);
         visible.push((c, w));
-        used += gap + w;
+        used = used.saturating_add(gap + w);
     }
     visible
 }
