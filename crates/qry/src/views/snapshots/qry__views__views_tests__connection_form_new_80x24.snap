@@ -6,23 +6,23 @@ expression: "h.render(80, 24)"
  SCHEMA                       │ QUERY  ln 1, col 1                              
       No connections yet      │  1 │                                            
                               │                                                 
-                              │                                                 
-    ┌ New Connection ──────────────────────────────────────────────────────┐    
-    │ › Name                                                               │    
-    │   Type         ‹ PostgreSQL ›                                        │    
-    │   Host                                                               │    
-    │   Port                                                               │    
-    │   User                                                               │    
-    │   Password                                                           │    
-    │   Database                                                           │    
-    │   Schema                                                             │    
-    │   SSL mode     ‹ prefer ›                                            │    
-    │   Wallet       Oracle only: folder with ewallet.pem                  │    
-    │   Password in  ‹ KEYCHAIN ›                                          │    
-    │                                                                      │    
-    │ Enter connect · Esc cancel · Tab next                                │    
-    └──────────────────────────────────────────────────────────────────────┘    
-                              │                                                 
+  ┌ New Connection ─────────────────────────────────────────────── postgres ─┐  
+  │   Driver       ‹ PostgreSQL ›                                            │  
+  │ › Name                                                                   │  
+  │                [ ] use a DSN instead                                     │  
+  │   Host                                                                   │  
+  │   Port         5432                                                      │  
+  │   User                                                                   │  
+  │   Password                                                               │  
+  │   Password in  ‹ keychain ›                                              │  
+  │   Database                                                               │  
+  │   Schema                                                                 │  
+  │   SSL          ‹ prefer ›                                                │  
+  │   Label        ‹ none ›                                                  │  
+  │                [ Test ]                                                  │  
+  │                                                                          │  
+  │ Enter save & connect · ctrl-t test · Tab next · → change · Esc cancel    │  
+  └──────────────────────────────────────────────────────────────────────────┘  
                               │                                                 
  connecting to scratch… · sqlite · :memory:                                     
  Enter submit  Tab next field  Esc cancel                               F1 help

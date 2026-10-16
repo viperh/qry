@@ -24,9 +24,13 @@ pub(crate) enum Field {
     },
     /// On or off, toggled with Space (or ← / →), shown as `[x]` / `[ ]`
     /// before its caption.
-    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
     Checkbox {
         checked: bool,
+        caption: String,
+    },
+    /// A button, `[ Test ]`, reached with Tab like a field. Enter on it does
+    /// what the form says it does rather than submitting.
+    Button {
         caption: &'static str,
     },
 }
@@ -52,9 +56,15 @@ impl Field {
         Field::Choice { options, selected }
     }
 
-    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
-    pub(crate) fn checkbox(checked: bool, caption: &'static str) -> Self {
-        Field::Checkbox { checked, caption }
+    pub(crate) fn checkbox(checked: bool, caption: impl Into<String>) -> Self {
+        Field::Checkbox {
+            checked,
+            caption: caption.into(),
+        }
+    }
+
+    pub(crate) fn button(caption: &'static str) -> Self {
+        Field::Button { caption }
     }
 
     /// Whether typing a character inserts it here.
@@ -66,11 +76,11 @@ impl Field {
         match self {
             Field::Text(input) => input.insert(c),
             Field::Secret(input) => input.insert(c),
-            Field::Choice { .. } | Field::Checkbox { .. } => {}
+            Field::Choice { .. } | Field::Checkbox { .. } | Field::Button { .. } => {}
         }
     }
 
-    fn apply(&mut self, action: Action) {
+    pub(crate) fn apply(&mut self, action: Action) {
         match self {
             Field::Text(input) => match action {
                 Action::Left => input.move_left(),
@@ -102,8 +112,33 @@ impl Field {
                     *checked = !*checked;
                 }
             }
+            Field::Button { .. } => {}
         }
     }
+}
+
+/// A line a form shows under its fields: green for good news, coral for
+/// bad, teal while something is under way, dim for a remark.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Note {
+    pub(crate) text: String,
+    pub(crate) tone: Tone,
+}
+
+impl Note {
+    pub(crate) fn new(tone: Tone, text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            tone,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Tone {
+    Ok,
+    Error,
+    Busy,
 }
 
 /// The keys a form's footer offers by default.
@@ -128,7 +163,7 @@ pub(crate) trait Form {
         64
     }
     /// One label per field, in the same order as [`Form::fields`].
-    fn labels(&self) -> &'static [&'static str];
+    fn labels(&self) -> &[&'static str];
     fn fields(&self) -> &[Field];
     fn fields_mut(&mut self) -> &mut [Field];
     fn focus(&self) -> usize;
@@ -141,6 +176,25 @@ pub(crate) trait Form {
     /// Shown next to the title, for what the title cannot carry.
     fn subtitle(&self) -> Option<String> {
         None
+    }
+
+    /// What is wrong with field `field`, shown in coral on a row of its own
+    /// under it.
+    fn field_error(&self, field: usize) -> Option<&str> {
+        let _ = field;
+        None
+    }
+
+    /// A line under the fields, such as a connection test's outcome.
+    fn note(&self) -> Option<Note> {
+        None
+    }
+
+    /// Checks the fields before a submit, marking what is wrong (and
+    /// moving to the first such field). Returns whether all is well; the
+    /// reducer submits only then.
+    fn check(&mut self) -> bool {
+        true
     }
 
     /// Called after a key changed the form, so a form whose fields depend on
@@ -160,7 +214,10 @@ pub(crate) trait Form {
     fn text(&self, field: usize) -> &str {
         match &self.fields()[field] {
             Field::Text(input) => &input.value,
-            Field::Secret(_) | Field::Choice { .. } | Field::Checkbox { .. } => "",
+            Field::Secret(_)
+            | Field::Choice { .. }
+            | Field::Checkbox { .. }
+            | Field::Button { .. } => "",
         }
     }
 
@@ -168,19 +225,21 @@ pub(crate) trait Form {
     fn secret(&self, field: usize) -> Option<&Password> {
         match &self.fields()[field] {
             Field::Secret(input) => Some(&input.value),
-            Field::Text(_) | Field::Choice { .. } | Field::Checkbox { .. } => None,
+            Field::Text(_)
+            | Field::Choice { .. }
+            | Field::Checkbox { .. }
+            | Field::Button { .. } => None,
         }
     }
 
     fn selected(&self, field: usize) -> usize {
         match &self.fields()[field] {
             Field::Choice { selected, .. } => *selected,
-            Field::Text(_) | Field::Secret(_) | Field::Checkbox { .. } => 0,
+            Field::Text(_) | Field::Secret(_) | Field::Checkbox { .. } | Field::Button { .. } => 0,
         }
     }
 
     /// Whether a checkbox is ticked; `false` for any other field.
-    #[allow(dead_code, reason = "T308's connection form is the first to use one")]
     fn checked(&self, field: usize) -> bool {
         matches!(self.fields()[field], Field::Checkbox { checked: true, .. })
     }

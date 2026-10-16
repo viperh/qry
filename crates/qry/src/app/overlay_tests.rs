@@ -21,15 +21,10 @@ fn harness() -> AppHarness {
 
 /// Fills in enough of the New Connection form to be submittable.
 fn fill_connection(h: &mut AppHarness) {
-    for (field, value) in [(0, "prod"), (2, "db.local"), (4, "app"), (6, "app")] {
-        h.state_mut()
-            .dialog_mut()
-            .unwrap()
-            .form_mut()
-            .set_focus(field);
-        h.type_str(value);
-    }
-    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(2);
+    use crate::app::dialogs::conndialog::{Key, test_support::*};
+    fill(h, "prod");
+    let at = dialog(h).position(Key::Conn(FieldKind::Host)).unwrap();
+    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(at);
 }
 
 /// A saved connection `prod` whose password is in the keychain.
@@ -169,6 +164,7 @@ fn confirmed_delete_removes_and_forgets_secret() {
         h.take_effects(),
         [
             Effect::ForgetSecret(record.id.clone()),
+            Effect::DeleteHistory(record.id.clone()),
             Effect::SaveConnections(Vec::new())
         ]
     );
@@ -180,7 +176,7 @@ fn confirmed_delete_removes_and_forgets_secret() {
     h.keys("delete right enter");
     assert!(matches!(
         h.take_effects().as_slice(),
-        [Effect::ForgetSecret(_), _]
+        [Effect::ForgetSecret(_), _, _]
     ));
 }
 
@@ -194,11 +190,11 @@ fn dialog_snapshots() {
         "dialog_new_connection_120x40_styled",
         styled(&h.render_buffer(120, 40))
     );
-    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(10);
+    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(12);
     h.resize(80, 24);
     insta::assert_snapshot!("dialog_new_connection_80x24_scrolled", h.render(80, 24));
     h.resize(120, 40);
-    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(2);
+    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(3);
     h.keys("enter");
     h.advance(200);
     insta::assert_snapshot!("dialog_new_connection_pending_120x40", h.render(120, 40));

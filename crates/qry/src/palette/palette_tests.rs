@@ -35,6 +35,7 @@ const KEY_ONLY: &[Action] = &[
     Action::Open,
     Action::Cancel,
     Action::Submit,
+    Action::TestConnection,
     Action::NextField,
     Action::PrevField,
     Action::NextChoice,
@@ -139,13 +140,13 @@ fn ranking_is_deterministic_and_prefers_word_starts() {
     // Two word starts each; equal scores keep the commands' order.
     assert_eq!(
         &first[..2],
-        ["Edit connection", "Export connections"],
+        ["Edit connection", "Export connections…"],
         "{first:?}"
     );
     h.keys("esc ctrl-p").type_str("ec");
     assert_eq!(labels(&h), first);
     h.keys("esc ctrl-p").type_str("exc");
-    assert_eq!(labels(&h)[0], "Export connections");
+    assert_eq!(labels(&h)[0], "Export connections…");
 }
 
 #[test]

@@ -130,7 +130,7 @@ fn import_waits_and_keeps_path_on_failure() {
         "{text}"
     );
 
-    // A second try that works closes it.
+    // A second try that works moves on to the preview.
     h.keys("enter");
     assert!(matches!(
         h.take_effects().as_slice(),
@@ -142,7 +142,7 @@ fn import_waits_and_keeps_path_on_failure() {
         skipped: Vec::new(),
         warnings: Vec::new(),
     })));
-    assert_eq!(h.dialog_title(), None);
+    assert_eq!(h.dialog_title(), Some("Import Preview"));
 }
 
 #[test]
@@ -151,14 +151,24 @@ fn exporting_connections_waits_for_the_file() {
     let mut saved = StoredConnection::new("app", Driver::Sqlite);
     saved.path = Some("app.db".into());
     h.file(FileAnswer::ConnectionsLoaded(vec![saved]));
-    h.keys("ctrl-s");
+    // Only the palette has it: ctrl-s is the snippets' (T306).
+    h.keys("ctrl-p");
+    h.type_str("Export connections");
+    h.keys("enter");
     assert_eq!(h.dialog_title(), Some("Export Connections"));
     assert!(h.render(80, 50).contains("Export Connections"));
     h.type_str("/root/b.json").keys("enter");
 
     // The tree holds the list, and the runtime writes it.
     let effects = h.take_effects();
-    let [Effect::ExportConnections { path, connections }] = effects.as_slice() else {
+    let [
+        Effect::ExportConnections {
+            path,
+            connections,
+            overwrite: false,
+        },
+    ] = effects.as_slice()
+    else {
         panic!("expected a write, got {effects:?}");
     };
     assert_eq!(path, "/root/b.json");
@@ -191,7 +201,10 @@ fn exporting_connections_waits_for_the_file() {
 #[test]
 fn exporting_no_saved_connections_is_refused_in_the_modal() {
     let mut h = harness();
-    h.keys("ctrl-s").type_str("/tmp/b.json").keys("enter");
+    h.keys("ctrl-p")
+        .type_str("Export connections")
+        .keys("enter");
+    h.type_str("/tmp/b.json").keys("enter");
     assert!(h.take_effects().is_empty());
     let text = h.render(80, 50);
     assert!(
@@ -258,11 +271,7 @@ fn a_refused_modal_stays_open_with_its_error() {
 
 /// Fills in enough of the New Connection form to be submittable.
 fn fill_connection(h: &mut AppHarness) {
-    for (field, value) in [(2, "db.local"), (4, "alice"), (6, "app")] {
-        let dialog = h.state_mut().dialog_mut().unwrap();
-        dialog.form_mut().set_focus(field);
-        h.type_str(value);
-    }
+    crate::app::dialogs::conndialog::test_support::fill(h, "app");
 }
 
 #[test]
@@ -421,8 +430,11 @@ fn password_text_never_in_effects() {
     // The same in the New Connection form's password field.
     h.keys("esc ctrl-n");
     fill_connection(&mut h);
-    h.state_mut().dialog_mut().unwrap().form_mut().set_focus(5);
-    h.type_str(CANARY).keys("enter");
+    {
+        use crate::app::dialogs::conndialog::{Key, test_support::*};
+        type_into(&mut h, Key::Conn(FieldKind::Password), CANARY);
+    }
+    h.keys("enter");
     let effects = h.take_effects();
     assert!(matches!(
         effects.as_slice(),
@@ -655,7 +667,7 @@ fn space_types_in_a_text_field_and_picks_in_a_choice() {
     h.keys("ctrl-n");
     let dialog = h.state_mut().dialog_mut().unwrap();
     // The name field, then the driver choice.
-    dialog.form_mut().set_focus(0);
+    dialog.form_mut().set_focus(1);
     h.type_str("a b");
     assert!(h.render(80, 50).contains("a b"));
     let form = h.state().dialog().unwrap().form();

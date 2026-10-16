@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "connections": [
+    {
+      "id": "3f9c2a71",
+      "name": "local-app",
+      "driver": "postgres",
+      "host": "localhost",
+      "user": "app",
+      "database": "app",
+      "schema": "public",
+      "tls": "prefer",
+      "secret": {
+        "mode": "keyring"
+      }
+    },
+    {
+      "id": "b81e04d2",
+      "name": "erp",
+      "driver": "oracle",
+      "host": "db.corp",
+      "port": 2484,
+      "user": "alice",
+      "service": "ORCLPDB1",
+      "tls": "/etc/oracle/wallet",
+      "secret": {
+        "mode": "env",
+        "var": "ERP_PASSWORD"
+      }
+    },
+    {
+      "id": "0c55aa10",
+      "name": "notes",
+      "driver": "sqlite",
+      "path": "~/notes.db",
+      "mode": "ro",
+      "secret": {
+        "mode": "none"
+      },
+      "colour": "teal"
+    },
+    {
+      "id": "77d1e9b3",
+      "name": "shop",
+      "driver": "mariadb",
+      "host": "shop.local",
+      "user": "web",
+      "secret": {
+        "mode": "prompt"
+      }
+    }
+  ],
+  "written_by": "qry 0.1.0"
+}

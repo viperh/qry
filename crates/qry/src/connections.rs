@@ -62,6 +62,56 @@ impl Driver {
     }
 }
 
+impl From<Driver> for qry_core::connspec::Engine {
+    fn from(driver: Driver) -> Self {
+        use qry_core::connspec::Engine;
+        match driver {
+            Driver::Postgres => Engine::Postgres,
+            Driver::Mariadb => Engine::Mariadb,
+            Driver::Mysql => Engine::Mysql,
+            Driver::Oracle => Engine::Oracle,
+            Driver::Sqlite => Engine::Sqlite,
+        }
+    }
+}
+
+impl From<qry_core::connspec::Engine> for Driver {
+    fn from(engine: qry_core::connspec::Engine) -> Self {
+        use qry_core::connspec::Engine;
+        match engine {
+            Engine::Postgres => Driver::Postgres,
+            Engine::Mariadb => Driver::Mariadb,
+            Engine::Mysql => Driver::Mysql,
+            Engine::Oracle => Driver::Oracle,
+            Engine::Sqlite => Driver::Sqlite,
+        }
+    }
+}
+
+/// What kind of database a connection points at, so a production one
+/// cannot be mistaken for a scratch one: shown in the tree and the top bar,
+/// and `prod` asks before the first write of a session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnLabel {
+    Dev,
+    Staging,
+    Prod,
+}
+
+impl ConnLabel {
+    /// In the order the dialog offers them, after `none`.
+    pub(crate) const ALL: [ConnLabel; 3] = [ConnLabel::Dev, ConnLabel::Staging, ConnLabel::Prod];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ConnLabel::Dev => "dev",
+            ConnLabel::Staging => "staging",
+            ConnLabel::Prod => "prod",
+        }
+    }
+}
+
 /// Where a connection's password comes from. Every record says so; qry never
 /// assumes.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,6 +165,10 @@ pub struct StoredConnection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsn: Option<String>,
     pub secret: Secret,
+    /// `dev`, `staging` or `prod`. Older files have none, and an older qry
+    /// keeps it among the keys it does not know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<ConnLabel>,
     /// Anything a newer qry wrote, kept so saving does not strip it.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -154,6 +208,7 @@ impl StoredConnection {
             } else {
                 Secret::None
             },
+            label: None,
             extra: Map::new(),
             ephemeral: false,
         }
@@ -196,6 +251,8 @@ impl StoredConnection {
 
         if self.driver == Driver::Sqlite {
             let path = required("path", &self.path)?;
+            // `~/app.db` is the user's, as a shell would read it.
+            let path = crate::import::expand_home(&path);
             return Ok(ConnectionConfig::Sqlite(SqliteConfig::new(
                 path,
                 self.mode.as_deref() == Some("ro"),
@@ -289,7 +346,7 @@ struct ConnectionFile {
 /// Reads the connections in `dir` (the data directory, in the app). A
 /// missing file is not an error: it means a first run. A malformed one is,
 /// and the bad file is left untouched.
-pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let file = dir.join(FILE);
     let text = match fs::read_to_string(&file) {
         Ok(text) => text,
@@ -301,7 +358,7 @@ pub(crate) fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>>
 
 /// The connections in the text of a connection file, which `file` names in
 /// errors. Also how a copy of the file is imported as a backup.
-pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
+pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let parsed: ConnectionFile = serde_json::from_str(text).wrap_err_with(|| {
         format!(
             "{} is not a connection file qry understands",
@@ -320,7 +377,7 @@ pub(crate) fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredCon
 
 /// Writes the connections whole into `dir`, and atomically: a crash
 /// mid-save leaves the previous file intact.
-pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
+pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
     fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     restrict(dir, 0o700)?;
 
@@ -338,10 +395,7 @@ pub(crate) fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyr
 /// already a connection file, so a mistyped path cannot clobber anything
 /// else. Holds no password, since a record has nowhere to keep one.
 pub(crate) fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
-    let path = match path.extension() {
-        Some(_) => path.to_path_buf(),
-        None => path.with_extension("json"),
-    };
+    let path = export_path(path);
     if path.is_dir() {
         bail!("{} is a directory", path.display());
     }
@@ -363,6 +417,15 @@ pub(crate) fn export(path: &Path, connections: &[StoredConnection]) -> color_eyr
     temp.push(".tmp");
     write_atomically(&file, Path::new(&temp), &path)?;
     Ok(path)
+}
+
+/// Where [`export`] writes for `path`: `.json` is added to a path with no
+/// extension.
+pub(crate) fn export_path(path: &Path) -> PathBuf {
+    match path.extension() {
+        Some(_) => path.to_path_buf(),
+        None => path.with_extension("json"),
+    }
 }
 
 /// Writes `file` to `temp`, then renames it over `target`: a crash midway

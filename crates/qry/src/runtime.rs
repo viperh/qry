@@ -269,8 +269,25 @@ impl Executor {
             Effect::SaveConnections(list) => Executed::Spawned(self.save_connections(list)),
             Effect::LoadConnections => Executed::Spawned(self.load_connections()),
             Effect::Import { path, format } => Executed::Spawned(self.import(path, format)),
-            Effect::ExportConnections { path, connections } => {
-                Executed::Spawned(self.export_connections(path, connections))
+            Effect::ExportConnections {
+                path,
+                connections,
+                overwrite,
+            } => Executed::Spawned(self.export_connections(path, connections, overwrite)),
+            // No history is kept yet (T306), so there is nothing to remove.
+            Effect::DeleteHistory(id) => {
+                debug!("no query history to delete for {id}");
+                Executed::Done
+            }
+            Effect::TestConnection { test, record } => {
+                // Taken now, so it cannot linger in the stash; it is
+                // cleared when the test is done with it.
+                let typed = secrets::take_stash(&crate::app::effects::test_stash_key(&record.id));
+                let events = self.events.clone();
+                Executed::Spawned(tokio::spawn(async move {
+                    let outcome = crate::db::test_connection(*record, typed).await;
+                    let _ = events.send(UiEvent::ConnectionTested { test, outcome });
+                }))
             }
             Effect::ForgetSecret(id) => {
                 let events = self.events.clone();
@@ -364,19 +381,35 @@ impl Executor {
 
     /// Writes a backup of the connections off the event loop, answering the
     /// modal that asked.
-    fn export_connections(&self, path: String, list: Vec<StoredConnection>) -> JoinHandle<()> {
+    fn export_connections(
+        &self,
+        path: String,
+        list: Vec<StoredConnection>,
+        overwrite: bool,
+    ) -> JoinHandle<()> {
         let events = self.events.clone();
         tokio::task::spawn_blocking(move || {
             let path = crate::import::expand_home(&path);
-            let answer = match connections::export(&path, &list) {
-                Ok(written) => FileAnswer::ConnectionsExported {
-                    path: written.display().to_string(),
-                    count: list.len(),
-                },
-                Err(e) => FileAnswer::ConnectionsExportFailed(format!("{e:#}")),
+            let target = connections::export_path(&path);
+            // An existing file is replaced only once the user has said so.
+            let answer = if !overwrite && target.exists() {
+                FileAnswer::ConnectionsExportExists(target.display().to_string())
+            } else {
+                written(connections::export(&path, &list), list.len())
             };
             let _ = events.send(UiEvent::File(answer));
         })
+    }
+}
+
+/// The answer to an export of `count` connections.
+fn written(outcome: color_eyre::Result<PathBuf>, count: usize) -> FileAnswer {
+    match outcome {
+        Ok(written) => FileAnswer::ConnectionsExported {
+            path: written.display().to_string(),
+            count,
+        },
+        Err(e) => FileAnswer::ConnectionsExportFailed(format!("{e:#}")),
     }
 }
 

@@ -5,6 +5,7 @@ expression: "Config::embedded().effective_json()"
 {
   "theme": "dark",
   "continue_on_error": false,
+  "confirm_writes_on_prod": true,
   "keybindings": {
     "Global": {
       "ctrl-q": "Quit",
@@ -39,7 +40,7 @@ expression: "Config::embedded().effective_json()"
       ":": "Palette",
       "e": "EditConnection",
       "Del": "DeleteConnection",
-      "ctrl-s": "ExportConnections",
+      "c": "DuplicateConnection",
       "k": "Up",
       "↑": "Up",
       "j": "Down",
@@ -143,12 +144,17 @@ expression: "Config::embedded().effective_json()"
     "Dialog": {
       "ctrl-q": "Quit",
       "F1": "Help",
+      "↑": "Up",
+      "↓": "Down",
       "←": "Left",
       "→": "Right",
+      "PgUp": "PageUp",
+      "PgDn": "PageDown",
       "Home": "LineStart",
       "End": "LineEnd",
       "Esc": "Cancel",
       "Enter": "Submit",
+      "ctrl-t": "TestConnection",
       "Tab": "NextField",
       "shift-Tab": "PrevField",
       "Space": "NextChoice",

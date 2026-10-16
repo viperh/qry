@@ -69,12 +69,19 @@ fn line(state: &State, row: &Row, selected: bool, focused: bool, theme: &Theme) 
                 }
                 None => Span::raw("  "),
             };
-            let line = Line::from(vec![
+            let mut spans = vec![
                 Span::raw(format!(" {marker} ")),
                 dot,
                 Span::raw(connection.title().to_string()),
-            ])
-            .style(style);
+            ];
+            if let Some(label) = connection.record.label {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    format!("[{}]", label.name()),
+                    theme.conn_label(label),
+                ));
+            }
+            let line = Line::from(spans).style(style);
             // The active session's connection stands out without taking
             // the colour, which belongs to the selection.
             if state.sessions.active().connection_id == connection.record.id {

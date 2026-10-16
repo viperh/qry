@@ -19,7 +19,15 @@ const ELLIPSIS: &str = " … ";
 /// there.
 fn label(number: usize, session: &SessionState) -> String {
     let running = if session.busy() { " ◐" } else { "" };
-    format!(" {number} {}{running} ", session.title)
+    format!(" {number} {}{running} {}", session.title, tag(session))
+}
+
+/// The connection's label after the title, `[prod] `, or nothing.
+fn tag(session: &SessionState) -> String {
+    session
+        .label
+        .map(|l| format!("[{}] ", l.name()))
+        .unwrap_or_default()
 }
 
 fn width(text: &str) -> u16 {
@@ -115,7 +123,16 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
             Some(_) => theme.tab(),
             None => theme.overflow_hint(),
         };
-        spans.push(Span::styled(text.clone(), style));
+        // The label's tag takes its own colour over the tab's.
+        let tag = tab.map(|i| tag(order[i])).unwrap_or_default();
+        match tab.map(|i| order[i]).and_then(|s| s.label) {
+            Some(label) if text.ends_with(&tag) => {
+                let base = &text[..text.len() - tag.len()];
+                spans.push(Span::styled(base.to_string(), style));
+                spans.push(Span::styled(tag, style.patch(theme.conn_label(label))));
+            }
+            _ => spans.push(Span::styled(text.clone(), style)),
+        }
     }
     let used: u16 = spans.iter().map(|s| width(&s.content)).sum();
 

@@ -47,6 +47,8 @@ pub struct Config {
     pub(crate) theme: Option<String>,
     /// Run all keeps going after a statement fails, instead of stopping.
     pub(crate) continue_on_error: bool,
+    /// The first write of a session on a `prod` connection asks first.
+    pub(crate) confirm_writes_on_prod: bool,
     /// Problems that did not stop the config from loading; see
     /// [`Config::warnings`].
     warnings: Vec<String>,
@@ -59,6 +61,8 @@ struct RawFile {
     theme: Option<String>,
     #[serde(default)]
     continue_on_error: Option<bool>,
+    #[serde(default)]
+    confirm_writes_on_prod: Option<bool>,
     /// `{ context: { chord: action or null } }`.
     #[serde(default)]
     keybindings: Option<Map<String, Value>>,
@@ -139,6 +143,9 @@ impl Config {
         }
         if let Some(keep_going) = file.continue_on_error {
             self.continue_on_error = keep_going;
+        }
+        if let Some(ask) = file.confirm_writes_on_prod {
+            self.confirm_writes_on_prod = ask;
         }
 
         let mut old = Migrated::default();
@@ -254,6 +261,10 @@ impl Config {
         out.push_str(&format!(
             "  \"continue_on_error\": {},\n",
             self.continue_on_error
+        ));
+        out.push_str(&format!(
+            "  \"confirm_writes_on_prod\": {},\n",
+            self.confirm_writes_on_prod
         ));
         out.push_str("  \"keybindings\": {");
         for (i, context) in KeyContext::iter().enumerate() {

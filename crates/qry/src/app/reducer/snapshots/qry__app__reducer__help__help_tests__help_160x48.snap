@@ -24,28 +24,28 @@ expression: "h.render(w, ht)"
 │ :            command palette                         shift-↓              select down                     Dialogs                                            │
 │ e            edit this connection                    ctrl-shift-←         select the previous word        ctrl-q     quit                                    │
 │ Del          forget this connection                  ctrl-shift-→         select the next word            F1         show / hide the help                    │
-│ ctrl-s       export connections                      shift-Home           select to the start of the l…   ←          left                                    │
-│ k ↑          up                                      shift-End            select to the end of the line   →          right                                   │
-│ j ↓          down                                    ctrl-a               select all                      Home       start of the line                       │
-│ h ←          left                                    Backspace            delete the character before     End        end of the line                         │
-│ l →          right                                   Del                  delete the character after      Esc        cancel / close                          │
-│ g g Home     to the top                              ctrl-w               delete the word before          Enter      submit                                  │
-│ G End        to the bottom                           alt-d                delete the word after           Tab        next field                              │
-│ Space        expand / collapse                       ctrl-k               delete to the end of the line   shift-Tab  previous field                          │
-│ Enter        connect / switch to its session         ctrl-z               undo                            Space      next choice                             │
-│ shift-Enter  open another session on it              ctrl-y ctrl-shift-z  redo                            Backspace  delete the character before             │
-│ r            read the tables again                   ctrl-x               cut                             Del        delete the character after              │
-│ /            filter the tree                         ctrl-v               paste                                                                              │
-│                                                                                                           Command palette                                    │
-│                                                      Editor · Running                                     ctrl-q     quit                                    │
-│                                                      F5 ctrl-Enter        run the statement               F1         show / hide the help                    │
-│                                                      F8                   run everything                  ctrl-p     command palette                         │
-│                                                      ctrl-e               run the selection               ↑ ctrl-k   up                                      │
-│                                                      ctrl-c               cancel the query (copy when …   ↓ ctrl-j   down                                    │
-│                                                      Editor · Other                                       ←          left                                    │
-│                                                      F6                   next pane                       →          right                                   │
-│                                                      shift-Tab            dedent                          PgUp       up a page                               │
-│                                                                                                           PgDn       down a page                             │
+│ c            duplicate this connection               shift-Home           select to the start of the l…   ↑          up                                      │
+│ k ↑          up                                      shift-End            select to the end of the line   ↓          down                                    │
+│ j ↓          down                                    ctrl-a               select all                      ←          left                                    │
+│ h ←          left                                    Backspace            delete the character before     →          right                                   │
+│ l →          right                                   Del                  delete the character after      PgUp       up a page                               │
+│ g g Home     to the top                              ctrl-w               delete the word before          PgDn       down a page                             │
+│ G End        to the bottom                           alt-d                delete the word after           Home       start of the line                       │
+│ Space        expand / collapse                       ctrl-k               delete to the end of the line   End        end of the line                         │
+│ Enter        connect / switch to its session         ctrl-z               undo                            Esc        cancel / close                          │
+│ shift-Enter  open another session on it              ctrl-y ctrl-shift-z  redo                            Enter      submit                                  │
+│ r            read the tables again                   ctrl-x               cut                             ctrl-t     test the connection                     │
+│ /            filter the tree                         ctrl-v               paste                           Tab        next field                              │
+│                                                                                                           shift-Tab  previous field                          │
+│                                                      Editor · Running                                     Space      next choice                             │
+│                                                      F5 ctrl-Enter        run the statement               Backspace  delete the character before             │
+│                                                      F8                   run everything                  Del        delete the character after              │
+│                                                      ctrl-e               run the selection                                                                  │
+│                                                      ctrl-c               cancel the query (copy when …   Command palette                                    │
+│                                                      Editor · Other                                       ctrl-q     quit                                    │
+│                                                      F6                   next pane                       F1         show / hide the help                    │
+│                                                      shift-Tab            dedent                          ctrl-p     command palette                         │
+│                                                                                                           ↑ ctrl-k   up                                      │
 │                                                                                                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value                                               │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                                                             │

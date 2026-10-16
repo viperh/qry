@@ -3,10 +3,12 @@
 //! submits and closes them, and [`crate::views::form`] draws them.
 
 pub(crate) mod confirm;
+pub(crate) mod conndialog;
 pub(crate) mod connexportform;
-pub(crate) mod connform;
+pub(crate) mod deleteconfirm;
 pub(crate) mod exportform;
 pub(crate) mod form;
+pub(crate) mod importdialog;
 pub(crate) mod importform;
 pub(crate) mod passwordform;
 pub(crate) mod textinput;
@@ -15,10 +17,11 @@ use qry_core::ExportConfig;
 
 use self::{
     confirm::{Confirm, OnConfirm},
+    conndialog::ConnDialog,
     connexportform::ConnExportForm,
-    connform::ConnForm,
     exportform::ExportForm,
     form::Form,
+    importdialog::ImportPreview,
     importform::ImportForm,
     passwordform::PasswordForm,
 };
@@ -28,34 +31,37 @@ use crate::{connections::StoredConnection, import::Format, secrets::Password};
 /// The open modal.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum DialogState {
-    Connection(ConnForm),
+    Connection(Box<ConnDialog>),
     Export(ExportForm),
     Password(PasswordForm),
     Import(ImportForm),
     ConnExport(ConnExportForm),
     Confirm(Confirm),
+    ImportPreview(ImportPreview),
 }
 
 impl DialogState {
     pub(crate) fn form(&self) -> &dyn Form {
         match self {
-            Self::Connection(form) => form,
+            Self::Connection(form) => &**form,
             Self::Export(form) => form,
             Self::Password(form) => form,
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
             Self::Confirm(form) => form,
+            Self::ImportPreview(form) => form,
         }
     }
 
     pub(crate) fn form_mut(&mut self) -> &mut dyn Form {
         match self {
-            Self::Connection(form) => form,
+            Self::Connection(form) => &mut **form,
             Self::Export(form) => form,
             Self::Password(form) => form,
             Self::Import(form) => form,
             Self::ConnExport(form) => form,
             Self::Confirm(form) => form,
+            Self::ImportPreview(form) => form,
         }
     }
 }
@@ -81,8 +87,11 @@ pub(crate) enum Submission {
     Export(ExportConfig),
     /// Read connections from another file.
     Import { path: String, format: Format },
-    /// Write a backup of the saved connections to this file.
-    ExportConnections(String),
+    /// Add these connections, picked in the import preview, and save.
+    ImportSelected(Vec<StoredConnection>),
+    /// Write a backup of the saved connections with these ids to this
+    /// file.
+    ExportConnections { path: String, ids: Vec<String> },
     /// A confirm dialog's confirm button.
     Confirmed(OnConfirm),
     /// A confirm dialog's Cancel button.

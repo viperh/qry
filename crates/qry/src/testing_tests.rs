@@ -191,7 +191,11 @@ fn every_view_renders_at_every_size() {
             });
         }),
         ("import", |h| _ = h.keys("ctrl-o")),
-        ("export connections", |h| _ = h.keys("ctrl-s")),
+        ("export connections", |h| {
+            h.keys("ctrl-p")
+                .type_str("Export connections")
+                .keys("enter");
+        }),
         ("help", |h| _ = h.keys("f1")),
     ];
     for &(w, h) in SIZES {

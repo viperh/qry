@@ -25,4 +25,4 @@ expression: "h.render(80, 24)"
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 144–161 of 161 ─┘
+└───────────────────────────────────────────────────────────── 149–166 of 166 ─┘

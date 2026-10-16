@@ -145,3 +145,99 @@ async fn a_scheduled_timer_comes_back_as_an_event_once_it_runs_out() {
     assert_eq!(start.elapsed(), std::time::Duration::from_secs(1));
     assert_eq!(events.try_recv().unwrap(), UiEvent::Timer(timer));
 }
+
+#[tokio::test]
+async fn test_connection_reports_server_version() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let record = sqlite("mem", ":memory:");
+    finished(executor.execute(Effect::TestConnection {
+        test: 7,
+        record: Box::new(record),
+    }))
+    .await;
+    let Ok(UiEvent::ConnectionTested { test, outcome }) = events.try_recv() else {
+        panic!("expected a test answer");
+    };
+    assert_eq!(test, 7);
+    let tested = outcome.unwrap();
+    assert!(tested.version.starts_with("SQLite 3."), "{tested:?}");
+    assert!(
+        !executor.sessions.contains(SessionId(1)),
+        "no session was opened"
+    );
+}
+
+#[tokio::test]
+async fn a_test_takes_its_password_from_the_stash_and_leaves_none_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let mut record = StoredConnection::new("pg", Driver::Postgres);
+    record.host = Some("127.0.0.1".into());
+    record.port = Some(1);
+    record.user = Some("alice".into());
+    record.database = Some("app".into());
+    record.secret = Secret::Prompt;
+    let key = crate::app::effects::test_stash_key(&record.id);
+    let id = record.id.clone();
+    executor.execute(Effect::StashPassword {
+        connection: key.clone(),
+        password: crate::secrets::Password::new("CANARY-PW-test"),
+    });
+    finished(executor.execute(Effect::TestConnection {
+        test: 1,
+        record: Box::new(record),
+    }))
+    .await;
+    assert!(
+        crate::secrets::take_stash(&key).is_none(),
+        "taken and dropped"
+    );
+    assert!(crate::secrets::take_stash(&id).is_none());
+    let Ok(UiEvent::ConnectionTested { outcome, .. }) = events.try_recv() else {
+        panic!("expected a test answer");
+    };
+    let message = outcome.unwrap_err();
+    assert!(!message.contains("CANARY"), "{message}");
+}
+
+#[tokio::test]
+async fn an_export_over_an_existing_file_waits_to_be_told() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let target = dir.path().join("backup.json");
+    connections::export(&target, &[]).unwrap();
+    let path = target.display().to_string();
+    let saved = sqlite("app", "app.db");
+
+    finished(executor.execute(Effect::ExportConnections {
+        path: path.clone(),
+        connections: vec![saved.clone()],
+        overwrite: false,
+    }))
+    .await;
+    assert_eq!(
+        events.try_recv().unwrap(),
+        UiEvent::File(FileAnswer::ConnectionsExportExists(path.clone()))
+    );
+    assert!(
+        connections::parse(&std::fs::read_to_string(&target).unwrap(), &target)
+            .unwrap()
+            .is_empty()
+    );
+
+    finished(executor.execute(Effect::ExportConnections {
+        path: path.clone(),
+        connections: vec![saved.clone()],
+        overwrite: true,
+    }))
+    .await;
+    assert!(matches!(
+        events.try_recv().unwrap(),
+        UiEvent::File(FileAnswer::ConnectionsExported { count: 1, .. })
+    ));
+    assert_eq!(
+        connections::parse(&std::fs::read_to_string(&target).unwrap(), &target).unwrap(),
+        [saved]
+    );
+}

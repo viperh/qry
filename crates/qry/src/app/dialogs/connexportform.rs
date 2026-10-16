@@ -4,26 +4,51 @@ use super::{
 };
 use crate::{action::Action, theme::Accent};
 
-const LABELS: [&str; 1] = ["File"];
 const FILE: usize = 0;
 
 /// The Export Connections form: where to write a backup that Import
-/// Connections can read back.
+/// Connections can read back, and which connections go in it (all of them
+/// to start with; Space takes one out).
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ConnExportForm {
-    fields: [Field; 1],
+    /// The file, then one checkbox per connection.
+    fields: Vec<Field>,
+    labels: Vec<&'static str>,
+    /// The connections' ids, in the checkboxes' order.
+    ids: Vec<String>,
+    focus: usize,
     error: Option<String>,
     /// Set while the file is being written.
     pending: Option<&'static str>,
 }
 
-impl Default for ConnExportForm {
-    fn default() -> Self {
+impl ConnExportForm {
+    /// A form offering these `(id, name)`s, all included.
+    pub(crate) fn new(connections: &[(String, String)]) -> Self {
+        let mut fields = vec![Field::text_with_placeholder("~/qry-connections.json")];
+        let mut labels = vec!["File"];
+        for (i, (_, name)) in connections.iter().enumerate() {
+            fields.push(Field::checkbox(true, name.clone()));
+            labels.push(if i == 0 { "Include" } else { "" });
+        }
         Self {
-            fields: [Field::text_with_placeholder("~/qry-connections.json")],
+            fields,
+            labels,
+            ids: connections.iter().map(|(id, _)| id.clone()).collect(),
+            focus: FILE,
             error: None,
             pending: None,
         }
+    }
+
+    /// The ids of the connections still ticked.
+    pub(crate) fn included(&self) -> Vec<String> {
+        self.ids
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| self.checked(i + 1))
+            .map(|(_, id)| id.clone())
+            .collect()
     }
 }
 
@@ -33,7 +58,12 @@ impl Form for ConnExportForm {
     }
 
     fn footer(&self) -> &'static [(Action, &'static str)] {
-        &[(Action::Submit, "export"), (Action::Cancel, "cancel")]
+        &[
+            (Action::Submit, "export"),
+            (Action::NextChoice, "toggle"),
+            (Action::NextField, "next"),
+            (Action::Cancel, "cancel"),
+        ]
     }
 
     fn width(&self) -> u16 {
@@ -45,11 +75,11 @@ impl Form for ConnExportForm {
     }
 
     fn subtitle(&self) -> Option<String> {
-        Some("no passwords are written".into())
+        Some("passwords are not included".into())
     }
 
-    fn labels(&self) -> &'static [&'static str] {
-        &LABELS
+    fn labels(&self) -> &[&'static str] {
+        &self.labels
     }
 
     fn fields(&self) -> &[Field] {
@@ -61,11 +91,11 @@ impl Form for ConnExportForm {
     }
 
     fn focus(&self) -> usize {
-        FILE
+        self.focus
     }
 
-    fn set_focus(&mut self, _focus: usize) {
-        // One field: there is nowhere else to go.
+    fn set_focus(&mut self, focus: usize) {
+        self.focus = focus.min(self.fields.len() - 1);
     }
 
     fn error(&self) -> Option<&str> {
@@ -89,7 +119,30 @@ impl Form for ConnExportForm {
         if path.is_empty() {
             return Err("File is required".into());
         }
-        Ok(Submission::ExportConnections(path))
+        if self.ids.is_empty() {
+            return Err("There are no saved connections to export".into());
+        }
+        let ids = self.included();
+        if ids.is_empty() {
+            return Err("Choose at least one connection to export".into());
+        }
+        Ok(Submission::ExportConnections { path, ids })
+    }
+
+    /// Up and down move between the rows too, so a long list reads like
+    /// one.
+    fn act(&mut self, action: Action) {
+        let count = self.fields.len();
+        match action {
+            Action::NextField | Action::Down => self.focus = (self.focus + 1) % count,
+            Action::PrevField | Action::Up => self.focus = (self.focus + count - 1) % count,
+            Action::Submit => {}
+            action => {
+                self.error = None;
+                let focus = self.focus;
+                self.fields[focus].apply(action);
+            }
+        }
     }
 }
 

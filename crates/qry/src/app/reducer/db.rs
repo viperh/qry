@@ -6,6 +6,7 @@ use crate::app::{
     event::DbAnswer,
     state::{Awaiting, SessionId, SessionStatus, State},
 };
+use crate::notice::Notice;
 
 /// Handles an answer from session `id`, which the caller has checked is
 /// still open.
@@ -38,7 +39,13 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
         } => {
             dialogs::need_password(state, id, connection, name);
         }
-        DbAnswer::SecretNotStored(connection) => tree::secret_not_stored(state, &connection, fx),
+        // The keychain would not take it: the record says so, and a dim
+        // toast tells the user why they will be asked.
+        DbAnswer::SecretNotStored(connection) => {
+            tree::secret_not_stored(state, &connection, fx);
+            let notice = Notice::info("keychain unavailable; qry will ask each time");
+            notices::notify(state, notice, fx);
+        }
         DbAnswer::QueryDone(result) => run::done(state, id, result, fx),
         DbAnswer::QueryFailed { message, position } => {
             run::failed(state, id, message, position, fx);

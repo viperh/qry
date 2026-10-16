@@ -12,7 +12,7 @@ use super::{
 };
 use crate::{
     app::dialogs::{
-        form::{Field, Form},
+        form::{Field, Form, Note, Tone},
         textinput::{SecretInput, TextInput},
     },
     keymap::{KeyContext, Keymap, display_chord},
@@ -22,10 +22,33 @@ use crate::{
 /// The widest a label column gets.
 const MAX_LABEL: u16 = 18;
 
-/// The popup's size with every field shown: the fields, a blank row, the
-/// footer and the border.
+/// One row of a form's body: a field, or the error under one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Row {
+    Field(usize),
+    Error(usize),
+}
+
+fn rows(form: &dyn Form) -> Vec<Row> {
+    let mut rows = Vec::new();
+    for i in 0..form.labels().len() {
+        rows.push(Row::Field(i));
+        if form.field_error(i).is_some() {
+            rows.push(Row::Error(i));
+        }
+    }
+    rows
+}
+
+/// Rows the note takes: a blank one and its own.
+fn note_rows(form: &dyn Form) -> u16 {
+    if form.note().is_some() { 2 } else { 0 }
+}
+
+/// The popup's size with every field shown: the fields and their errors,
+/// the note, a blank row, the footer and the border.
 pub(crate) fn height(form: &dyn Form) -> u16 {
-    u16::try_from(form.labels().len()).unwrap_or(u16::MAX) + 4
+    u16::try_from(rows(form).len()).unwrap_or(u16::MAX) + note_rows(form) + 4
 }
 
 /// The popup's width in an `area` this wide: what the form asks for, with
@@ -59,11 +82,18 @@ pub(crate) fn draw(
         return;
     }
     let footer_row = Rect::new(inner.x, inner.bottom() - 1, inner.width, 1);
+    let notes = note_rows(form);
     let fields = Rect {
-        height: inner.height.saturating_sub(2),
+        height: inner.height.saturating_sub(2 + notes),
         ..inner
     };
     draw_fields(form, theme, frame, fields);
+    if let Some(note) = form.note()
+        && inner.height >= 2 + notes
+    {
+        let at = Rect::new(inner.x, inner.bottom() - 3, inner.width, 1);
+        frame.render_widget(note_line(&note, theme), at);
+    }
     frame.render_widget(
         footer(form, keymap, spinner, theme, inner.width),
         footer_row,
@@ -110,12 +140,24 @@ fn footer(
     Line::from(spans)
 }
 
-/// Draws as many fields as fit, scrolled so the focused one is visible.
+/// The note in its tone's colour.
+fn note_line(note: &Note, theme: &Theme) -> Line<'static> {
+    let style = match note.tone {
+        Tone::Ok => theme.value_ok(),
+        Tone::Error => theme.value_error(),
+        Tone::Busy => theme.spinner(),
+    };
+    Line::styled(format!("  {}", note.text), style)
+}
+
+/// Draws as many rows as fit, scrolled so the focused field (and the error
+/// under it) is visible.
 fn draw_fields(form: &dyn Form, theme: &Theme, frame: &mut Frame, area: Rect) {
     let labels = form.labels();
     if labels.is_empty() || area.height == 0 {
         return;
     }
+    let rows = rows(form);
     let label_width = labels
         .iter()
         .map(|l| u16::try_from(l.chars().count()).unwrap_or(u16::MAX))
@@ -123,10 +165,30 @@ fn draw_fields(form: &dyn Form, theme: &Theme, frame: &mut Frame, area: Rect) {
         .unwrap_or(0)
         .saturating_add(2)
         .min(MAX_LABEL);
-    let fits = usize::from(area.height).min(labels.len());
-    let first = (form.focus() + 1).saturating_sub(fits);
-    for (row, i) in (0..fits).zip(first..) {
-        let y = area.y + u16::try_from(row).unwrap_or(0);
+    let fits = usize::from(area.height).min(rows.len());
+    // The last row that belongs to the focused field: its error, if any.
+    let focus_end = rows
+        .iter()
+        .rposition(|row| matches!(row, Row::Field(i) | Row::Error(i) if *i == form.focus()))
+        .unwrap_or(0);
+    let first = (focus_end + 1).saturating_sub(fits);
+    for (line, row) in (0..fits).zip(rows.iter().skip(first)) {
+        let y = area.y + u16::try_from(line).unwrap_or(0);
+        let i = match *row {
+            Row::Field(i) => i,
+            Row::Error(i) => {
+                let indent = label_width + 2;
+                let message = form.field_error(i).unwrap_or_default();
+                let at = Rect::new(
+                    area.x + indent.min(area.width),
+                    y,
+                    area.width.saturating_sub(indent),
+                    1,
+                );
+                frame.render_widget(Span::styled(message.to_string(), theme.value_error()), at);
+                continue;
+            }
+        };
         let focused = i == form.focus();
         let (marker, label_style) = if focused {
             (
@@ -181,6 +243,14 @@ fn draw_field(field: &Field, focused: bool, theme: &Theme, frame: &mut Frame, ar
                 Span::styled(format!(" {caption}"), theme.field()),
             ]);
             frame.render_widget(line, area);
+        }
+        Field::Button { caption } => {
+            let style = if focused {
+                theme.button_primary()
+            } else {
+                theme.button()
+            };
+            frame.render_widget(Span::styled(format!("[ {caption} ]"), style), area);
         }
     }
 }

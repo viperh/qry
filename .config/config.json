@@ -9,6 +9,10 @@
   // true.
   "continue_on_error": false,
 
+  // The first statement that writes, in each session on a connection
+  // labelled prod, asks before it runs, unless this is false.
+  "confirm_writes_on_prod": true,
+
   // Key bindings, by context: `Global` applies wherever a pane has focus,
   // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
   // `Jobs`), which win over it. `Dialog`, `Help` and `Palette` apply alone
@@ -71,9 +75,9 @@
       "<space>": "Toggle",
       "<e>": "EditConnection",
       "<delete>": "DeleteConnection",
+      "<c>": "DuplicateConnection",
       "<r>": "Refresh",
-      "</>": "Filter",
-      "<ctrl-s>": "ExportConnections"
+      "</>": "Filter"
     },
     // `?` and `:` are not bound here, so they can be typed.
     "Editor": {
@@ -180,8 +184,13 @@
     "Dialog": {
       "<enter>": "Submit",
       "<esc>": "Cancel",
+      "<ctrl-t>": "TestConnection",
       "<tab>": "NextField",
       "<shift-tab>": "PrevField",
+      "<up>": "Up",
+      "<down>": "Down",
+      "<pageup>": "PageUp",
+      "<pagedown>": "PageDown",
       "<left>": "Left",
       "<right>": "Right",
       "<home>": "LineStart",

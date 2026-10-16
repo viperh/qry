@@ -6,15 +6,17 @@ use std::sync::Arc;
 
 use qry_core::{
     QueryResult,
-    sql::{Dialect, TokenKind, lex, split, statement_at},
+    sql::{Dialect, TokenKind, is_read_only, lex, split, statement_at},
 };
 
 use super::{results, tx_change};
 use crate::{
     app::{
+        dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
         state::{EditorState, Failed, Queued, SessionId, State, TabError},
     },
+    connections::ConnLabel,
     db::DbCommand,
 };
 
@@ -80,11 +82,47 @@ pub(crate) fn enqueue(state: &mut State, statements: Vec<Queued>, fx: &mut Vec<E
     if statements.is_empty() {
         return;
     }
+    // The first write of a session on a prod connection asks first.
+    let ask = state.config.confirm_writes_on_prod;
+    let session = state.sessions.active();
+    let writes = statements
+        .iter()
+        .any(|q| !is_read_only(session.dialect(), &q.sql));
+    if ask && writes && session.label == Some(ConnLabel::Prod) && !session.writes_confirmed {
+        let confirm = Confirm::run_on_prod(session.id, &session.title);
+        state.sessions.active_mut().held = statements;
+        state.open_dialog(DialogState::Confirm(confirm));
+        state.awaiting = None;
+        return;
+    }
     let session = state.sessions.active_mut();
     session.failed = None;
     session.queue.extend(statements);
     let id = session.id;
     pump(state, id, fx);
+}
+
+/// The prod confirm said yes: session `id` runs what it held, and is not
+/// asked again.
+pub(crate) fn release(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    session.writes_confirmed = true;
+    let held = std::mem::take(&mut session.held);
+    if held.is_empty() {
+        return;
+    }
+    session.failed = None;
+    session.queue.extend(held);
+    pump(state, id, fx);
+}
+
+/// The prod confirm went away without a yes: what it held is not run.
+pub(crate) fn drop_held(state: &mut State) {
+    for session in state.sessions.by_id.values_mut() {
+        session.held.clear();
+    }
 }
 
 /// Sends session `id`'s next statement, if its worker is free.

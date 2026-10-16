@@ -41,6 +41,19 @@ pub enum UiEvent {
     Db(SessionId, DbAnswer),
     /// A file the runtime read or wrote off the event loop.
     File(FileAnswer),
+    /// The outcome of `Effect::TestConnection` number `test`: how long the
+    /// connection took and what the server said it is, or why it failed.
+    ConnectionTested {
+        test: u64,
+        outcome: Result<Tested, String>,
+    },
+}
+
+/// A connection test that worked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tested {
+    pub millis: u64,
+    pub version: String,
 }
 
 /// Which timer ran out. The reducer tells a stale one from the live one by
@@ -78,6 +91,9 @@ pub enum FileAnswer {
         count: usize,
     },
     ConnectionsExportFailed(String),
+    /// The backup's file is already there (the path as written), so it was
+    /// left alone until the user says to replace it.
+    ConnectionsExportExists(String),
 }
 
 /// The database worker's answer to a [`DbCommand`](crate::db::DbCommand).

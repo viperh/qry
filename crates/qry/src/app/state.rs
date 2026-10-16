@@ -22,7 +22,7 @@ use super::dialogs::DialogState;
 pub use crate::theme::SessionStatus;
 use crate::{
     config::Config,
-    connections::{Driver, Secret, StoredConnection},
+    connections::{ConnLabel, Driver, Secret, StoredConnection},
     keymap::KeyContext,
     notice::{NoticeLog, TimeOfDay, Toasts},
     theme::{Pill, Theme},
@@ -89,6 +89,13 @@ pub(crate) struct SessionState {
     pub(crate) in_transaction: bool,
     /// Expand its connection in the tree once it is open.
     pub(crate) expand_when_connected: bool,
+    /// Its connection's label; `prod` asks before the first write.
+    pub(crate) label: Option<ConnLabel>,
+    /// A write was confirmed on this `prod` session, so it is not asked
+    /// about again.
+    pub(crate) writes_confirmed: bool,
+    /// Statements held back while the `prod` confirm is open.
+    pub(crate) held: Vec<Queued>,
 }
 
 impl SessionState {
@@ -116,6 +123,9 @@ impl SessionState {
             tx_changes: VecDeque::new(),
             in_transaction: false,
             expand_when_connected: false,
+            label: record.label,
+            writes_confirmed: false,
+            held: Vec::new(),
         }
     }
 
@@ -126,6 +136,7 @@ impl SessionState {
         self.driver = fresh.driver;
         self.summary = fresh.summary;
         self.database = fresh.database;
+        self.label = fresh.label;
         self.in_transaction = false;
     }
 
@@ -228,7 +239,7 @@ impl ResultTab {
 
 /// `postgres · app@db.local`, `sqlite · :memory:`: the driver and where it
 /// points, without the password or the port.
-fn summary(record: &StoredConnection) -> String {
+pub(crate) fn summary(record: &StoredConnection) -> String {
     let driver = record.driver.name();
     let target = match (&record.path, &record.host) {
         (Some(path), _) => path.clone(),
@@ -526,6 +537,9 @@ pub struct State {
     pub(crate) spinner: usize,
     pub(crate) spinner_timer: u64,
     pub(crate) ids: IdGen,
+    /// How many connection tests have been asked for; the open dialog
+    /// waits for the answer to the last.
+    pub(crate) tests_made: u64,
     /// Something changed since the runtime last drew.
     pub(crate) dirty: bool,
 }
@@ -552,6 +566,7 @@ impl Default for State {
             spinner: 0,
             spinner_timer: 0,
             ids: IdGen::default(),
+            tests_made: 0,
             dirty: true,
         }
     }

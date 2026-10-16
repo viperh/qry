@@ -96,7 +96,10 @@ impl Form for TestForm {
         if self.text(0).is_empty() {
             return Err("Name is required".into());
         }
-        Ok(Submission::ExportConnections(self.text(0).to_string()))
+        Ok(Submission::ExportConnections {
+            path: self.text(0).to_string(),
+            ids: Vec::new(),
+        })
     }
 }
 
