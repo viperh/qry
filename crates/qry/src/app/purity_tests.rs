@@ -18,6 +18,11 @@ fn reducer_modules_import_no_io() {
         ["key", "ring"].concat(),
         ["crate::", "runtime"].concat(),
         ["db::", "spawn"].concat(),
+        // The history store's types may be named, not its files.
+        ["File", "Store"].concat(),
+        ["history_store::", "perform"].concat(),
+        ["save_", "snippets"].concat(),
+        ["load_", "snippets"].concat(),
     ];
     // The keychain and the stash are I/O; only the `Password` type may be
     // named from here.

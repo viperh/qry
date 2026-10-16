@@ -7,6 +7,7 @@ mod dialogs;
 mod editor;
 mod files;
 pub(crate) mod help;
+mod history;
 mod keys;
 mod mouse;
 pub(crate) mod notices;
@@ -14,6 +15,7 @@ pub(crate) mod palette;
 mod results;
 mod run;
 mod sessions;
+mod snippets;
 mod tree;
 
 use super::{
@@ -27,7 +29,10 @@ use crate::{action::Action, connections::StoredConnection, keymap::KeyContext};
 pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     let mut fx = Vec::new();
     // Nothing on screen follows the tick or the clock.
-    state.dirty |= !matches!(event, UiEvent::Tick(_) | UiEvent::Clock(_));
+    state.dirty |= !matches!(
+        event,
+        UiEvent::Tick(_) | UiEvent::Clock(_) | UiEvent::WallClock(_)
+    );
     match event {
         UiEvent::Started => start(state, &mut fx),
         UiEvent::Key(key) => keys::key(state, key, &mut fx),
@@ -41,6 +46,7 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
             }
         }
         UiEvent::Clock(now) => state.clock = now,
+        UiEvent::WallClock(now) => state.wall = now,
         UiEvent::Notice(notice) => notices::notify(state, notice, &mut fx),
         UiEvent::Timer(Timer::Toast(n)) => notices::expired(state, n, &mut fx),
         UiEvent::Timer(Timer::KeySequence(n)) => keys::timed_out(state, n, &mut fx),
@@ -57,9 +63,12 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
 
 /// Every run starts on an empty in-memory SQLite database, session 1. The
 /// tree lists it like any other connection, but it is never saved. The
-/// saved connections are read from disk alongside.
+/// saved connections are read from disk alongside, with the query history
+/// and the snippets.
 fn start(state: &mut State, fx: &mut Vec<Effect>) {
     fx.push(Effect::LoadConnections);
+    fx.push(Effect::LoadHistory);
+    fx.push(Effect::LoadSnippets);
     let scratch = scratch_record();
     tree::attempt(state, &scratch, fx);
     if state.sessions.get(SessionId::FIRST).is_some() {
@@ -103,6 +112,11 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
         Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
         Action::Palette => palette::toggle(state),
+        Action::History => history::open(state),
+        Action::RecallPrev => history::recall(state, true),
+        Action::RecallNext => history::recall(state, false),
+        Action::SaveSnippet => snippets::open_save(state, fx),
+        Action::ManageSnippets => snippets::open_manage(state),
         // The jobs drawer comes with T305.
         Action::ToggleJobs => {}
         action => match context {
@@ -112,7 +126,11 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Dialog => dialogs::act(state, action, fx),
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
             KeyContext::Help => help::act(state, action),
-            KeyContext::Palette => palette::run_key(state, action, fx),
+            KeyContext::Palette => match state.overlays.last() {
+                Some(state::Overlay::History(_)) => history::run_key(state, action, fx),
+                Some(state::Overlay::Snippets(_)) => snippets::run_key(state, action, fx),
+                _ => palette::run_key(state, action, fx),
+            },
             KeyContext::Global | KeyContext::Inspector | KeyContext::Jobs => {}
         },
     }
@@ -170,6 +188,11 @@ fn paste(state: &mut State, text: &str) {
         Some(state::Overlay::Palette(_)) => {
             for c in text.chars().filter(|c| !c.is_control()) {
                 palette::type_char(state, c);
+            }
+        }
+        Some(state::Overlay::History(_)) => {
+            for c in text.chars().filter(|c| !c.is_control()) {
+                history::type_char(state, c);
             }
         }
         Some(_) => {}

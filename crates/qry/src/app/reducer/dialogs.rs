@@ -119,7 +119,8 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         Submission::Confirmed(_)
         | Submission::Dismissed
         | Submission::Copy { .. }
-        | Submission::Goto(_) => None,
+        | Submission::Goto(_)
+        | Submission::SaveSnippet(_) => None,
     };
     dialog.form_mut().set_error(None);
     dialog.form_mut().set_pending(pending);
@@ -175,8 +176,32 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             tree::delete(state, &id, fx);
             return;
         }
+        // Back to the list it was deleted from.
+        Submission::Confirmed(OnConfirm::DeleteSnippet { name, connection }) => {
+            close(state);
+            super::snippets::delete(state, &name, connection.as_deref(), fx);
+            super::snippets::open_manage(state);
+            return;
+        }
         Submission::Dismissed => {
             close(state);
+            return;
+        }
+        // A name already taken keeps the dialog, saying so.
+        Submission::SaveSnippet(save) => {
+            match super::snippets::submitted(state, save, fx) {
+                Ok(from_list) => {
+                    close(state);
+                    if from_list {
+                        super::snippets::open_manage(state);
+                    }
+                }
+                Err(error) => {
+                    if let Some(dialog) = state.dialog_mut() {
+                        dialog.form_mut().set_error(Some(error));
+                    }
+                }
+            }
             return;
         }
         Submission::Copy { scope, format } => {

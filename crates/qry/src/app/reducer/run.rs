@@ -9,7 +9,7 @@ use qry_core::{
     sql::{Dialect, TokenKind, lex, split, statement_at},
 };
 
-use super::{results, tx_change};
+use super::{history, results, tx_change};
 use crate::{
     app::{
         effects::Effect,
@@ -151,7 +151,8 @@ fn label(dialect: Dialect, sql: &str, result: &QueryResult) -> String {
     format!("{name} · {}", result.rows.len())
 }
 
-/// Session `id`'s statement finished with `result`.
+/// Session `id`'s statement finished with `result`. It goes into the
+/// history too.
 pub(super) fn done(
     state: &mut State,
     id: SessionId,
@@ -170,7 +171,19 @@ pub(super) fn done(
     let table = table_name(session.dialect(), &sql);
     let tab = session.new_tab(label);
     tab.table = table;
+    let outcome = history::Outcome {
+        ok: true,
+        // The rows it returned, or else those it changed.
+        rows: if result.columns.is_empty() {
+            result.affected
+        } else {
+            u64::try_from(result.rows.len()).ok()
+        },
+        ms: u64::try_from(result.elapsed.as_millis()).unwrap_or(u64::MAX),
+        error: None,
+    };
     results::show(&mut tab.results, result);
+    history::record(state, id, &sql, outcome, fx);
     pump(state, id, fx);
 }
 
@@ -203,13 +216,20 @@ pub(super) fn failed(
     }
     let sql = queued.map(|q| q.sql).unwrap_or_default();
     session.new_tab("✗ error".into()).error = Some(TabError {
-        message,
+        message: message.clone(),
         position,
-        sql,
+        sql: sql.clone(),
     });
     if !keep_going {
         session.queue.clear();
     }
+    let outcome = history::Outcome {
+        ok: false,
+        rows: None,
+        ms: 0,
+        error: Some(message),
+    };
+    history::record(state, id, &sql, outcome, fx);
     pump(state, id, fx);
 }
 

@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/history_tests.rs
+expression: "h.render(80, 24)"
+---
+ qry  1 scratch                                       sqlite · :memory:   EDIT  
+ SCHEMA                       │ QUERY  ln 1, col 33                             
+ ▸ ◌ scratch                  │▌ 1 │ SELECT * FROM users WHERE active           
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+            ┌ Save Snippet ────────────────────────────────────────┐            
+            │ › Name   active users                                │            
+            │   Scope  ‹ this connection ›                         │            
+            │                                                      │            
+            │ Enter save · Tab next · Esc cancel                   │            
+            └──────────────────────────────────────────────────────┘            
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+ connecting to scratch… · sqlite · :memory:                                     
+ Enter submit  Tab next field  Esc cancel                               F1 help

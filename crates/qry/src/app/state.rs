@@ -18,7 +18,13 @@ use crossterm::event::KeyEvent;
 use qry_core::QueryResult;
 use ratatui_textarea::TextArea;
 
-use super::dialogs::DialogState;
+use qry_core::snippets::Snippet;
+
+use super::{
+    dialogs::DialogState,
+    event::WallClock,
+    history::{EditingSnippet, HistoryBook, Recall},
+};
 pub use crate::theme::SessionStatus;
 use crate::{
     config::Config,
@@ -441,6 +447,10 @@ pub(crate) enum Overlay {
     Help(HelpState),
     Messages(MessagesState),
     Palette(crate::palette::PaletteState),
+    /// The query history (ctrl-r); keys as the palette's.
+    History(super::history::HistoryDialog),
+    /// Manage snippets; keys as the palette's.
+    Snippets(super::history::SnippetList),
 }
 
 /// The Messages dialog: which entry of the history, newest first, is
@@ -523,6 +533,16 @@ pub struct State {
     pub(crate) clock: TimeOfDay,
     /// The labels of the palette items run lately, newest first.
     pub(crate) palette_recent: Vec<String>,
+    /// The date and time, from the last `UiEvent::WallClock`.
+    pub(crate) wall: WallClock,
+    /// Every connection's query history.
+    pub(crate) history: HistoryBook,
+    /// Where alt-↑/↓ got to in the history.
+    pub(crate) recall: Option<Recall>,
+    /// The saved snippets, as in the file.
+    pub(crate) snippets: Vec<Snippet>,
+    /// The snippet the editor holds for editing, if any.
+    pub(crate) editing_snippet: Option<EditingSnippet>,
     /// The start of a multi-key binding typed so far, normalised.
     pub(crate) pending_keys: Vec<KeyEvent>,
     /// Which `Timer::KeySequence` is the live one: each key that leaves a
@@ -555,6 +575,11 @@ impl Default for State {
             messages: NoticeLog::default(),
             clock: TimeOfDay::default(),
             palette_recent: Vec::new(),
+            wall: WallClock::default(),
+            history: HistoryBook::default(),
+            recall: None,
+            snippets: Vec::new(),
+            editing_snippet: None,
             pending_keys: Vec::new(),
             key_timer: 0,
             spinner: 0,
@@ -609,21 +634,33 @@ impl State {
     pub(crate) fn dialog(&self) -> Option<&DialogState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Help(_)
+            | Overlay::Messages(_)
+            | Overlay::Palette(_)
+            | Overlay::History(_)
+            | Overlay::Snippets(_) => None,
         })
     }
 
     pub(crate) fn dialog_mut(&mut self) -> Option<&mut DialogState> {
         self.overlays.iter_mut().find_map(|overlay| match overlay {
             Overlay::Dialog(dialog) => Some(dialog),
-            Overlay::Help(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Help(_)
+            | Overlay::Messages(_)
+            | Overlay::Palette(_)
+            | Overlay::History(_)
+            | Overlay::Snippets(_) => None,
         })
     }
 
     pub(crate) fn help(&self) -> Option<&HelpState> {
         self.overlays.iter().find_map(|overlay| match overlay {
             Overlay::Help(help) => Some(help),
-            Overlay::Dialog(_) | Overlay::Messages(_) | Overlay::Palette(_) => None,
+            Overlay::Dialog(_)
+            | Overlay::Messages(_)
+            | Overlay::Palette(_)
+            | Overlay::History(_)
+            | Overlay::Snippets(_) => None,
         })
     }
 
@@ -645,7 +682,9 @@ impl State {
         match self.overlays.last() {
             // The Messages dialog scrolls and closes with the help's keys.
             Some(Overlay::Help(_) | Overlay::Messages(_)) => vec![KeyContext::Help],
-            Some(Overlay::Palette(_)) => vec![KeyContext::Palette],
+            Some(Overlay::Palette(_) | Overlay::History(_) | Overlay::Snippets(_)) => {
+                vec![KeyContext::Palette]
+            }
             Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
             None => vec![self.focus.context(), KeyContext::Global],
         }
@@ -657,7 +696,7 @@ impl State {
     pub fn pill(&self) -> Pill {
         let overlays = self.overlays.iter().rev().map(|overlay| match overlay {
             Overlay::Help(_) | Overlay::Messages(_) => KeyContext::Help,
-            Overlay::Palette(_) => KeyContext::Palette,
+            Overlay::Palette(_) | Overlay::History(_) | Overlay::Snippets(_) => KeyContext::Palette,
             Overlay::Dialog(_) => KeyContext::Dialog,
         });
         overlays

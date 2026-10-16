@@ -3,12 +3,15 @@ use serde::{Deserialize, Serialize};
 
 pub mod copy;
 pub mod exporter;
+pub mod fuzzy;
 pub mod grid;
+pub mod history;
 pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
 pub mod postgres;
 pub mod shared;
+pub mod snippets;
 pub mod sql;
 pub mod sqlite;
 /// Fakes and fixtures for tests; never in a release build.

@@ -1,0 +1,149 @@
+---
+source: crates/qry/src/views/history_tests.rs
+expression: "styled(&h.render_buffer(80, 24))"
+---
+ qry  1 scratch                                    sqlite · :memory:   COMMAND  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+ ▸ ◌ scratch                  │  1 │                                            
+    ┌──────────────────────────────────────────────────────────────────────┐    
+    │ › sel usr                                        scratch · 3 entries │    
+    │ ✓ 09:12  SELECT *                                        1 row  4 ms │    
+    │ ✗ yday   SELECT * FROM user_s                                  error │    
+    │ ✓ 09:00  SELECT u.name, count(*) FROM users u JOIN …   42 rows 31 ms │    
+    └─ Enter insert  ctrl-Enter run  Tab all connections  ctrl-d delete ───┘    
+                              │                                                 
+                              │ RESULTS                                         
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+ connecting to scratch… · sqlite · :memory:                                     
+ Enter run  ↓ move  Esc close                                           F1 help 
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD | DIM
+5,0 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM | UNDERLINED
+16,0 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+70,0 Rgb(138, 148, 163) Rgb(199, 166, 255) BOLD | DIM
+79,0 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+30,1 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+31,1 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD | DIM
+37,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD | DIM
+12,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+37,2 Rgb(138, 148, 163) Rgb(242, 176, 74) DIM
+38,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,3 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,4 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,4 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,4 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+8,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,4 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+16,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+55,4 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+74,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,4 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,4 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,5 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,5 Rgb(159, 211, 138) Rgb(42, 35, 64) NONE
+7,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+8,5 Rgb(138, 148, 163) Rgb(42, 35, 64) NONE
+14,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+15,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
+18,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+21,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
+22,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+29,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
+31,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+32,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
+33,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+63,5 Rgb(138, 148, 163) Rgb(42, 35, 64) NONE
+74,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,5 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,6 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,6 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,6 Rgb(242, 139, 107) Rgb(22, 28, 37) NONE
+7,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+8,6 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+14,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+18,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+21,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+22,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+29,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+31,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+32,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+33,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+69,6 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+74,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,6 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,6 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,7 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,7 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,7 Rgb(159, 211, 138) Rgb(22, 28, 37) NONE
+7,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+8,7 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+14,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+15,7 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+18,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+21,7 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+23,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+45,7 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+46,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+47,7 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+48,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+61,7 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+74,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,7 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,7 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,8 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,8 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+7,8 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+12,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+21,8 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+31,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+37,8 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+40,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+58,8 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+64,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+72,8 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,8 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,9 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,10 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+31,10 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,12 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,13 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,14 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,15 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,16 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,17 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,18 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,19 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,20 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,21 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,22 Rgb(138, 148, 163) Rgb(26, 33, 43) DIM
+0,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+1,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+6,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+12,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+13,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+20,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+23,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+72,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+74,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

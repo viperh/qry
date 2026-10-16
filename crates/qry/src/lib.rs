@@ -23,6 +23,7 @@ pub mod connections;
 pub mod db;
 pub mod errors;
 pub mod help_model;
+pub mod history_store;
 pub mod import;
 pub mod keymap;
 pub mod logging;

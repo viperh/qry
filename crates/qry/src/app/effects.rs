@@ -6,8 +6,13 @@
 
 use std::time::Duration;
 
+use qry_core::snippets::Snippet;
+
 use super::{event::Timer, state::SessionId};
-use crate::{connections::StoredConnection, db::DbCommand, import::Format, secrets::Password};
+use crate::{
+    connections::StoredConnection, db::DbCommand, history_store::HistoryWrite, import::Format,
+    secrets::Password,
+};
 
 /// A side-effect request. Not `Clone`: [`Effect::StashPassword`] holds a
 /// [`Password`], whose `Debug` is redacted, so no effect's `Debug` shows one.
@@ -54,6 +59,18 @@ pub enum Effect {
         timer: Timer,
         after: Duration,
     },
+    /// Read every connection's query history, answered with
+    /// `FileAnswer::HistoryLoaded`.
+    LoadHistory,
+    /// Write to a connection's history file; a failure is answered with
+    /// `FileAnswer::HistoryWriteFailed`. It holds SQL text only, already
+    /// redacted.
+    History(HistoryWrite),
+    /// Read the saved snippets, answered with `FileAnswer::SnippetsLoaded`.
+    LoadSnippets,
+    /// Write the snippets file; a failure is answered with
+    /// `FileAnswer::SaveFailed`.
+    SaveSnippets(Vec<Snippet>),
     /// Put this text on the system clipboard, through the terminal (OSC 52).
     CopyToClipboard(String),
     /// Redraw the whole terminal.

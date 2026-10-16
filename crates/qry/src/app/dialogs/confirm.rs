@@ -14,6 +14,11 @@ pub(crate) enum OnConfirm {
     CloseSession(SessionId),
     /// Forget the stored connection with this id, and its password.
     DeleteConnection(String),
+    /// Delete the snippet with this name and scope.
+    DeleteSnippet {
+        name: String,
+        connection: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -55,6 +60,20 @@ impl Confirm {
             "Close",
             true,
             OnConfirm::CloseSession(session),
+        )
+    }
+
+    /// Asks before deleting a snippet.
+    pub(crate) fn delete_snippet(name: &str, connection: Option<String>) -> Self {
+        Self::new(
+            "Delete Snippet",
+            format!("Delete the snippet \"{name}\"? This cannot be undone."),
+            "Delete",
+            true,
+            OnConfirm::DeleteSnippet {
+                name: name.to_string(),
+                connection,
+            },
         )
     }
 

@@ -4129,6 +4129,7 @@ dependencies = [
  "rustls",
  "rustls-pki-types",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "tokio-postgres",

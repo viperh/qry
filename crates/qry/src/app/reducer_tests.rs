@@ -28,7 +28,13 @@ fn startup_opens_scratch_and_loads_connections() {
     let mut h = harness();
     h.send(UiEvent::Started);
     let effects = h.take_effects();
-    let [Effect::LoadConnections, Effect::OpenSession(id, scratch)] = effects.as_slice() else {
+    let [
+        Effect::LoadConnections,
+        Effect::LoadHistory,
+        Effect::LoadSnippets,
+        Effect::OpenSession(id, scratch),
+    ] = effects.as_slice()
+    else {
         panic!("expected a load and the scratch session, got {effects:?}");
     };
     assert_eq!(*id, SessionId::FIRST);

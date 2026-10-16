@@ -41,6 +41,20 @@ pub enum Action {
     /// Stops the running query; in the editor, copies when none runs.
     CancelQuery,
     ExportResults,
+    /// Opens the query history.
+    History,
+    /// On an empty editor, puts this connection's previous or next
+    /// statement from the history in it, like a shell.
+    RecallPrev,
+    RecallNext,
+    /// Saves the statement under the cursor as a named snippet.
+    SaveSnippet,
+    /// Lists the snippets, to rename, delete or edit them.
+    ManageSnippets,
+    /// In the history and the palette: insert what is picked and run it.
+    SubmitAndRun,
+    /// In the history: delete the picked entry (pressed twice).
+    DeleteEntry,
 
     Up,
     Down,
@@ -158,6 +172,13 @@ impl Action {
             Self::RunSelection => "Run the selection",
             Self::CancelQuery => "Cancel the query (copy when none runs)",
             Self::ExportResults => "Export the results to a file",
+            Self::History => "Query history",
+            Self::RecallPrev => "Previous statement from the history",
+            Self::RecallNext => "Next statement from the history",
+            Self::SaveSnippet => "Save the statement as a snippet",
+            Self::ManageSnippets => "Manage the saved snippets",
+            Self::SubmitAndRun => "Insert and run",
+            Self::DeleteEntry => "Delete the entry",
             Self::Up => "Up",
             Self::Down => "Down",
             Self::Left => "Left",
@@ -255,6 +276,9 @@ impl Action {
             Self::RunSelection => "Run selection",
             Self::CancelQuery => "Cancel query",
             Self::ExportResults => "Export results",
+            Self::History => "History",
+            Self::SaveSnippet => "Save snippet",
+            Self::ManageSnippets => "Manage snippets",
             Self::Refresh => "Refresh tables",
             Self::Filter => "Filter the tree",
             Self::Search => "Search the results",
@@ -298,6 +322,7 @@ impl Action {
                 "session"
             }
             Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => "query",
+            Self::History | Self::SaveSnippet | Self::ManageSnippets => "query",
             Self::ExportResults
             | Self::Search
             | Self::CopyCell
@@ -342,6 +367,9 @@ impl Action {
             | Self::Refresh
             | Self::Filter => KeyContext::Tree,
             Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => {
+                KeyContext::Editor
+            }
+            Self::History | Self::SaveSnippet | Self::RecallPrev | Self::RecallNext => {
                 KeyContext::Editor
             }
             Self::Search

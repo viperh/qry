@@ -35,6 +35,9 @@ pub enum PaletteTarget {
     Action(Action),
     /// Open the stored connection with this id, or switch to its session.
     OpenConnection(String),
+    /// Insert the saved snippet with this index into the editor; ctrl-enter
+    /// runs it too.
+    Snippet(usize),
     /// A command that takes the text typed after `prefix`.
     Argument {
         prefix: &'static str,

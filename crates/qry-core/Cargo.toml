@@ -29,6 +29,8 @@ rust_xlsxwriter = { workspace = true }
 # Used to check a host name before TLS.
 rustls-pki-types = { workspace = true }
 serde = { workspace = true }
+# The history's JSON lines and the snippets file.
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-postgres = { workspace = true }
 tokio-rusqlite = { workspace = true }

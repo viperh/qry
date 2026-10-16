@@ -9,6 +9,17 @@
   // true.
   "continue_on_error": false,
 
+  // The query history (ctrl-r in the editor): every statement sent, per
+  // connection, in `<data dir>/history/<connection id>.jsonl`. The scratch
+  // database's stays in memory unless `ephemeral_to_disk` is true. A string
+  // literal after one of the `redact` words is stored as '•••'.
+  "history": {
+    "enabled": true,
+    "max_entries": 1000,
+    "ephemeral_to_disk": false,
+    "redact": ["PASSWORD", "IDENTIFIED BY", "SECRET"]
+  },
+
   // Key bindings, by context: `Global` applies wherever a pane has focus,
   // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
   // `Jobs`), which win over it. `Dialog`, `Help` and `Palette` apply alone
@@ -82,6 +93,10 @@
       "<f5>": "RunStatement",
       "<f8>": "RunAll",
       "<ctrl-e>": "RunSelection",
+      "<ctrl-r>": "History",
+      "<alt-up>": "RecallPrev",
+      "<alt-down>": "RecallNext",
+      "<ctrl-s>": "SaveSnippet",
       "<ctrl-c>": "CancelQuery",
       "<enter>": "NewLine",
       "<tab>": "Indent",
@@ -225,9 +240,12 @@
       "<ctrl-p>": "Palette",
       "<ctrl-q>": "Quit"
     },
-    // Plain characters type into the query.
+    // Plain characters type into the query. The history dialog and the
+    // snippet list use these keys too.
     "Palette": {
       "<enter>": "Submit",
+      "<ctrl-enter>": "SubmitAndRun",
+      "<ctrl-d>": "DeleteEntry",
       "<esc>": "Cancel",
       "<up>": "Up",
       "<down>": "Down",
