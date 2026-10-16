@@ -116,6 +116,11 @@ winresource = "0.1.31"
 cargo_metadata = "0.23.1"
 # Snapshot tests: `cargo insta review` accepts or rejects changed snapshots.
 insta = "1.49.0"
+# Benchmarks (crates/*/benches/, T006). No plotting or rayon: bench.yml
+# runs with --noplot, and the gates read only estimates.json.
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+# A pseudo-terminal for the start-up timing test (crates/qry/tests/startup.rs).
+portable-pty = "0.9.0"
 pretty_assertions = "1.4.1"
 proptest = "1.11.0"
 # A TLS server for the Oracle tests; already in the tree through oracledb.
