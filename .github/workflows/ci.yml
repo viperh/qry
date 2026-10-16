@@ -257,8 +257,9 @@ jobs:
           path: fuzz/artifacts
           if-no-files-found: ignore
 
-  # Benchmarks must compile. T006 adds the criterion benches and
-  # scripts/bench-gate.py; the self-test step runs once that script exists.
+  # Benchmarks must compile, and the gate script must work. They are run
+  # (and gated) nightly by bench.yml, not here: shared runners are too
+  # noisy for timing.
   bench-build:
     name: Benchmarks compile
     runs-on: ubuntu-latest
@@ -273,7 +274,6 @@ jobs:
       - name: Build benchmarks
         run: cargo bench --workspace --no-run --locked
       - name: Gate script self-test
-        if: hashFiles('scripts/bench-gate.py') != ''
         run: python3 scripts/bench-gate.py self-test
 
   # The one non-Linux job: keeps the winresource build script and the

@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# `cargo bench` builds only the criterion benches below, not the unit tests
+# in bench mode.
+[lib]
+bench = false
+
 [lints]
 workspace = true
 
@@ -35,9 +40,20 @@ tokio-rusqlite = { workspace = true }
 unicode-width = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 # A TLS server for the Oracle tests.
 rustls = { workspace = true }
 tempfile = { workspace = true }
 proptest = { workspace = true }
 # `start_paused` and `time::advance` for tests on a virtual clock.
 tokio = { workspace = true, features = ["test-util"] }
+
+# Benchmarks (T006): criterion, `harness = false`. `cargo bench` runs them;
+# scripts/bench-gates.toml holds their limits.
+[[bench]]
+name = "sql"
+harness = false
+
+[[bench]]
+name = "query"
+harness = false
