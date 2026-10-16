@@ -1,0 +1,17 @@
+pkgbase = qry-bin
+	pkgdesc = A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle (prebuilt)
+	pkgver = 0.0.0
+	pkgrel = 1
+	url = https://github.com/viperh/qry
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	provides = qry
+	conflicts = qry
+	options = !strip
+	source_x86_64 = https://github.com/viperh/qry/releases/download/v0.0.0/qry-0.0.0-linux-x86_64.tar.gz
+	sha256sums_x86_64 = 0000000000000000000000000000000000000000000000000000000000000000
+	source_aarch64 = https://github.com/viperh/qry/releases/download/v0.0.0/qry-0.0.0-linux-aarch64.tar.gz
+	sha256sums_aarch64 = 0000000000000000000000000000000000000000000000000000000000000000
+
+pkgname = qry-bin

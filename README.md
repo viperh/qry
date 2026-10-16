@@ -99,9 +99,21 @@ and runs the database drivers against real servers.
 
 ## Releases
 
-Pushing a tag matching `v1.2.3` or `1.2.3` builds the binary for macOS
-(x86_64/arm64), Linux (x86_64/arm64/i686) and Windows, then attaches tarballs
-and SHA-256 sums to the GitHub release.
+Pushing a tag `vX.Y.Z` that matches `workspace.package.version` runs
+`.github/workflows/cd.yml`. It builds static Linux binaries (musl, x86_64 and
+aarch64), a universal macOS binary and a Windows binary, packs them into
+reproducible archives with the man page and shell completions, and publishes
+a GitHub release with `SHA256SUMS` and notes from [CHANGELOG.md](CHANGELOG.md).
+It then updates the AUR, Homebrew and Scoop packages from `packaging/`. A
+manual run of the workflow is a dry run. The checklist is
+[docs/release.md](docs/release.md).
+
+```sh
+brew install viperh/tap/qry      # macOS, Linux
+yay -S qry-bin                   # Arch (or `qry` to build from source)
+scoop install qry                # Windows, after adding the bucket
+nix run github:viperh/qry        # Nix
+```
 
 ## License
 

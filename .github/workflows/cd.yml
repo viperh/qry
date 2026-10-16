@@ -1,113 +1,556 @@
 name: CD # Continuous Deployment
 
+# The tag-driven release (tasks/T007-release-pipeline.md), modelled on
+# sverb's cd.yml. A tag vX.Y.Z builds every target, checks the archives,
+# publishes a GitHub release with notes from CHANGELOG.md, then updates the
+# package channels. A manual run (workflow_dispatch) is always a dry run:
+# it builds and checks everything and uploads the `release-dry-run`
+# artifact, but publishes nothing. The checklist is docs/release.md.
+
 on:
   push:
-    tags:
-      - '[v]?[0-9]+.[0-9]+.[0-9]+'
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch: # always a dry run: builds everything, publishes nothing
 
-# The binary published here is the `qry` crate. Rename BINARY_NAME (and the
-# crate) together when you adopt this template.
+permissions:
+  contents: read
+
+# One release per ref at a time, and never cancel one half-way.
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
-  BINARY_NAME: qry
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+  QRY_KEYRING: "off"
+  # The package channels. Each is skipped when its secret is empty.
+  HOMEBREW_TAP_REPO: viperh/homebrew-tap
+  SCOOP_BUCKET_REPO: viperh/scoop-bucket
 
 jobs:
-  publish:
-    name: Publishing for ${{ matrix.os-name }}-${{ matrix.architecture }}
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            os-name: macos
-            target: x86_64-apple-darwin
-            architecture: x86_64
-            binary-postfix: ""
-            use-cross: false
-          - os: macos-latest
-            os-name: macos
-            target: aarch64-apple-darwin
-            architecture: arm64
-            binary-postfix: ""
-            use-cross: false
-          - os: ubuntu-latest
-            os-name: linux
-            target: x86_64-unknown-linux-gnu
-            architecture: x86_64
-            binary-postfix: ""
-            use-cross: false
-          - os: windows-latest
-            os-name: windows
-            target: x86_64-pc-windows-msvc
-            architecture: x86_64
-            binary-postfix: ".exe"
-            use-cross: false
-          - os: ubuntu-latest
-            os-name: linux
-            target: aarch64-unknown-linux-gnu
-            architecture: arm64
-            binary-postfix: ""
-            use-cross: true
-          - os: ubuntu-latest
-            os-name: linux
-            target: i686-unknown-linux-gnu
-            architecture: i686
-            binary-postfix: ""
-            use-cross: true
+  meta:
+    name: Version and tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      publish: ${{ steps.meta.outputs.publish }}
+      source-date-epoch: ${{ steps.meta.outputs.source-date-epoch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Read the version and check the tag
+        id: meta
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          echo "workspace.package.version is $version"
+          if [[ $EVENT == push && $REF_TYPE == tag ]]; then
+            tag_version="${REF_NAME#v}"
+            if [[ $tag_version != "$version" ]]; then
+              echo "::error title=Tag does not match the version::tag $REF_NAME is version $tag_version, but workspace.package.version in Cargo.toml is $version. Bump the version (docs/release.md) or fix the tag."
+              exit 1
+            fi
+            publish=true
+          else
+            echo "::notice::$EVENT run: dry run, nothing is published"
+            publish=false
+          fi
+          {
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "source-date-epoch=$(git log -1 --format=%ct)"
+          } >> "$GITHUB_OUTPUT"
 
+  # The man page and completions, generated once by a native build. Every
+  # archive ships these same files, including the ones built for targets
+  # that cannot run here.
+  assets:
+    name: Man page and completions
+    needs: meta
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # vergen reads the git history to stamp the version string.
-          fetch-depth: 0
+          fetch-depth: 0 # vergen-gix (crates/qry/build.rs) reads git history
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install groff and zsh
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends groff zsh
+      - name: Build
+        run: cargo build --locked -p qry
+      - name: Generate
+        run: |
+          mkdir -p assets
+          qry=target/debug/qry
+          "$qry" generate man > assets/qry.1
+          "$qry" generate completions bash > assets/qry.bash
+          "$qry" generate completions zsh > assets/_qry
+          "$qry" generate completions fish > assets/qry.fish
+          "$qry" generate completions powershell > assets/_qry.ps1
+          ls -l assets
+      - name: Validate
+        run: |
+          bash -n assets/qry.bash
+          if command -v zsh >/dev/null; then zsh -n assets/_qry; fi
+          # -ww: every warning; -z: discard the output. groff exits 0 even
+          # with warnings, so fail on any stderr.
+          warnings="$(groff -man -ww -z assets/qry.1 2>&1)"
+          if [[ -n $warnings ]]; then
+            echo "::error::groff warnings in qry.1:"
+            echo "$warnings"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qry-assets
+          path: assets/
+          if-no-files-found: error
 
+  linux:
+    name: Linux ${{ matrix.arch }} (musl, static)
+    needs: [meta, assets]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            arch: x86_64
+            label: linux-x86_64
+            cross: false
+          - target: aarch64-unknown-linux-musl
+            arch: aarch64
+            label: linux-aarch64
+            cross: true
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source-date-epoch }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-
+      - name: Install musl-tools
+        if: ${{ !matrix.cross }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
       - name: Install cross
-        if: matrix.use-cross
+        if: ${{ matrix.cross }}
         uses: taiki-e/install-action@v2
         with:
           tool: cross
-
+      # The flags depend on the checkout's path, so the reproducibility
+      # check below sets its own. Paths are remapped so that neither the
+      # runner's workspace nor its cargo home ends up in the binary.
       - name: Build
-        shell: bash
+        env:
+          CARGO: ${{ matrix.cross && 'cross' || 'cargo' }}
         run: |
-          if [[ "${{ matrix.use-cross }}" == "true" ]]; then
-            cross build --locked --release --package "$BINARY_NAME" --target ${{ matrix.target }}
-          else
-            cargo build --locked --release --package "$BINARY_NAME" --target ${{ matrix.target }}
+          export RUSTFLAGS="-C target-feature=+crt-static -C strip=symbols --remap-path-prefix=$GITHUB_WORKSPACE=/build/qry --remap-path-prefix=$HOME/.cargo=/cargo"
+          "$CARGO" build --locked --release -p qry --target ${{ matrix.target }}
+      - name: Check the binary is static
+        run: |
+          bin=target/${{ matrix.target }}/release/qry
+          file "$bin"
+          if ! file "$bin" | grep -Eq 'statically linked|static-pie linked'; then
+            echo "::error::$bin is not statically linked"
+            exit 1
           fi
-
+      - name: Smoke test
+        if: ${{ !matrix.cross }}
+        run: |
+          bin=target/${{ matrix.target }}/release/qry
+          "$bin" --version
+          "$bin" generate man | grep -q ENVIRONMENT
+      # The same commit built again in a second worktree at another path,
+      # with its own target directory, must give the same bytes.
+      - name: Check the build is reproducible
+        if: matrix.arch == 'x86_64'
+        run: |
+          other="$RUNNER_TEMP/qry-repro"
+          git worktree add --detach "$other" HEAD
+          export RUSTFLAGS="-C target-feature=+crt-static -C strip=symbols --remap-path-prefix=$other=/build/qry --remap-path-prefix=$HOME/.cargo=/cargo"
+          (cd "$other" && CARGO_TARGET_DIR="$other/target" \
+            cargo build --locked --release -p qry --target ${{ matrix.target }})
+          a=target/${{ matrix.target }}/release/qry
+          b="$other/target/${{ matrix.target }}/release/qry"
+          sha256sum "$a" "$b"
+          if ! cmp "$a" "$b"; then
+            echo "::error::two builds of the same commit differ"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: qry-assets
+          path: assets
       - name: Package
-        shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
+          scripts/release-package.sh "$VERSION" ${{ matrix.label }} \
+            target/${{ matrix.target }}/release/qry dist assets
+          tar -tzvf "dist/qry-$VERSION-${{ matrix.label }}.tar.gz"
+          (cd dist && sha256sum -c ./*.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.label }}
+          path: dist/
+          if-no-files-found: error
 
-          BINARY="${BINARY_NAME}${{ matrix.binary-postfix }}"
-          RELEASE_NAME="${BINARY_NAME}-${GITHUB_REF#refs/tags/}-${{ matrix.os-name }}-${{ matrix.architecture }}"
+  macos:
+    name: macOS (universal)
+    needs: [meta, assets]
+    runs-on: macos-14
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source-date-epoch }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      # Secrets cannot appear in `if:`; this flag can.
+      HAVE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_P12 != '' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin, aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Build both architectures
+        run: |
+          export RUSTFLAGS="-C strip=symbols --remap-path-prefix=$GITHUB_WORKSPACE=/build/qry --remap-path-prefix=$HOME/.cargo=/cargo"
+          cargo build --locked --release -p qry --target x86_64-apple-darwin
+          cargo build --locked --release -p qry --target aarch64-apple-darwin
+      - name: Combine into a universal binary
+        run: |
+          mkdir -p universal
+          lipo -create -output universal/qry \
+            target/x86_64-apple-darwin/release/qry \
+            target/aarch64-apple-darwin/release/qry
+          info="$(lipo -info universal/qry)"
+          echo "$info"
+          for arch in x86_64 arm64; do
+            if ! grep -qw "$arch" <<<"$info"; then
+              echo "::error::universal/qry lacks $arch"
+              exit 1
+            fi
+          done
+          universal/qry --version
+      - name: Unsigned build
+        if: env.HAVE_CERTIFICATE != 'true'
+        run: echo "::notice::unsigned macOS build (APPLE_CERTIFICATE_P12 is not set)"
+      - name: Sign and notarize
+        if: env.HAVE_CERTIFICATE == 'true'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          trap 'security delete-keychain "$keychain" 2>/dev/null || true; rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"' EXIT
 
-          tar czvf "$RELEASE_NAME.tar.gz" "$BINARY"
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$keychain_password" "$keychain" >/dev/null
+          # Add ours to the search list, keeping the existing ones (one word each).
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
 
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            certutil -hashfile "$RELEASE_NAME.tar.gz" sha256 | grep -E '[A-Fa-f0-9]{64}' > "$RELEASE_NAME.sha256"
-          else
-            shasum -a 256 "$RELEASE_NAME.tar.gz" > "$RELEASE_NAME.sha256"
+          codesign --force --options runtime --timestamp \
+            --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY" universal/qry
+          codesign --verify --strict --verbose=2 universal/qry
+
+          echo "$APPLE_NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent universal/qry "$RUNNER_TEMP/qry-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/qry-notarize.zip" \
+            --key "$RUNNER_TEMP/notary.p8" --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER" --wait
+      - uses: actions/download-artifact@v4
+        with:
+          name: qry-assets
+          path: assets
+      - name: Install GNU tar
+        run: brew install gnu-tar
+      - name: Package
+        run: |
+          scripts/release-package.sh "$VERSION" macos-universal universal/qry dist assets
+          gtar -tzvf "dist/qry-$VERSION-macos-universal.tar.gz"
+          (cd dist && shasum -a 256 -c ./*.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos-universal
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    name: Windows x86_64
+    needs: [meta, assets]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source-date-epoch }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      # Text files go into the archive byte for byte; keep LF endings.
+      - name: Disable CRLF conversion
+        run: git config --global core.autocrlf false
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --locked --release -p qry --target x86_64-pc-windows-msvc
+      # crates/qry/build.rs embeds assets/icon.ico through winresource.
+      # Load the .exe as a data file and count its icon groups.
+      - name: Check the icon is embedded
+        shell: pwsh
+        run: |
+          Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class PeResources {
+              [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+              static extern IntPtr LoadLibraryEx(string path, IntPtr file, uint flags);
+              [DllImport("kernel32.dll", SetLastError = true)]
+              static extern bool FreeLibrary(IntPtr module);
+              delegate bool EnumNameProc(IntPtr module, IntPtr type, IntPtr name, IntPtr param);
+              [DllImport("kernel32.dll", SetLastError = true)]
+              static extern bool EnumResourceNames(IntPtr module, IntPtr type, EnumNameProc proc, IntPtr param);
+              public static int Count(string path, int type) {
+                  IntPtr module = LoadLibraryEx(path, IntPtr.Zero, 0x2); // LOAD_LIBRARY_AS_DATAFILE
+                  if (module == IntPtr.Zero) throw new Exception("cannot load " + path);
+                  int n = 0;
+                  EnumResourceNames(module, (IntPtr)type, (m, t, name, p) => { n++; return true; }, IntPtr.Zero);
+                  FreeLibrary(module);
+                  return n;
+              }
+          }
+          '@
+          $exe = (Resolve-Path "target/x86_64-pc-windows-msvc/release/qry.exe").Path
+          $icons = [PeResources]::Count($exe, 14)   # RT_GROUP_ICON
+          $versions = [PeResources]::Count($exe, 16) # RT_VERSION
+          Write-Host "icon groups: $icons, version resources: $versions"
+          if ($icons -lt 1) { Write-Host "::error::qry.exe has no embedded icon"; exit 1 }
+          if ($versions -lt 1) { Write-Host "::error::qry.exe has no version resource"; exit 1 }
+          (Get-Item $exe).VersionInfo | Format-List ProductName, FileDescription, FileVersion
+      - uses: actions/download-artifact@v4
+        with:
+          name: qry-assets
+          path: assets
+      - name: Install zip
+        run: choco install zip --no-progress -y
+      - name: Package
+        run: |
+          scripts/release-package.sh "$VERSION" windows-x86_64 \
+            target/x86_64-pc-windows-msvc/release/qry.exe dist assets
+          (cd dist && sha256sum -c ./*.sha256)
+      - name: Smoke test the zip
+        run: |
+          mkdir -p "$RUNNER_TEMP/smoke"
+          unzip -q "dist/qry-$VERSION-windows-x86_64.zip" -d "$RUNNER_TEMP/smoke"
+          ls -lR "$RUNNER_TEMP/smoke"
+          "$RUNNER_TEMP/smoke/qry-$VERSION-windows-x86_64/qry.exe" --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows-x86_64
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [meta, linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      PUBLISH: ${{ needs.meta.outputs.publish }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Check every archive is here
+        run: |
+          ls -l dist
+          for f in linux-x86_64.tar.gz linux-aarch64.tar.gz macos-universal.tar.gz windows-x86_64.zip; do
+            for g in "dist/qry-$VERSION-$f" "dist/qry-$VERSION-$f.sha256"; do
+              [[ -f $g ]] || { echo "::error::$g is missing"; exit 1; }
+            done
+          done
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            /^## \[/ { if (on) exit; on = index($0, "[" v "]") > 0; next }
+            on' CHANGELOG.md > notes.md
+          # The last section runs to the end of the file: drop the link
+          # definitions ([0.1.0]: https://…) that end it.
+          sed -i '/^\[[^]]*\]: https\?:/d' notes.md
+          if [[ ! -s notes.md ]]; then
+            if [[ $PUBLISH == true ]]; then
+              echo "::error::CHANGELOG.md has no section for $VERSION"
+              exit 1
+            fi
+            echo "::warning::CHANGELOG.md has no section for $VERSION (a tag would fail here)"
+            echo "Dry run: CHANGELOG.md has no section for $VERSION yet." > notes.md
           fi
-
-      - name: Release assets
+          cat notes.md
+      - name: Install cargo-cyclonedx
+        continue-on-error: true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-cyclonedx
+      - name: SBOM (CycloneDX)
+        continue-on-error: true
+        run: |
+          cargo cyclonedx --format json --all-features
+          for f in $(find crates -name '*.cdx.json' | sort); do
+            name="qry-$VERSION-sbom-$(basename "$f")"
+            cp "$f" "dist/$name"
+            (cd dist && sha256sum "$name" > "$name.sha256")
+          done
+      - name: SHA256SUMS
+        run: |
+          cd dist
+          # One line per file, sorted by file name.
+          cat ./*.sha256 | sort -k2 > SHA256SUMS
+          cat SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Publish the GitHub release
+        if: env.PUBLISH == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}-*.tar.gz
-            target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}-*.sha256
+          tag_name: ${{ github.ref_name }}
+          name: qry ${{ needs.meta.outputs.version }}
+          body_path: notes.md
+          files: dist/*
+          prerelease: ${{ contains(needs.meta.outputs.version, '-') }}
+          fail_on_unmatched_files: true
+      - name: Upload the dry run
+        if: env.PUBLISH != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: |
+            dist/
+            notes.md
+          if-no-files-found: error
+
+  channels:
+    name: Package channels
+    needs: [meta, release]
+    if: needs.meta.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      # Secrets cannot appear in `if:`; the env copies can.
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Fill in the manifests
+        run: |
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS
+          source_sha256="$(curl -fsSL "https://github.com/$GITHUB_REPOSITORY/archive/refs/tags/$TAG.tar.gz" | sha256sum | cut -d' ' -f1)"
+          echo "source tarball sha256: $source_sha256"
+          python3 scripts/update-packaging.py "$VERSION" SHA256SUMS \
+            --source-sha256 "$source_sha256" --out out
+
+      - name: AUR (skipped)
+        if: env.AUR_SSH_PRIVATE_KEY == ''
+        run: echo "::notice::skipping aur (AUR_SSH_PRIVATE_KEY is not set)"
+      - name: AUR qry
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: qry
+          pkgbuild: out/aur/qry/PKGBUILD
+          commit_username: qry release bot
+          commit_email: qviperh.dev@proton.me
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ needs.meta.outputs.version }}
+      - name: AUR qry-bin
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: qry-bin
+          pkgbuild: out/aur/qry-bin/PKGBUILD
+          commit_username: qry release bot
+          commit_email: qviperh.dev@proton.me
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ needs.meta.outputs.version }}
+
+      - name: Homebrew tap (skipped)
+        if: env.HOMEBREW_TAP_TOKEN == ''
+        run: echo "::notice::skipping homebrew (HOMEBREW_TAP_TOKEN is not set)"
+      - name: Homebrew tap
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        run: |
+          git clone --depth 1 "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${HOMEBREW_TAP_REPO}.git" tap
+          mkdir -p tap/Formula
+          cp out/homebrew/qry.rb tap/Formula/qry.rb
+          cd tap
+          git config user.name "qry release bot"
+          git config user.email "qviperh.dev@proton.me"
+          git add Formula/qry.rb
+          if git diff --cached --quiet; then
+            echo "::notice::homebrew formula already at $VERSION"
+          else
+            git commit -m "qry $VERSION"
+            git push
+          fi
+
+      - name: Scoop bucket (skipped)
+        if: env.SCOOP_BUCKET_TOKEN == ''
+        run: echo "::notice::skipping scoop (SCOOP_BUCKET_TOKEN is not set)"
+      - name: Scoop bucket
+        if: env.SCOOP_BUCKET_TOKEN != ''
+        run: |
+          git clone --depth 1 "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/${SCOOP_BUCKET_REPO}.git" bucket
+          mkdir -p bucket/bucket
+          cp out/scoop/qry.json bucket/bucket/qry.json
+          cd bucket
+          git config user.name "qry release bot"
+          git config user.email "qviperh.dev@proton.me"
+          git add bucket/qry.json
+          if git diff --cached --quiet; then
+            echo "::notice::scoop manifest already at $VERSION"
+          else
+            git commit -m "qry $VERSION"
+            git push
+          fi

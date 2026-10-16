@@ -58,3 +58,91 @@ fn print_config_is_a_flag() {
             .print_config
     );
 }
+
+#[test]
+fn help_output_snapshot() {
+    // A fixed width: with `wrap_help`, clap otherwise wraps to the
+    // terminal running the tests.
+    let help = Cli::command().term_width(100).render_long_help();
+    insta::assert_snapshot!("cli_help", help.to_string());
+}
+
+#[test]
+fn generate_parses_man_and_completions() {
+    let cli = Cli::try_parse_from(["qry", "generate", "man"]).unwrap();
+    assert_eq!(cli.command, Some(Command::Generate { asset: Asset::Man }));
+    let cli = Cli::try_parse_from(["qry", "generate", "completions", "zsh"]).unwrap();
+    assert_eq!(
+        cli.command,
+        Some(Command::Generate {
+            asset: Asset::Completions { shell: Shell::Zsh }
+        })
+    );
+    assert!(Cli::try_parse_from(["qry", "generate", "completions", "tcsh"]).is_err());
+    assert_eq!(Cli::try_parse_from(["qry"]).unwrap().command, None);
+}
+
+#[test]
+fn generate_is_hidden_from_the_help() {
+    let help = Cli::command().render_long_help().to_string();
+    assert!(!help.contains("generate"), "{help}");
+}
+
+fn generated(asset: Asset) -> String {
+    let mut out = Vec::new();
+    generate(asset, &mut out).unwrap();
+    String::from_utf8(out).unwrap()
+}
+
+#[test]
+fn generate_man_contains_the_environment_section() {
+    let man = generated(Asset::Man);
+    assert!(man.contains(".TH qry 1"), "{man}");
+    assert!(man.contains(".SH ENVIRONMENT"), "{man}");
+    for var in [
+        "QRY_CONFIG",
+        "QRY_DATA",
+        "QRY_LOG_LEVEL",
+        "QRY_KEYRING",
+        "NO_COLOR",
+        "COLORTERM",
+    ] {
+        assert!(man.contains(&format!("\\fB{var}\\fR")), "{var} missing");
+    }
+    // ENVIRONMENT sits between OPTIONS and VERSION.
+    let options = man.find(".SH OPTIONS").unwrap();
+    let environment = man.find(".SH ENVIRONMENT").unwrap();
+    let version = man.find(".SH VERSION").unwrap();
+    assert!(options < environment && environment < version);
+}
+
+#[test]
+fn generate_man_is_the_same_on_every_machine() {
+    let man = generated(Asset::Man);
+    // The plain version, not `--version`'s text with this machine's
+    // directories in it, and no subcommand in the synopsis.
+    assert!(
+        man.contains(concat!("v", env!("CARGO_PKG_VERSION"))),
+        "{man}"
+    );
+    assert!(!man.contains("Config directory"), "{man}");
+    assert!(!man.contains("subcommands"), "{man}");
+    assert!(!man.contains("generate"), "{man}");
+}
+
+#[test]
+fn generate_completions_for_every_shell() {
+    for shell in [
+        Shell::Bash,
+        Shell::Zsh,
+        Shell::Fish,
+        Shell::PowerShell,
+        Shell::Elvish,
+    ] {
+        let script = generated(Asset::Completions { shell });
+        assert!(!script.is_empty(), "{shell}: empty");
+        assert!(script.contains("qry"), "{shell}: {script}");
+        assert!(script.contains("print-config"), "{shell}: {script}");
+        assert!(!script.contains("generate"), "{shell}: {script}");
+    }
+}

@@ -5,11 +5,19 @@
 //! testable without a TTY.
 
 use clap::Parser;
-use qry::cli::Cli;
+use qry::cli::{Cli, Command};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
+    let cli = Cli::parse();
+    // `qry generate …` writes a release asset to stdout. It runs before the
+    // panic hooks, the log file and the terminal are set up, so it works in
+    // a build sandbox with no TTY and no writable home.
+    if let Some(Command::Generate { asset }) = cli.command {
+        qry::cli::generate(asset, &mut std::io::stdout().lock())?;
+        return Ok(());
+    }
     qry::errors::init()?;
     qry::logging::init()?;
-    qry::run(Cli::parse()).await
+    qry::run(cli).await
 }
