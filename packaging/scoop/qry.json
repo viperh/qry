@@ -1,0 +1,28 @@
+{
+    "version": "0.0.0",
+    "description": "A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle",
+    "homepage": "https://github.com/viperh/qry",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/viperh/qry/releases/download/v0.0.0/qry-0.0.0-windows-x86_64.zip",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "extract_dir": "qry-0.0.0-windows-x86_64"
+        }
+    },
+    "bin": "qry.exe",
+    "checkver": {
+        "github": "https://github.com/viperh/qry"
+    },
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/viperh/qry/releases/download/v$version/qry-$version-windows-x86_64.zip",
+                "extract_dir": "qry-$version-windows-x86_64"
+            }
+        },
+        "hash": {
+            "url": "$url.sha256"
+        }
+    }
+}

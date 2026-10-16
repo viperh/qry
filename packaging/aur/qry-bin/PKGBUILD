@@ -1,0 +1,33 @@
+# Maintainer: qViperH <qviperh.dev@proton.me>
+#
+# The prebuilt, statically linked (musl) release binary, with its man page
+# and shell completions. The version and checksums here are placeholders:
+# CI (scripts/update-packaging.py) rewrites them for each release and
+# regenerates .SRCINFO. Do not edit them by hand.
+
+pkgname=qry-bin
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle (prebuilt)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/viperh/qry'
+license=('MIT')
+provides=('qry')
+conflicts=('qry')
+options=('!strip')
+source_x86_64=("https://github.com/viperh/qry/releases/download/v$pkgver/qry-$pkgver-linux-x86_64.tar.gz")
+source_aarch64=("https://github.com/viperh/qry/releases/download/v$pkgver/qry-$pkgver-linux-aarch64.tar.gz")
+sha256sums_x86_64=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums_aarch64=('0000000000000000000000000000000000000000000000000000000000000000')
+
+package() {
+  cd "qry-$pkgver-linux-$CARCH"
+  install -Dm0755 qry "$pkgdir/usr/bin/qry"
+  install -Dm0644 man/qry.1 "$pkgdir/usr/share/man/man1/qry.1"
+  install -Dm0644 completions/qry.bash "$pkgdir/usr/share/bash-completion/completions/qry"
+  install -Dm0644 completions/_qry "$pkgdir/usr/share/zsh/site-functions/_qry"
+  install -Dm0644 completions/qry.fish "$pkgdir/usr/share/fish/vendor_completions.d/qry.fish"
+  install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm0644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm0644 CHANGELOG.md "$pkgdir/usr/share/doc/$pkgname/CHANGELOG.md"
+}
