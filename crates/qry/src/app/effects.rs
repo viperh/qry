@@ -18,6 +18,10 @@ pub enum Effect {
     /// Open a session on this connection: start a worker of its own and
     /// connect it. Its answers come back as `UiEvent::Db` with the same id.
     OpenSession(SessionId, Box<StoredConnection>),
+    /// Stop the statement the session's worker is running, through the
+    /// connection's cancel handle. Its answer still comes back, as a
+    /// failure or, where the driver cannot cancel, as the late result.
+    CancelQuery(SessionId),
     /// Drop the session's worker, which closes its connection once the
     /// command it is running, if any, is done.
     CloseSession(SessionId),

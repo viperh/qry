@@ -1,18 +1,26 @@
 //! The results grid.
 
-use qry_core::grid::{self, COLUMN_SPACING, Order};
+use qry_core::{
+    grid::{self, COLUMN_SPACING, Order},
+    jobs::{JobState, format_rows},
+};
 use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::{
+    action::Action,
     app::state::{Focus, GridSearch, State, TabError},
     db::took,
+    keymap::{KeyContext, display_chord},
     theme::Theme,
-    views::status_line::thousands,
+    views::{overlay::SPINNER, status_line::thousands},
 };
 
 /// `204 rows` for the title row, once there is a result; nothing when
 /// there are tabs, which say it themselves.
 pub(crate) fn summary(state: &State) -> String {
+    if let Some(running) = running(state) {
+        return running;
+    }
     if state.sessions.active().tabs.len() > 1 {
         return String::new();
     }
@@ -35,7 +43,7 @@ pub(crate) fn summary(state: &State) -> String {
         n => format!("{} rows", thousands(n)),
     };
     if result.truncated {
-        summary.push_str(" (truncated)");
+        summary.push_str(" (first rows only)");
     }
     if !result.elapsed.is_zero() {
         summary.push_str(&format!(" · {}", took(result.elapsed)));
@@ -50,8 +58,28 @@ pub(crate) fn summary(state: &State) -> String {
             })
             .collect();
         summary.push_str(&format!(" · sorted by {}", keys.join(", ")));
+        if result.truncated {
+            summary.push_str(" (fetched rows only)");
+        }
     }
     summary
+}
+
+/// `⠹ running · 2.4 s · 12 000 rows` while the active session runs a
+/// statement.
+pub(crate) fn running(state: &State) -> Option<String> {
+    let job = state.jobs.running(state.sessions.active().id)?;
+    let frame = (state.now.as_millis() / 100) as usize % SPINNER.len();
+    let mut text = format!("{} running", SPINNER[frame]);
+    if let Some(elapsed) = job.elapsed(state.now) {
+        text.push_str(&format!(" · {}", took(elapsed)));
+    }
+    if let JobState::Running { rows } = job.state
+        && rows > 0
+    {
+        text.push_str(&format!(" · {} rows", format_rows(rows)));
+    }
+    Some(text)
 }
 
 /// With more than one result, the tabs over the label's detail: ` 1 users
@@ -157,6 +185,24 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
         area.height = area.height.saturating_sub(1);
         let at = (results.data_row(results.row), results.col);
         draw_search(search, at, theme, frame, line);
+    }
+
+    // A truncated result says so on its last line.
+    if result.truncated && area.height > 2 {
+        let line = Rect::new(area.x, area.bottom() - 1, area.width, 1);
+        area.height -= 1;
+        let fetch = state
+            .config
+            .keymap
+            .chords_for(KeyContext::Results, &Action::FetchAll);
+        let mut text = format!(
+            " … more rows — showing the first {}",
+            thousands(result.rows.len())
+        );
+        if !fetch.is_empty() {
+            text.push_str(&format!(" · {} fetch all", display_chord(&fetch)));
+        }
+        frame.render_widget(Paragraph::new(text).style(theme.dim()), line);
     }
 
     let total_rows = result.rows.len();

@@ -12,10 +12,14 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
     ops::Range,
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use crossterm::event::KeyEvent;
-use qry_core::QueryResult;
+use qry_core::{
+    QueryResult,
+    jobs::{JobId, Jobs},
+};
 use ratatui_textarea::TextArea;
 
 use super::dialogs::DialogState;
@@ -187,6 +191,15 @@ impl SessionState {
     }
 }
 
+/// The jobs drawer: which job is selected, counted from the newest.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct JobsDrawer {
+    pub(crate) selected: usize,
+}
+
+/// The most jobs the drawer shows at once.
+pub(crate) const DRAWER_JOBS: usize = 7;
+
 /// The most result tabs a session keeps.
 pub(crate) const MAX_TABS: usize = 20;
 
@@ -197,6 +210,21 @@ pub(crate) struct Queued {
     pub(crate) sql: String,
     /// Byte offsets into the editor's text.
     pub(crate) span: Option<Range<usize>>,
+    /// Its entry in [`State::jobs`], once queued.
+    pub(crate) job: Option<JobId>,
+    /// Every row, not only the first `max_rows`.
+    pub(crate) all_rows: bool,
+}
+
+impl Queued {
+    pub(crate) fn new(sql: impl Into<String>, span: Option<Range<usize>>) -> Self {
+        Self {
+            sql: sql.into(),
+            span,
+            job: None,
+            all_rows: false,
+        }
+    }
 }
 
 /// The statement whose run failed, as byte offsets into the editor's text,
@@ -226,6 +254,8 @@ pub(crate) struct ResultTab {
     pub(crate) error: Option<TabError>,
     /// The table the statement read, for INSERTs copied from it.
     pub(crate) table: Option<String>,
+    /// The statement, to fetch every row of a truncated result again.
+    pub(crate) sql: String,
 }
 
 impl ResultTab {
@@ -533,6 +563,17 @@ pub struct State {
     /// is the live one.
     pub(crate) spinner: usize,
     pub(crate) spinner_timer: u64,
+    /// Every statement run, running or waiting, and the latest finished.
+    pub(crate) jobs: Jobs<SessionId>,
+    /// The jobs drawer, while it is open.
+    pub(crate) drawer: Option<JobsDrawer>,
+    /// Quit once no session runs anything: the rollbacks asked for on the
+    /// way out are done.
+    pub(crate) quit_when_idle: bool,
+    /// The first tick's time, and how long since then at the last tick:
+    /// the clock jobs are timed on.
+    pub(crate) epoch: Option<Instant>,
+    pub(crate) now: Duration,
     pub(crate) ids: IdGen,
     /// Something changed since the runtime last drew.
     pub(crate) dirty: bool,
@@ -559,6 +600,11 @@ impl Default for State {
             key_timer: 0,
             spinner: 0,
             spinner_timer: 0,
+            jobs: Jobs::default(),
+            drawer: None,
+            quit_when_idle: false,
+            epoch: None,
+            now: Duration::ZERO,
             ids: IdGen::default(),
             dirty: true,
         }
@@ -576,9 +622,14 @@ impl State {
             split_percent: self.chrome.split_percent,
             maximised: self.chrome.maximised,
             inspector: self.chrome.inspector,
-            jobs_rows: 0,
+            jobs_rows: self.drawer.map_or(0, |_| self.drawer_rows()),
             hints: self.chrome.hints,
         }
+    }
+
+    /// The jobs drawer's height: a title and up to seven jobs.
+    pub(crate) fn drawer_rows(&self) -> u16 {
+        1 + u16::try_from(self.jobs.len().clamp(1, DRAWER_JOBS)).unwrap_or(1)
     }
 
     /// The terminal is too small to draw the main screen.
@@ -647,6 +698,7 @@ impl State {
             Some(Overlay::Help(_) | Overlay::Messages(_)) => vec![KeyContext::Help],
             Some(Overlay::Palette(_)) => vec![KeyContext::Palette],
             Some(Overlay::Dialog(_)) => vec![KeyContext::Dialog],
+            None if self.drawer.is_some() => vec![KeyContext::Jobs, KeyContext::Global],
             None => vec![self.focus.context(), KeyContext::Global],
         }
     }

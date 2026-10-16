@@ -30,7 +30,7 @@ async fn finished(executed: Executed) {
 #[tokio::test]
 async fn runtime_executes_save_off_the_loop() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
     let saved = sqlite("app", "app.db");
 
     finished(executor.execute(Effect::SaveConnections(vec![saved.clone()]))).await;
@@ -43,7 +43,7 @@ async fn runtime_executes_save_off_the_loop() {
     // A file where the directory should be makes the save fail.
     let blocked = dir.path().join("blocked");
     std::fs::write(&blocked, "").unwrap();
-    let (mut executor, _answers, mut events) = Executor::new(blocked);
+    let (mut executor, _answers, mut events) = Executor::new(blocked, 0);
     finished(executor.execute(Effect::SaveConnections(Vec::new()))).await;
     let Ok(UiEvent::File(FileAnswer::SaveFailed(message))) = events.try_recv() else {
         panic!("expected SaveFailed");
@@ -56,7 +56,7 @@ async fn loading_reads_the_saved_connections() {
     let dir = tempfile::tempdir().unwrap();
     let saved = sqlite("app", "app.db");
     connections::save_to(dir.path(), std::slice::from_ref(&saved)).unwrap();
-    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
 
     finished(executor.execute(Effect::LoadConnections)).await;
     assert_eq!(
@@ -68,7 +68,7 @@ async fn loading_reads_the_saved_connections() {
 #[tokio::test]
 async fn db_worker_answers_with_db_answer() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut executor, mut answers, _events) = Executor::new(dir.path().to_path_buf());
+    let (mut executor, mut answers, _events) = Executor::new(dir.path().to_path_buf(), 0);
     let mut scratch = sqlite("", ":memory:");
     scratch.ephemeral = true;
 
@@ -102,7 +102,7 @@ async fn db_worker_answers_with_db_answer() {
 #[tokio::test]
 async fn a_closed_session_reports_its_worker_stopped() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
     let id = SessionId(2);
     executor.execute(Effect::OpenSession(id, Box::new(sqlite("", ":memory:"))));
     assert!(executor.sessions.contains(id));
@@ -133,7 +133,7 @@ fn query_results_are_never_logged() {
 #[tokio::test(start_paused = true)]
 async fn a_scheduled_timer_comes_back_as_an_event_once_it_runs_out() {
     let dir = tempfile::tempdir().unwrap();
-    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf());
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
     let timer = crate::app::Timer::KeySequence(7);
     let start = tokio::time::Instant::now();
 

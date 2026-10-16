@@ -1,0 +1,220 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: "crate::testing::styled(&buffer)"
+---
+ qry  1 scratch ◐                                                                           sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 44 · 2 statements                                                      
+ ▸ ● scratch                  │▌ 1 │ select * from events where a > 1; select 2;                                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS   1 UPDATE · 3 rows  2 ✗ error                                                  
+                              │ ✗ relation "nope" does not exist                                                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ JOBS · 1 running                                                               j select  c cancel  Enter show  J close 
+ … scratch       select 2                                              queued                                           
+ ▸ scratch       select * from events where a > 1                      running   1 m 4 s                                
+ – scratch       select * from huge                                    cancelled 9.2 s                                  
+ ✗ scratch       select * from nope                                    failed    0 ms     relation "nope" does not exist
+ ✓ scratch       update users set x = 1                                done      0 ms                                   
+ scratch · ⠋ running · 1 m 4 s · sqlite · :memory: · auto                                                               
+ j move  c cancel  Enter show  J close                                                                           ? help 
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+5,0 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED
+18,0 Rgb(211, 217, 224) Rgb(19, 24, 32) NONE
+92,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+111,0 Rgb(14, 17, 22) Rgb(79, 193, 201) BOLD
+119,0 Rgb(211, 217, 224) Rgb(19, 24, 32) NONE
+0,1 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+30,1 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,1 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+0,2 Rgb(211, 217, 224) Rgb(27, 37, 51) BOLD
+3,2 Rgb(79, 193, 201) Rgb(27, 37, 51) BOLD
+5,2 Rgb(211, 217, 224) Rgb(27, 37, 51) BOLD
+12,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,2 Rgb(242, 176, 74) Rgb(14, 17, 22) NONE
+35,2 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+36,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+37,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+43,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+44,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+45,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+46,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+50,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+58,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+63,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+66,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+67,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+68,2 Rgb(199, 166, 255) Rgb(14, 17, 22) NONE
+69,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,2 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+77,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+78,2 Rgb(199, 166, 255) Rgb(14, 17, 22) NONE
+79,2 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,4 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,4 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,4 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,6 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,6 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,6 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,7 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,7 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,7 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,8 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,8 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,9 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,9 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,10 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,10 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,11 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,11 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,12 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,12 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,13 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,13 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,14 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,14 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,14 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+39,14 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+60,14 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED
+71,14 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+0,15 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,15 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,15 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+64,15 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,16 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,16 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,16 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,17 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,17 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,17 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,18 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,18 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,18 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,19 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,19 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,19 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,20 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,20 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,20 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,21 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,21 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,21 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,22 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,22 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,22 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,23 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,23 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,23 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,24 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,24 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,24 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,25 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,25 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,25 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,26 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,26 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,26 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,27 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,27 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,27 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,28 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,28 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,28 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,29 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,29 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,29 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,30 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,30 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,30 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,31 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+30,31 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+31,31 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,32 Rgb(199, 166, 255) Rgb(26, 33, 43) BOLD
+17,32 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+80,32 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
+119,32 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+0,33 Rgb(138, 148, 163) Rgb(27, 37, 51) NONE
+3,33 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+71,33 Rgb(138, 148, 163) Rgb(27, 37, 51) NONE
+81,33 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+90,33 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,34 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+3,34 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,34 Rgb(79, 193, 201) Rgb(14, 17, 22) NONE
+81,34 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,35 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+3,35 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,35 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+81,35 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,36 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+3,36 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,36 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+81,36 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+90,36 Rgb(169, 180, 194) Rgb(14, 17, 22) NONE
+0,37 Rgb(159, 211, 138) Rgb(14, 17, 22) NONE
+3,37 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+71,37 Rgb(159, 211, 138) Rgb(14, 17, 22) NONE
+81,37 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,38 Rgb(79, 193, 201) Rgb(26, 33, 43) BOLD
+8,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
+11,38 Rgb(199, 166, 255) Rgb(26, 33, 43) BOLD
+30,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
+33,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+39,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
+42,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+50,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
+57,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+0,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+1,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+2,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+7,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+9,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+10,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+17,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+19,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+24,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+29,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+31,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+32,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+38,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+113,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
+114,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+119,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE

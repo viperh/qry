@@ -170,6 +170,16 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             sessions::close(state, session, fx);
             return;
         }
+        Submission::Confirmed(OnConfirm::QuitRollingBack(sessions)) => {
+            close(state);
+            for id in sessions {
+                let rollback = vec![crate::app::state::Queued::new("ROLLBACK", None)];
+                super::run::enqueue_on(state, id, rollback, fx);
+            }
+            state.quit_when_idle = true;
+            super::run::quit_if_idle(state, fx);
+            return;
+        }
         Submission::Confirmed(OnConfirm::DeleteConnection(id)) => {
             close(state);
             tree::delete(state, &id, fx);

@@ -48,5 +48,5 @@ expression: "app.render(w, h)"
                                         │                                                                                                                       
                                         │                                                                                                                       
                                         │                                                                                                                       
- scratch · sqlite · :memory: · auto-commit                                                                                                       R 1 / 2  C 1/2 
+ scratch · sqlite · :memory: · auto                                                                                                              R 1 / 2  C 1/2 
  Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help

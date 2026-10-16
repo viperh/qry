@@ -47,6 +47,8 @@ pub struct Config {
     pub(crate) theme: Option<String>,
     /// Run all keeps going after a statement fails, instead of stopping.
     pub(crate) continue_on_error: bool,
+    /// The most rows a query keeps; 0 keeps every row.
+    pub(crate) max_rows: usize,
     /// Problems that did not stop the config from loading; see
     /// [`Config::warnings`].
     warnings: Vec<String>,
@@ -59,6 +61,8 @@ struct RawFile {
     theme: Option<String>,
     #[serde(default)]
     continue_on_error: Option<bool>,
+    #[serde(default)]
+    max_rows: Option<usize>,
     /// `{ context: { chord: action or null } }`.
     #[serde(default)]
     keybindings: Option<Map<String, Value>>,
@@ -139,6 +143,9 @@ impl Config {
         }
         if let Some(keep_going) = file.continue_on_error {
             self.continue_on_error = keep_going;
+        }
+        if let Some(max_rows) = file.max_rows {
+            self.max_rows = max_rows;
         }
 
         let mut old = Migrated::default();
@@ -255,6 +262,7 @@ impl Config {
             "  \"continue_on_error\": {},\n",
             self.continue_on_error
         ));
+        out.push_str(&format!("  \"max_rows\": {},\n", self.max_rows));
         out.push_str("  \"keybindings\": {");
         for (i, context) in KeyContext::iter().enumerate() {
             let mut bindings: Vec<_> = self

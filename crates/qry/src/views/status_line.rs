@@ -10,7 +10,7 @@ use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::{
     app::state::{SessionStatus, State},
-    theme::Theme,
+    theme::{Pill, Theme},
 };
 
 fn width(spans: &[Span]) -> usize {
@@ -37,13 +37,15 @@ fn items(state: &State, theme: &Theme) -> Vec<Vec<Span<'static>>> {
             )]
         }
     };
-    let mut items = vec![
-        name,
-        vec![
-            sep(),
-            Span::styled(session.driver.name(), theme.status_line()),
-        ],
-    ];
+    let mut items = vec![name];
+    // A running statement comes straight after the session's name.
+    if let Some(running) = crate::views::results::running(state) {
+        items.push(vec![sep(), Span::styled(running, theme.status_jobs())]);
+    }
+    items.extend([vec![
+        sep(),
+        Span::styled(session.driver.name(), theme.status_line()),
+    ]]);
     if let Some(database) = &session.database {
         items.push(vec![
             sep(),
@@ -54,9 +56,9 @@ fn items(state: &State, theme: &Theme) -> Vec<Vec<Span<'static>>> {
         items.push(vec![
             sep(),
             if session.in_transaction {
-                Span::styled("in transaction", theme.status_warning())
+                Span::styled(" TX ", theme.mode_pill(Pill::Edit))
             } else {
-                Span::styled("auto-commit", theme.status_dim())
+                Span::styled("auto", theme.status_dim())
             },
         ]);
     }
@@ -79,17 +81,9 @@ fn position(state: &State) -> Option<String> {
     ))
 }
 
-/// `1204` as `1 204`.
+/// `1204` as `1 204`, with a thin space.
 pub(crate) fn thousands(n: usize) -> String {
-    let digits = n.to_string();
-    let mut out = String::new();
-    for (i, c) in digits.chars().enumerate() {
-        if i > 0 && (digits.len() - i).is_multiple_of(3) {
-            out.push(' ');
-        }
-        out.push(c);
-    }
-    out
+    qry_core::jobs::format_rows(u64::try_from(n).unwrap_or(u64::MAX))
 }
 
 pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {

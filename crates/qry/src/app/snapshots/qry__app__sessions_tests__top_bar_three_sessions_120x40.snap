@@ -40,5 +40,5 @@ expression: "s.h.render(120, 40)"
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
- analytics · sqlite · analytics.db · auto-commit                                                                        
+ analytics · sqlite · analytics.db · auto                                                                               
  F5 run  F8 run all  F6 next pane  ctrl-p commands  ctrl-n new conn  ctrl-q quit                                F1 help

@@ -7,6 +7,7 @@ mod dialogs;
 mod editor;
 mod files;
 pub(crate) mod help;
+mod jobs;
 mod keys;
 mod mouse;
 pub(crate) mod notices;
@@ -20,7 +21,7 @@ use super::{
     effects::Effect,
     event::{Timer, UiEvent},
     state,
-    state::{Focus, SessionId, State, scratch_record},
+    state::{Focus, Queued, SessionId, State, scratch_record},
 };
 use crate::{action::Action, connections::StoredConnection, keymap::KeyContext};
 
@@ -34,9 +35,12 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
         UiEvent::Mouse(mouse) => mouse::mouse(state, mouse, &mut fx),
         UiEvent::Paste(text) => paste(state, &text),
         UiEvent::Resize(w, h) => state.size = (w, h),
-        UiEvent::Tick(_) => {
-            // A long search goes on a batch at a time.
-            if results::step_searches(state) {
+        UiEvent::Tick(at) => {
+            let epoch = *state.epoch.get_or_insert(at);
+            state.now = at.saturating_duration_since(epoch);
+            // A long search goes on a batch at a time, and a running job's
+            // spinner and time move on.
+            if results::step_searches(state) || state.jobs.running_count() > 0 {
                 state.dirty = true;
             }
         }
@@ -71,7 +75,7 @@ fn start(state: &mut State, fx: &mut Vec<Effect>) {
 /// key was looked up in: the actions that move, edit or pick act on it.
 fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effect>) {
     match action {
-        Action::Quit => fx.push(Effect::Quit),
+        Action::Quit => quit(state, fx),
         // Only unix has job control to suspend to.
         Action::Suspend => {
             if cfg!(unix) {
@@ -103,8 +107,16 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
         Action::ToggleInspector => state.chrome.inspector = !state.chrome.inspector,
         Action::Palette => palette::toggle(state),
-        // The jobs drawer comes with T305.
-        Action::ToggleJobs => {}
+        Action::ToggleJobs => jobs::toggle(state),
+        // Sent like any statement, so the transaction state follows.
+        Action::Commit | Action::Rollback => {
+            let sql = if action == Action::Commit {
+                "COMMIT"
+            } else {
+                "ROLLBACK"
+            };
+            run::enqueue(state, vec![Queued::new(sql, None)], fx);
+        }
         action => match context {
             KeyContext::Tree => tree::run(state, action, fx),
             KeyContext::Editor => editor::run(state, action, fx),
@@ -113,9 +125,31 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             KeyContext::Help if notices::showing_messages(state) => notices::act(state, action),
             KeyContext::Help => help::act(state, action),
             KeyContext::Palette => palette::run_key(state, action, fx),
-            KeyContext::Global | KeyContext::Inspector | KeyContext::Jobs => {}
+            KeyContext::Jobs => jobs::run(state, action, fx),
+            KeyContext::Global | KeyContext::Inspector => {}
         },
     }
+}
+
+/// Quits, asking first when a transaction is open somewhere.
+fn quit(state: &mut State, fx: &mut Vec<Effect>) {
+    let open: Vec<&state::SessionState> = state
+        .sessions
+        .iter()
+        .filter(|s| s.in_transaction && s.is_open())
+        .collect();
+    if open.is_empty() {
+        return fx.push(Effect::Quit);
+    }
+    let titles = open
+        .iter()
+        .map(|s| s.title.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let ids = open.iter().map(|s| s.id).collect();
+    let form = super::dialogs::confirm::Confirm::quit_in_transaction(ids, &titles);
+    state.open_dialog(super::dialogs::DialogState::Confirm(form));
+    state.awaiting = None;
 }
 
 /// What `sql` does to the transaction, judged by its last statement:
@@ -132,6 +166,8 @@ pub(crate) fn tx_change(sql: &str) -> Option<bool> {
         // Rolling back to a savepoint stays in the transaction.
         ["rollback", "to"] => None,
         ["commit" | "rollback" | "end" | "abort", ..] => Some(false),
+        _ if last.replace(' ', "").starts_with("setautocommit=0") => Some(true),
+        _ if last.replace(' ', "").starts_with("setautocommit=1") => Some(false),
         _ => None,
     }
 }

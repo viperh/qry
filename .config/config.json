@@ -8,6 +8,8 @@
   // Run all (F8) stops at the first statement that fails, unless this is
   // true.
   "continue_on_error": false,
+  // The most rows a query keeps; more are not read. 0 keeps every row.
+  "max_rows": 1000,
 
   // Key bindings, by context: `Global` applies wherever a pane has focus,
   // under the focused pane's own (`Tree`, `Editor`, `Results`, `Inspector`,
@@ -54,6 +56,7 @@
     "Tree": {
       "<?>": "Help",
       "<:>": "Palette",
+      "<J>": "ToggleJobs",
       "<j>": "Down",
       "<down>": "Down",
       "<k>": "Up",
@@ -154,6 +157,9 @@
       "<gt>": "WidenColumn",
       "<=>": "ResetWidths",
       "<F>": "FreezeColumn",
+      "<A>": "FetchAll",
+      "<J>": "ToggleJobs",
+      "<ctrl-c>": "CancelQuery",
       "<y>": "CopyCell",
       "<Y>": "CopyRow",
       "</>": "Search",
@@ -178,6 +184,10 @@
     "Jobs": {
       "<?>": "Help",
       "<:>": "Palette",
+      "<J>": "ToggleJobs",
+      "<esc>": "ToggleJobs",
+      "<c>": "CancelQuery",
+      "<enter>": "Open",
       "<j>": "Down",
       "<down>": "Down",
       "<k>": "Up",

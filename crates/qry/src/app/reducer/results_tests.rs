@@ -90,7 +90,10 @@ fn ran(sql: &str, replies: Vec<QueryResult>) -> (AppHarness, FakeDatabase) {
     for result in replies {
         db = db.reply(Reply::Rows(result));
     }
-    let mut h = AppHarness::new(Config::embedded()).with_database(db.clone());
+    // Every row is kept: these tests are not about the row limit.
+    let mut config = Config::embedded();
+    config.max_rows = 0;
+    let mut h = AppHarness::new(config).with_database(db.clone());
     h.send(UiEvent::Started);
     h.keys("tab").type_str(sql).keys("f8");
     h.state_mut().focus = Focus::Results;

@@ -509,3 +509,17 @@ fn top_bar_overflow_snapshot() {
     assert!(line.starts_with(" qry  1 scratch"), "{line}");
     assert!(line.contains(" … "), "{line}");
 }
+
+#[test]
+fn two_sessions_run_jobs_at_once() {
+    let mut s = FakeSessions::new();
+    let prod = s.open(1);
+    s.keys("tab").h.type_str("select 2");
+    s.keys("f8");
+    s.keys("ctrl-1");
+    s.keys("tab").h.type_str("select 1");
+    s.keys("f8");
+    let jobs = &s.h.state().jobs;
+    assert_eq!(jobs.running_count(), 2);
+    assert!(jobs.running(prod).is_some() && jobs.running(SessionId::FIRST).is_some());
+}

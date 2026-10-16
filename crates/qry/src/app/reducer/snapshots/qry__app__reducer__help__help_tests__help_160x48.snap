@@ -36,17 +36,17 @@ expression: "h.render(w, ht)"
 │ shift-Enter          open another session on it      ctrl-y         copy as…                              Backspace  delete the character before             │
 │ r                    read the tables again           Enter          inspect the value                     Del        delete the character after              │
 │ /                    filter the tree                 i              show / hide the inspector                                                                │
-│                                                      Results · Other                                      Jobs                                               │
-│ Editor · Editing                                     ?              show / hide the help                  ?          show / hide the help                    │
-│ ↑                    up                              :              command palette                       :          command palette                         │
+│ J                    show / hide the jobs            Results · Other                                      Jobs                                               │
+│                                                      ?              show / hide the help                  ?          show / hide the help                    │
+│ Editor · Editing                                     :              command palette                       :          command palette                         │
+│ ↑                    up                              ctrl-c         cancel the query (copy when none r…   c          cancel the query (copy when none runs)  │
 │ ↓                    down                            s              sort by the column                    k ↑        up                                      │
 │ ←                    left                            S              add the column to the sort            j ↓        down                                    │
 │ →                    right                           ctrl-g         go to a row                           h ←        left                                    │
 │ PgUp                 up a page                       <              narrow the column                     l →        right                                   │
 │ PgDn                 down a page                     >              widen the column                      g g        to the top                              │
 │ ctrl-Home            to the top                      =              reset the column widths               G          to the bottom                           │
-│ ctrl-End             to the bottom                   F              freeze the first column                                                                  │
 │                                                                                                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value                                               │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter                                                                                             │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────────────────────────────────────────────── 1–43 of 67 ─┘
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────────────────────────────────────────────── 1–43 of 68 ─┘

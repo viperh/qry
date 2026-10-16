@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: "crate::testing::buffer_lines(&buffer).join(\"\\n\")"
+---
+ qry  1 scratch ◐                                                                           sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 44 · 2 statements                                                      
+ ▸ ● scratch                  │▌ 1 │ select * from events where a > 1; select 2;                                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS   1 UPDATE · 3 rows  2 ✗ error                                                  
+                              │ ✗ relation "nope" does not exist                                                        
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ JOBS · 1 running                                                               j select  c cancel  Enter show  J close 
+ … scratch       select 2                                              queued                                           
+ ▸ scratch       select * from events where a > 1                      running   1 m 4 s                                
+ – scratch       select * from huge                                    cancelled 9.2 s                                  
+ ✗ scratch       select * from nope                                    failed    0 ms     relation "nope" does not exist
+ ✓ scratch       update users set x = 1                                done      0 ms                                   
+ scratch · ⠋ running · 1 m 4 s · sqlite · :memory: · auto                                                               
+ j move  c cancel  Enter show  J close                                                                           ? help

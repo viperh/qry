@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub mod copy;
 pub mod exporter;
 pub mod grid;
+pub mod jobs;
 pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
@@ -184,6 +185,19 @@ impl Driver {
             bail!("not connected to a database");
         };
         db.query(sql).await
+    }
+
+    /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all).
+    pub async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.query_limited(sql, max_rows).await
+    }
+
+    /// What stops the open connection's running statement, if it can be.
+    pub fn cancel_handle(&self) -> Option<std::sync::Arc<dyn shared::CancelHandle>> {
+        self.db.as_ref()?.cancel_handle()
     }
 
     /// The tables of the open connection, for the connection tree.

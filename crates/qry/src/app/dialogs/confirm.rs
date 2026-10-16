@@ -14,6 +14,8 @@ pub(crate) enum OnConfirm {
     CloseSession(SessionId),
     /// Forget the stored connection with this id, and its password.
     DeleteConnection(String),
+    /// Roll back these sessions' open transactions, then quit.
+    QuitRollingBack(Vec<SessionId>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -55,6 +57,33 @@ impl Confirm {
             "Close",
             true,
             OnConfirm::CloseSession(session),
+        )
+    }
+
+    /// Asks before closing a session with an open transaction: dropping
+    /// the connection rolls it back.
+    pub(crate) fn close_in_transaction(session: SessionId, title: &str) -> Self {
+        Self::new(
+            "Close Session",
+            format!("{title} has an open transaction. Closing the session rolls it back."),
+            "Roll back & close",
+            true,
+            OnConfirm::CloseSession(session),
+        )
+    }
+
+    /// Asks before quitting with transactions open in `sessions`, named
+    /// `titles`.
+    pub(crate) fn quit_in_transaction(sessions: Vec<SessionId>, titles: &str) -> Self {
+        Self::new(
+            "Open Transaction",
+            format!(
+                "{titles} {} an open transaction. Quitting rolls it back; cancel to commit first.",
+                if sessions.len() == 1 { "has" } else { "have" }
+            ),
+            "Roll back & quit",
+            true,
+            OnConfirm::QuitRollingBack(sessions),
         )
     }
 

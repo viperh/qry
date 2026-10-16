@@ -48,5 +48,5 @@ expression: "h.render(160, 48)"
                                         │                                                                                                                       
                                         │                                                                                                                       
                                         │ ✓ Connected to scratch (:memory:)                                                                                     
- scratch · sqlite · :memory: · auto-commit                                                                                                                      
+ scratch · sqlite · :memory: · auto                                                                                                                             
  Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                                                                       ? help

@@ -327,7 +327,12 @@ impl AppHarness {
                     | Effect::OpenSession(id, record) => {
                         self.answer_connect(*id, record);
                     }
-                    Effect::Db(id, DbCommand::Query(sql)) => self.answer_query(*id, sql),
+                    Effect::Db(id, DbCommand::Query(sql)) => {
+                        let max_rows = self.app.state().config.max_rows;
+                        self.answer_query(*id, sql, max_rows);
+                    }
+                    Effect::Db(id, DbCommand::QueryAll(sql)) => self.answer_query(*id, sql, 0),
+                    Effect::CancelQuery(id) => self.cancel_query(*id),
                     Effect::ScheduleTimer { timer, after } => {
                         let after = u64::try_from(after.as_millis()).unwrap_or(u64::MAX);
                         self.pending.push(Pending {
@@ -374,8 +379,26 @@ impl AppHarness {
         }
     }
 
-    /// Answers a query from the fake database, if there is one.
-    fn answer_query(&mut self, id: SessionId, sql: &str) {
+    /// Stops session `id`'s statement in progress, if any: its answer is
+    /// dropped and the failure a cancelled statement gives arrives now.
+    fn cancel_query(&mut self, id: SessionId) {
+        let is_answer = |event: &UiEvent| matches!(event, UiEvent::Db(s, DbAnswer::QueryDone(_) | DbAnswer::QueryFailed { .. }) if *s == id);
+        let before = self.pending.len();
+        self.pending
+            .retain(|pending| !pending.events.iter().any(is_answer));
+        let hung = self.worker_free_at.get(&id) == Some(&u64::MAX);
+        if self.pending.len() == before && !hung {
+            return;
+        }
+        self.worker_free_at.insert(id, self.now);
+        let answer =
+            db::query_answer::<&str>(Err(qry_core::testing::CANCELLED), Duration::ZERO, None);
+        self.schedule(id, 0, answer);
+    }
+
+    /// Answers a query from the fake database, if there is one, keeping
+    /// at most `max_rows` rows.
+    fn answer_query(&mut self, id: SessionId, sql: &str, max_rows: usize) {
         let Some(db) = &self.database else {
             return;
         };
@@ -383,7 +406,7 @@ impl AppHarness {
         let mut after = 0;
         let outcome = loop {
             match reply {
-                Reply::Rows(result) => break Ok(result),
+                Reply::Rows(result) => break Ok(qry_core::shared::truncate(result, max_rows)),
                 Reply::Affected(count) => {
                     break Ok(QueryResult::affected(count));
                 }

@@ -188,3 +188,60 @@ async fn sqlite_columns_take_the_type_of_their_first_value() {
     use shared::ValueKind as K;
     assert_eq!(kinds, [K::Integer, K::Float, K::Text, K::Other]);
 }
+
+#[tokio::test]
+async fn sqlite_stops_reading_at_max_rows() {
+    let mut driver = Driver::new();
+    driver.connect(in_memory()).await.unwrap();
+    let counting = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) \
+                    SELECT i FROM n";
+    // Without the limit this would never end.
+    let result = driver.query_limited(counting, 1000).await.unwrap();
+    assert_eq!(result.rows.len(), 1000);
+    assert!(result.truncated);
+    assert_eq!(result.rows[999], [Some("1000".to_string())]);
+
+    let small = driver
+        .query_limited("SELECT 1 UNION SELECT 2", 2)
+        .await
+        .unwrap();
+    assert_eq!(small.rows.len(), 2);
+    assert!(!small.truncated, "exactly max_rows is not truncated");
+}
+
+#[tokio::test]
+async fn sqlite_cancel_interrupts_a_long_query() {
+    let mut driver = Driver::new();
+    driver.connect(in_memory()).await.unwrap();
+    let handle = driver.cancel_handle().unwrap();
+    let endless = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) \
+                   SELECT count(*) FROM n";
+    let (outcome, ()) = tokio::join!(driver.query(endless), async {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        handle.cancel().await.unwrap();
+    });
+    let err = outcome.unwrap_err();
+    assert!(format!("{err:#}").contains("interrupt"), "{err:#}");
+    // The connection is still good.
+    assert_eq!(driver.query("SELECT 1").await.unwrap().rows.len(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_fake_cancels_only_the_statement_in_progress() {
+    use testing::{CANCELLED, FakeDatabase, Reply, grid};
+    let db = FakeDatabase::default()
+        .reply(Reply::Hang)
+        .reply(Reply::Rows(grid(3, 1)));
+    let driver = Driver::with_database(Box::new(db.clone()));
+    let handle = driver.cancel_handle().unwrap();
+    let (outcome, ()) = tokio::join!(driver.query("hang"), async {
+        tokio::task::yield_now().await;
+        handle.cancel().await.unwrap();
+    });
+    assert_eq!(outcome.unwrap_err().to_string(), CANCELLED);
+    // Nothing is stored up for the next statement.
+    handle.cancel().await.unwrap();
+    let next = driver.query_limited("next", 2).await.unwrap();
+    assert!(next.truncated && next.rows.len() == 2);
+    assert_eq!(db.cancels(), 2);
+}

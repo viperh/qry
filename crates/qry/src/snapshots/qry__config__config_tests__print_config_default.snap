@@ -5,6 +5,7 @@ expression: "Config::embedded().effective_json()"
 {
   "theme": "dark",
   "continue_on_error": false,
+  "max_rows": 1000,
   "keybindings": {
     "Global": {
       "ctrl-q": "Quit",
@@ -56,7 +57,8 @@ expression: "Config::embedded().effective_json()"
       "Enter": "Open",
       "shift-Enter": "OpenNewSession",
       "r": "Refresh",
-      "/": "Filter"
+      "/": "Filter",
+      "J": "ToggleJobs"
     },
     "Editor": {
       "F6": "FocusNext",
@@ -103,6 +105,7 @@ expression: "Config::embedded().effective_json()"
     "Results": {
       "?": "Help",
       ":": "Palette",
+      "ctrl-c": "CancelQuery",
       "ctrl-s": "ExportResults",
       "k": "Up",
       "↑": "Up",
@@ -137,8 +140,10 @@ expression: "Config::embedded().effective_json()"
       ">": "WidenColumn",
       "=": "ResetWidths",
       "F": "FreezeColumn",
+      "A": "FetchAll",
       "Enter": "Inspect",
-      "i": "ToggleInspector"
+      "i": "ToggleInspector",
+      "J": "ToggleJobs"
     },
     "Inspector": {
       "?": "Help",
@@ -210,6 +215,7 @@ expression: "Config::embedded().effective_json()"
     "Jobs": {
       "?": "Help",
       ":": "Palette",
+      "c": "CancelQuery",
       "k": "Up",
       "↑": "Up",
       "j": "Down",
@@ -219,7 +225,10 @@ expression: "Config::embedded().effective_json()"
       "l": "Right",
       "→": "Right",
       "g g": "Top",
-      "G": "Bottom"
+      "G": "Bottom",
+      "Enter": "Open",
+      "J": "ToggleJobs",
+      "Esc": "ToggleJobs"
     }
   }
 }

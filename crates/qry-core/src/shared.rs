@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
@@ -50,12 +50,41 @@ impl std::fmt::Display for SslMode {
     }
 }
 
+/// Stops the statement a connection is running, from outside it: taken
+/// before the query starts, so it never waits for the busy connection.
+#[async_trait]
+pub trait CancelHandle: Send + Sync {
+    async fn cancel(&self) -> Result<()>;
+}
+
+/// Keeps the first `max_rows` rows of `result` (all for 0), and says so
+/// if there were more.
+pub fn truncate(mut result: QueryResult, max_rows: usize) -> QueryResult {
+    if max_rows > 0 && result.rows.len() > max_rows {
+        result.rows.truncate(max_rows);
+        result.truncated = true;
+    }
+    result
+}
+
 #[async_trait]
 pub trait Database: Send + Sync {
     fn kind(&self) -> DatabaseType;
     fn label(&self) -> String;
-    async fn query(&self, query: &str) -> Result<QueryResult>;
+    async fn query(&self, query: &str) -> Result<QueryResult> {
+        self.query_limited(query, 0).await
+    }
+    /// Runs `query` and keeps at most `max_rows` rows (0 keeps all),
+    /// setting [`QueryResult::truncated`] when there were more. A backend
+    /// that streams stops reading there.
+    async fn query_limited(&self, query: &str, max_rows: usize) -> Result<QueryResult>;
     async fn execute(&self, query: &str) -> Result<u64>;
+
+    /// What stops a running statement on this connection, if the backend
+    /// can.
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        None
+    }
 
     /// The tables and views this connection can see, for the tree. Each
     /// backend keeps its list somewhere else, so the query differs; a

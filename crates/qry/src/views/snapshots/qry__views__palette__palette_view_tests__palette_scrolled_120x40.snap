@@ -6,7 +6,7 @@ expression: text
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
  ▸ ◌ scratch                  │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ ›                                                                                    54 / 54 │            
+            │ ›                                                                                    57 / 57 │            
             │ Go to the tree                                view                                           │            
             │ Go to the editor                              view                                           │            
             │ Go to the results                             view                                           │            
@@ -22,8 +22,8 @@ expression: text
             │ Run all                                       query                                       F8 │            
             │ Run selection                                 query                                   ctrl-e │            
             │ Cancel query                                  query                                   ctrl-c │            
-            │ Export results                                results                                 ctrl-s │            
-            │ Open another session                          session                            shift-Enter │            
+            │ Commit                                        query                                          │            
+            │ Rollback                                      query                                          │            
             └──────────────────────────────────────────────────────────────────────────────────────────────┘            
                               │                                                                                         
                               │                                                                                         

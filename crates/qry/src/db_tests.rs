@@ -31,7 +31,7 @@ fn spawn_fake(db: &FakeDatabase, answers: Answers) -> UnboundedSender<DbCommand>
 /// A worker for the first session, and where its answers arrive.
 fn spawn_first() -> (UnboundedSender<DbCommand>, Receiver) {
     let (answers, rx) = mpsc::unbounded_channel();
-    (spawn(SessionId::FIRST, answers), Receiver(rx))
+    (spawn(SessionId::FIRST, answers, 0).0, Receiver(rx))
 }
 
 /// The answers of the first session's worker, without the session's id.

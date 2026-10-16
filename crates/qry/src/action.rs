@@ -40,6 +40,9 @@ pub enum Action {
     RunSelection,
     /// Stops the running query; in the editor, copies when none runs.
     CancelQuery,
+    /// Ends the session's transaction, keeping or undoing its changes.
+    Commit,
+    Rollback,
     ExportResults,
 
     Up,
@@ -81,6 +84,8 @@ pub enum Action {
     ResetWidths,
     /// Keeps the first column in view while the others scroll.
     FreezeColumn,
+    /// Runs a truncated result's statement again, for every row.
+    FetchAll,
     Inspect,
     ToggleInspector,
     ToggleJobs,
@@ -157,6 +162,8 @@ impl Action {
             Self::RunAll => "Run everything",
             Self::RunSelection => "Run the selection",
             Self::CancelQuery => "Cancel the query (copy when none runs)",
+            Self::Commit => "Commit the transaction",
+            Self::Rollback => "Roll the transaction back",
             Self::ExportResults => "Export the results to a file",
             Self::Up => "Up",
             Self::Down => "Down",
@@ -187,6 +194,7 @@ impl Action {
             Self::WidenColumn => "Widen the column",
             Self::ResetWidths => "Reset the column widths",
             Self::FreezeColumn => "Freeze the first column",
+            Self::FetchAll => "Fetch every row",
             Self::CopyRow => "Copy the row",
             Self::Inspect => "Inspect the value",
             Self::ToggleInspector => "Show / hide the inspector",
@@ -254,6 +262,8 @@ impl Action {
             Self::RunAll => "Run all",
             Self::RunSelection => "Run selection",
             Self::CancelQuery => "Cancel query",
+            Self::Commit => "Commit",
+            Self::Rollback => "Rollback",
             Self::ExportResults => "Export results",
             Self::Refresh => "Refresh tables",
             Self::Filter => "Filter the tree",
@@ -271,6 +281,7 @@ impl Action {
             Self::WidenColumn => "Widen the column",
             Self::ResetWidths => "Reset the column widths",
             Self::FreezeColumn => "Freeze the first column",
+            Self::FetchAll => "Fetch every row",
             Self::CopyRow => "Copy row",
             Self::Inspect => "Inspect value",
             Self::ToggleInspector => "Toggle inspector",
@@ -297,7 +308,12 @@ impl Action {
             Self::OpenNewSession | Self::NextSession | Self::PrevSession | Self::CloseSession => {
                 "session"
             }
-            Self::RunStatement | Self::RunAll | Self::RunSelection | Self::CancelQuery => "query",
+            Self::RunStatement
+            | Self::RunAll
+            | Self::RunSelection
+            | Self::CancelQuery
+            | Self::Commit
+            | Self::Rollback => "query",
             Self::ExportResults
             | Self::Search
             | Self::CopyCell
@@ -314,6 +330,7 @@ impl Action {
             | Self::WidenColumn
             | Self::ResetWidths
             | Self::FreezeColumn
+            | Self::FetchAll
             | Self::Inspect
             | Self::ToggleInspector => "results",
             Self::FocusTree
@@ -359,7 +376,8 @@ impl Action {
             | Self::NarrowColumn
             | Self::WidenColumn
             | Self::ResetWidths
-            | Self::FreezeColumn => KeyContext::Results,
+            | Self::FreezeColumn
+            | Self::FetchAll => KeyContext::Results,
             _ => KeyContext::Global,
         }
     }

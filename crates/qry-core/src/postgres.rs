@@ -1,12 +1,15 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::{StreamExt, pin_mut};
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 use crate::{
     Database, DatabaseType,
-    shared::{ColumnMeta, QueryError, QueryResult, SslMode},
+    shared::{CancelHandle, ColumnMeta, QueryError, QueryResult, SslMode},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,7 +106,11 @@ impl Database for Postgres {
             self.config.user, self.config.host, self.config.port, self.config.database
         )
     }
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(Cancel(self.client.cancel_token())))
+    }
+
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         // Preparing first gives the columns' types, and their names even
         // when no row comes back. The simple protocol still runs it, as it
         // takes what preparing refuses (COPY, several commands).
@@ -113,29 +120,26 @@ impl Database for Postgres {
                 .map(|c| ColumnMeta::new(c.name(), c.type_().name()))
                 .collect()
         });
-        let messages = self.client.simple_query(sql).await.map_err(|e| {
-            let Some(db) = e.as_db_error() else {
-                return anyhow::Error::new(e);
-            };
-            let position = match db.position() {
-                Some(tokio_postgres::error::ErrorPosition::Original(p)) => {
-                    QueryError::char_position(sql, *p as usize)
-                }
-                _ => None,
-            };
-            anyhow::Error::new(QueryError {
-                message: db.message().to_string(),
-                position,
-            })
-        })?;
+        let stream = self
+            .client
+            .simple_query_raw(sql)
+            .await
+            .map_err(|e| positioned(sql, e))?;
+        pin_mut!(stream);
 
         let mut columns = Vec::new();
         let mut rows = Vec::new();
         let mut affected = 0;
+        let mut truncated = false;
 
-        for message in messages {
-            match message {
+        while let Some(message) = stream.next().await {
+            match message.map_err(|e| positioned(sql, e))? {
                 SimpleQueryMessage::Row(row) => {
+                    // The rest stays unread; the connection drains it.
+                    if max_rows > 0 && rows.len() == max_rows {
+                        truncated = true;
+                        break;
+                    }
                     if columns.is_empty() {
                         columns = row
                             .columns()
@@ -164,26 +168,16 @@ impl Database for Postgres {
             rows,
             affected: Some(affected),
             elapsed: std::time::Duration::ZERO,
-            truncated: false,
+            truncated,
         })
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
-        let messages = self.client.simple_query(sql).await.map_err(|e| {
-            let Some(db) = e.as_db_error() else {
-                return anyhow::Error::new(e);
-            };
-            let position = match db.position() {
-                Some(tokio_postgres::error::ErrorPosition::Original(p)) => {
-                    QueryError::char_position(sql, *p as usize)
-                }
-                _ => None,
-            };
-            anyhow::Error::new(QueryError {
-                message: db.message().to_string(),
-                position,
-            })
-        })?;
+        let messages = self
+            .client
+            .simple_query(sql)
+            .await
+            .map_err(|e| positioned(sql, e))?;
         let mut affected = 0;
         for message in messages {
             if let SimpleQueryMessage::CommandComplete(n) = message {
@@ -191,6 +185,34 @@ impl Database for Postgres {
             }
         }
         Ok(affected)
+    }
+}
+
+/// A server error, with where in `sql` it stopped when the server says.
+fn positioned(sql: &str, e: tokio_postgres::Error) -> anyhow::Error {
+    let Some(db) = e.as_db_error() else {
+        return anyhow::Error::new(e);
+    };
+    let position = match db.position() {
+        Some(tokio_postgres::error::ErrorPosition::Original(p)) => {
+            QueryError::char_position(sql, *p as usize)
+        }
+        _ => None,
+    };
+    anyhow::Error::new(QueryError {
+        message: db.message().to_string(),
+        position,
+    })
+}
+
+/// Asks the server, on a connection of its own, to stop the statement.
+struct Cancel(tokio_postgres::CancelToken);
+
+#[async_trait]
+impl CancelHandle for Cancel {
+    async fn cancel(&self) -> Result<()> {
+        self.0.cancel_query(NoTls).await?;
+        Ok(())
     }
 }
 

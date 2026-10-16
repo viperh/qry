@@ -13,7 +13,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::{
     app::SessionId,
     connections::StoredConnection,
-    db::{self, Answers, DbCommand},
+    db::{self, Answers, CancelSlot, DbCommand},
 };
 
 /// The session has no worker: it was closed, never opened, or its worker
@@ -22,12 +22,42 @@ use crate::{
 pub(crate) struct WorkerGone;
 
 /// The workers of the open sessions, by session.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub(crate) struct SessionManager {
-    workers: HashMap<SessionId, UnboundedSender<DbCommand>>,
+    workers: HashMap<SessionId, (UnboundedSender<DbCommand>, CancelSlot)>,
+    /// The most rows a query keeps; 0 keeps all.
+    max_rows: usize,
+}
+
+/// What [`SessionManager::cancel`] could do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CancelOutcome {
+    /// The connection was asked to stop its statement.
+    Asked,
+    /// Its driver cannot stop a statement; it runs on.
+    Unsupported,
+    Gone,
+}
+
+/// The handles inside have no `Debug`; the sessions' ids say enough.
+impl std::fmt::Debug for SessionManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SessionManager")
+            .field("sessions", &self.workers.keys().collect::<Vec<_>>())
+            .field("max_rows", &self.max_rows)
+            .finish()
+    }
 }
 
 impl SessionManager {
+    /// No session open yet; each query will keep at most `max_rows` rows.
+    pub(crate) fn new(max_rows: usize) -> Self {
+        Self {
+            workers: HashMap::new(),
+            max_rows,
+        }
+    }
+
     /// Starts a worker for session `id` and has it open `record`. Its
     /// answers arrive on `answers`, tagged with `id`. A session that is
     /// already open gets a fresh worker; the old one ends.
@@ -37,16 +67,32 @@ impl SessionManager {
         record: StoredConnection,
         answers: Answers,
     ) -> Result<(), WorkerGone> {
-        let worker = db::spawn(id, answers);
+        let (worker, cancel) = db::spawn(id, answers, self.max_rows);
         let sent = worker.send(DbCommand::Connect(Box::new(record)));
-        self.workers.insert(id, worker);
+        self.workers.insert(id, (worker, cancel));
         sent.map_err(|_| WorkerGone)
     }
 
     /// Hands `command` to session `id`'s worker.
     pub(crate) fn send(&self, id: SessionId, command: DbCommand) -> Result<(), WorkerGone> {
-        let worker = self.workers.get(&id).ok_or(WorkerGone)?;
+        let (worker, _) = self.workers.get(&id).ok_or(WorkerGone)?;
         worker.send(command).map_err(|_| WorkerGone)
+    }
+
+    /// Asks session `id`'s connection to stop the statement it runs, on a
+    /// task of its own: the worker is busy with that statement.
+    pub(crate) fn cancel(&self, id: SessionId) -> CancelOutcome {
+        let Some((_, slot)) = self.workers.get(&id) else {
+            return CancelOutcome::Gone;
+        };
+        let Some(handle) = db::lock(slot).clone() else {
+            return CancelOutcome::Unsupported;
+        };
+        tokio::spawn(async move {
+            // A statement that already finished has nothing to stop.
+            let _ = handle.cancel().await;
+        });
+        CancelOutcome::Asked
     }
 
     /// Drops the session's sender. The worker finishes the command it is

@@ -40,5 +40,5 @@ expression: "h.render(120, 40)"
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
- scratch · sqlite · :memory: · auto-commit                                                                              
+ scratch · sqlite · :memory: · auto                                                                                     
  Enter submit  Tab next field  Esc cancel                                                                       F1 help

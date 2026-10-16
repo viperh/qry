@@ -40,7 +40,7 @@ expression: "styled(&h.render_buffer(120, 40))"
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
- scratch · sqlite · :memory: · auto-commit                                                                              
+ scratch · sqlite · :memory: · auto                                                                                     
  Enter submit  Tab next field  Esc cancel                                                                       F1 help 
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD | DIM

@@ -7,6 +7,7 @@ pub(crate) mod editor;
 pub(crate) mod form;
 pub(crate) mod help;
 pub(crate) mod hints;
+pub(crate) mod jobs;
 pub(crate) mod layout;
 pub(crate) mod messages;
 pub(crate) mod overlay;
@@ -85,6 +86,9 @@ pub fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) {
         let [title, _] =
             Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(inspector);
         pane_title::draw("INSPECTOR", "", false, theme, frame, title);
+    }
+    if let Some(drawer) = screen.jobs {
+        jobs::draw(state, theme, frame, drawer);
     }
     status_line::draw(state, theme, frame, screen.status);
     if let Some(hints) = screen.hints {

@@ -3,9 +3,6 @@ source: crates/qry/src/app/reducer/help_tests.rs
 expression: "h.render(80, 24)"
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────┐
-│ PgDn                 down a page                                             │
-│ Home                 start of the line                                       │
-│ End                  end of the line                                         │
 │ Esc                  cancel / close                                          │
 │ Enter                submit                                                  │
 │ Tab                  next field                                              │
@@ -15,14 +12,17 @@ expression: "h.render(80, 24)"
 │ Jobs                                                                         │
 │ ?                    show / hide the help                                    │
 │ :                    command palette                                         │
+│ c                    cancel the query (copy when none runs)                  │
 │ k ↑                  up                                                      │
 │ j ↓                  down                                                    │
 │ h ←                  left                                                    │
 │ l →                  right                                                   │
 │ g g                  to the top                                              │
 │ G                    to the bottom                                           │
+│ Enter                open                                                    │
+│ J Esc                show / hide the jobs                                    │
 │                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection                                 │
 │ results:  / search  y copy cell  Y copy row  Enter inspect value             │
 │ tree:  Enter connect  Space expand  e edit  Del delete  / filter             │
-└───────────────────────────────────────────────────────────── 154–171 of 171 ─┘
+└───────────────────────────────────────────────────────────── 161–178 of 178 ─┘

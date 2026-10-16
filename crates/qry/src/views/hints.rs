@@ -43,7 +43,13 @@ pub(crate) fn table(context: KeyContext) -> &'static [Hint] {
             (&[Action::Palette], "commands"),
             (&[Action::Quit], "quit"),
         ],
-        KeyContext::Inspector | KeyContext::Jobs => &[
+        KeyContext::Jobs => &[
+            (&[Action::Down, Action::Up], "move"),
+            (&[Action::CancelQuery], "cancel"),
+            (&[Action::Open], "show"),
+            (&[Action::ToggleJobs], "close"),
+        ],
+        KeyContext::Inspector => &[
             (&[Action::Down, Action::Up], "move"),
             (&[Action::FocusNext], "next pane"),
             (&[Action::Quit], "quit"),
@@ -78,8 +84,17 @@ fn key_for(state: &State, contexts: &[KeyContext], action: Action) -> Option<Str
 /// The `(key, label)` pairs for where the keys go now, and the help's.
 pub(crate) fn pairs(state: &State) -> (Vec<(String, &'static str)>, Option<String>) {
     let contexts = state.contexts();
-    let pairs = table(contexts[0])
+    // While a statement runs, how to stop it comes first.
+    let running = matches!(contexts[0], KeyContext::Editor | KeyContext::Results)
+        && state.jobs.running(state.sessions.active().id).is_some();
+    let cancel: &[Hint] = if running {
+        &[(&[Action::CancelQuery], "cancel")]
+    } else {
+        &[]
+    };
+    let pairs = cancel
         .iter()
+        .chain(table(contexts[0]))
         .filter_map(|(actions, label)| {
             let key = actions.iter().find_map(|a| key_for(state, &contexts, *a))?;
             Some((key, *label))

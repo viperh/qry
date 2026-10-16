@@ -115,7 +115,7 @@ fn help_snapshots() {
     assert!(running.entries[0].0.contains("alt-r"), "{running:?}");
     // Scrolled to where the editor's groups are.
     h.render(120, 40);
-    h.keys("pagedown");
+    h.keys("pagedown j j j j");
     let text = h.render(120, 40);
     assert!(text.contains("alt-r"), "{text}");
     insta::assert_snapshot!("help_120x40_remapped", text);

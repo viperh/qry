@@ -10,7 +10,7 @@ use qry_core::{
     grid::{self, Order, Search, sort_permutation},
 };
 
-use super::notices::notify;
+use super::{notices::notify, run};
 use crate::{
     action::Action,
     app::{
@@ -53,6 +53,11 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
             session.active_tab = (session.active_tab + 1).min(session.tabs.len() - 1);
             return;
         }
+        Action::CancelQuery => {
+            run::cancel(state, fx);
+            return;
+        }
+        Action::FetchAll => return run::fetch_all(state, fx),
         _ => {}
     }
     let Some((rows, cols)) = state

@@ -47,11 +47,12 @@ fn line(h: &AppHarness, width: u16) -> String {
 fn items_drop_in_priority_order() {
     let mut h = prod();
     h.db(DbAnswer::QueryDone(Arc::new(grid(1204, 9))));
-    let position = "R 1 / 1 204  C 1/9";
+    let position = "R 1 / 1\u{2009}204  C 1/9";
     let cases = [
-        (120, " prod · postgres · app · auto-commit"),
-        (60, " prod · postgres · app · auto-commit"),
-        (50, " prod · postgres · app"),
+        (120, " prod · postgres · app · auto"),
+        (60, " prod · postgres · app · auto"),
+        (50, " prod · postgres · app · auto"),
+        (45, " prod · postgres · app"),
         (40, " prod · postgres"),
         (30, " prod"),
     ];
@@ -75,16 +76,18 @@ fn position_shown_only_with_a_result() {
 }
 
 #[test]
-fn in_transaction_is_coral() {
+fn in_transaction_is_an_amber_pill() {
     let mut h = prod();
     h.keys("tab").type_str("begin").keys("f8");
     h.db(DbAnswer::QueryDone(Arc::new(grid(0, 0))));
     let text = line(&h, 80);
-    assert!(text.contains("in transaction"), "{text}");
+    assert!(text.ends_with(" TX"), "{text}");
     let buffer = drawn(&h, 80);
-    let x = u16::try_from(text.find("in transaction").unwrap()).unwrap();
-    assert_eq!(Some(buffer[(x, 0)].fg), h.theme().status_warning().fg);
-    assert_eq!(h.theme().status_warning().fg, Some(h.theme().coral));
+    // The line ends in the pill, its last space trimmed: `T` is next to last.
+    let x = u16::try_from(text.chars().count() - 2).unwrap();
+    let pill = h.theme().mode_pill(crate::theme::Pill::Edit);
+    assert_eq!(Some(buffer[(x, 0)].bg), pill.bg);
+    assert_eq!(pill.bg, Some(h.theme().amber));
 
     // A failed COMMIT leaves it open; one that works ends it.
     h.keys("ctrl-a backspace").type_str("commit").keys("f5");
@@ -92,15 +95,15 @@ fn in_transaction_is_coral() {
         message: "nope".into(),
         position: None,
     });
-    assert!(line(&h, 80).contains("in transaction"));
+    assert!(line(&h, 80).ends_with(" TX"));
     h.keys("f5");
     h.db(DbAnswer::QueryDone(Arc::new(grid(0, 0))));
-    assert!(line(&h, 80).contains("auto-commit"));
+    assert!(line(&h, 80).ends_with("auto"), "{}", line(&h, 80));
 }
 
 #[test]
-fn thousands_are_grouped_by_spaces() {
+fn thousands_are_grouped_by_thin_spaces() {
     assert_eq!(thousands(7), "7");
-    assert_eq!(thousands(1204), "1 204");
-    assert_eq!(thousands(1_000_000), "1 000 000");
+    assert_eq!(thousands(1204), "1\u{2009}204");
+    assert_eq!(thousands(1_000_000), "1\u{2009}000\u{2009}000");
 }

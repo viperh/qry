@@ -19,6 +19,7 @@ test-util = []
 # Keep this crate UI-agnostic: no ratatui, no crossterm, no clap.
 # Everything here should be testable without a terminal.
 [dependencies]
+futures = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 color-eyre = { workspace = true }

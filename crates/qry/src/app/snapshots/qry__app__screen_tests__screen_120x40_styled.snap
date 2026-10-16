@@ -40,7 +40,7 @@ expression: "styled(&app.render_buffer(w, h))"
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
- scratch · sqlite · :memory: · auto-commit                                                               R 1 / 2  C 1/2 
+ scratch · sqlite · :memory: · auto                                                                      R 1 / 2  C 1/2 
  Enter open  Space expand  ctrl-n new conn  Tab next pane  : commands  ctrl-q quit                               ? help 
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
@@ -189,7 +189,7 @@ expression: "styled(&app.render_buffer(w, h))"
 17,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
 20,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
 28,38 Rgb(138, 148, 163) Rgb(26, 33, 43) NONE
-42,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
+35,38 Rgb(211, 217, 224) Rgb(26, 33, 43) NONE
 0,39 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
 1,39 Rgb(242, 176, 74) Rgb(14, 17, 22) BOLD
 6,39 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE

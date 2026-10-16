@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: "h.render(80, 24)"
+---
+ qry  1 scratch                                       sqlite · :memory:   EDIT  
+ SCHEMA                       │ QUERY  ln 1, col 6                              
+ ▸ ● scratch                  │▌ 1 │ begin                                      
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                 ┌ Open Transaction ──────────────────────────┐                 
+                 │ scratch has an open transaction. Quitting  │                 
+                 │ rolls it back; cancel to commit first.     │d                
+                 │                                            │                 
+                 │           [ Cancel ]    Roll back & quit   │                 
+                 └────────────────────────────────────────────┘                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │ ✓ Statement executed in 0 ms                    
+ scratch · sqlite · :memory: ·  TX                                              
+ Enter submit  Tab next field  Esc cancel                               F1 help

@@ -344,7 +344,7 @@ impl Database for Oracle {
         self.config.label()
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
         self.with_conn(move |conn| {
             let mut stmt = conn.statement(&sql).ora()?.build().ora()?;
@@ -365,7 +365,13 @@ impl Database for Oracle {
                 .collect();
 
             let mut rows: Vec<Vec<Option<String>>> = Vec::new();
+            let mut truncated = false;
             for row in cursor {
+                // The cursor fetches as it goes; the rest is never read.
+                if max_rows > 0 && rows.len() == max_rows {
+                    truncated = true;
+                    break;
+                }
                 let row = row.ora()?;
                 let mut cells = Vec::with_capacity(columns.len());
                 for i in 0..columns.len() {
@@ -380,7 +386,7 @@ impl Database for Oracle {
                 rows,
                 affected: Some(affected),
                 elapsed: std::time::Duration::ZERO,
-                truncated: false,
+                truncated,
             })
         })
         .await

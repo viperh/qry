@@ -4121,6 +4121,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "color-eyre",
+ "futures",
  "hex",
  "mysql_async",
  "oracledb",

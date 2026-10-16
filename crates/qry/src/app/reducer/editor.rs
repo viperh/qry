@@ -19,7 +19,11 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
         Action::RunSelection => run::selection(state, fx),
         // No query can be cancelled until there are jobs (T305), so it
         // always copies.
-        Action::CancelQuery => apply(state.editor_mut(), Action::Copy),
+        Action::CancelQuery => {
+            if !run::cancel(state, fx) {
+                apply(state.editor_mut(), Action::Copy);
+            }
+        }
         action => apply(state.editor_mut(), action),
     }
 }

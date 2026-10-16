@@ -22,7 +22,10 @@ use std::{
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 
-use crate::{ColumnMeta, DatabaseType, QueryResult, shared::Database};
+use crate::{
+    ColumnMeta, DatabaseType, QueryResult,
+    shared::{CancelHandle, Database},
+};
 
 /// One scripted answer from a [`FakeDatabase`].
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,7 +56,13 @@ pub struct FakeDatabase {
     script: Arc<Mutex<VecDeque<Reply>>>,
     calls: Arc<Mutex<Vec<String>>>,
     tables: Vec<String>,
+    /// Wakes the statement in progress when its cancel handle is used.
+    cancel: Arc<tokio::sync::Notify>,
+    cancels: Arc<Mutex<usize>>,
 }
+
+/// What the fake says when a statement is cancelled, as Postgres does.
+pub const CANCELLED: &str = "canceling statement due to user request";
 
 /// A SQLite-flavoured fake with an empty script.
 impl Default for FakeDatabase {
@@ -79,6 +88,8 @@ impl FakeDatabase {
             script: Arc::default(),
             calls: Arc::default(),
             tables: Vec::new(),
+            cancel: Arc::default(),
+            cancels: Arc::default(),
         }
     }
 
@@ -96,6 +107,11 @@ impl FakeDatabase {
     pub fn tables(mut self, names: &[&str]) -> Self {
         self.tables = names.iter().map(|name| name.to_string()).collect();
         self
+    }
+
+    /// How many times its cancel handle was used.
+    pub fn cancels(&self) -> usize {
+        *lock(&self.cancels)
     }
 
     /// Every SQL text it received, in order.
@@ -156,8 +172,19 @@ impl Database for FakeDatabase {
         self.name()
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
-        resolve(self.next_reply(sql)).await
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+        let reply = self.next_reply(sql);
+        tokio::select! {
+            result = resolve(reply) => Ok(crate::shared::truncate(result?, max_rows)),
+            () = self.cancel.notified() => Err(anyhow!(CANCELLED)),
+        }
+    }
+
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(FakeCancel {
+            cancel: self.cancel.clone(),
+            cancels: self.cancels.clone(),
+        }))
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
@@ -167,6 +194,23 @@ impl Database for FakeDatabase {
 
     async fn tables(&self) -> Result<Vec<String>> {
         Ok(self.table_names())
+    }
+}
+
+/// Stops the fake's statement in progress, if any.
+struct FakeCancel {
+    cancel: Arc<tokio::sync::Notify>,
+    cancels: Arc<Mutex<usize>>,
+}
+
+#[async_trait]
+impl CancelHandle for FakeCancel {
+    async fn cancel(&self) -> Result<()> {
+        *lock(&self.cancels) += 1;
+        // Only a statement already waiting is woken; none is stored up
+        // for the next one.
+        self.cancel.notify_waiters();
+        Ok(())
     }
 }
 

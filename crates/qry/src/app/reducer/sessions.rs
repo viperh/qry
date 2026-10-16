@@ -81,8 +81,12 @@ pub(super) fn reconnect(
 /// Closes the active session, asking first if a query is running there.
 fn close_active(state: &mut State, fx: &mut Vec<Effect>) {
     let session = state.sessions.active();
-    if session.busy() {
-        let form = Confirm::close_session(session.id, &session.title);
+    if session.busy() || session.in_transaction {
+        let form = if session.busy() {
+            Confirm::close_session(session.id, &session.title)
+        } else {
+            Confirm::close_in_transaction(session.id, &session.title)
+        };
         state.open_dialog(DialogState::Confirm(form));
         state.awaiting = None;
         return;
@@ -99,6 +103,7 @@ pub(super) fn close(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
         return;
     };
     fx.push(Effect::CloseSession(id));
+    state.jobs.close_session(id, state.now);
     if session.busy() {
         let text = format!("Closed {}: its running query was cancelled", session.title);
         super::notices::notify(state, Notice::warning(text), fx);

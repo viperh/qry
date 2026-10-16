@@ -23,7 +23,7 @@ use crate::{
     import::Format,
     notice::{Notice, TimeOfDay},
     secrets,
-    sessions::SessionManager,
+    sessions::{CancelOutcome, SessionManager},
     theme::{self, ColorSupport},
     tui::{Event, Tui},
     views,
@@ -62,7 +62,7 @@ impl Runtime {
             eprintln!("qry: {warning}");
         }
         let theme = theme::resolve(theme, config.theme.as_deref(), ColorSupport::detect())?;
-        let (executor, answers, events) = Executor::new(get_data_dir());
+        let (executor, answers, events) = Executor::new(get_data_dir(), config.max_rows);
         Ok(Self {
             app: App::new(config, theme, connections::id_seed()),
             tick_rate,
@@ -232,6 +232,7 @@ impl Executor {
     /// where the workers' answers and the files' outcomes arrive.
     pub(crate) fn new(
         data_dir: PathBuf,
+        max_rows: usize,
     ) -> (
         Self,
         UnboundedReceiver<(SessionId, DbAnswer)>,
@@ -241,7 +242,7 @@ impl Executor {
         let (events_tx, events) = mpsc::unbounded_channel();
         let executor = Self {
             data_dir,
-            sessions: SessionManager::default(),
+            sessions: SessionManager::new(max_rows),
             answers: answers_tx,
             events: events_tx,
         };
@@ -253,6 +254,14 @@ impl Executor {
             Effect::Db(id, command) => {
                 if self.sessions.send(id, command).is_err() {
                     self.worker_stopped(id);
+                }
+                Executed::Done
+            }
+            Effect::CancelQuery(id) => {
+                if self.sessions.cancel(id) == CancelOutcome::Unsupported {
+                    let _ = self.events.send(UiEvent::Notice(Notice::warning(
+                        "cancellation not supported by this driver; the server statement continues",
+                    )));
                 }
                 Executed::Done
             }

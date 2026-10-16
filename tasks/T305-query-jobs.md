@@ -126,8 +126,8 @@ Query plans and EXPLAIN visualisation, server-side cursors for DML, scheduled jo
 
 ## Acceptance criteria
 
-- [ ] Every user-started database operation is a job with id, session, kind, SQL, timing and state, visible in the jobs drawer (`J`).
-- [ ] Jobs in one session run in FIFO order. Jobs in different sessions run concurrently.
+- [x] Every user-started database operation is a job with id, session, kind, SQL, timing and state, visible in the jobs drawer (`J`).
+- [x] Jobs in one session run in FIFO order. Jobs in different sessions run concurrently.
 - [ ] A spinner, elapsed time and live row count show in the results title and status line while running. Completed results show `N rows · T`.
 - [ ] `ctrl-c` cancels the running job of the focused session on Postgres, MySQL, MariaDB and SQLite, and the server statement actually stops (integration-tested with `pg_sleep` / `SLEEP` / a recursive CTE). The Oracle behaviour is implemented or documented as specified.
 - [ ] `max_rows` (default 1000) truncates with a visible footer. `L` continues the same cursor without re-running the query. `A` fetches all, after confirmation.
@@ -187,3 +187,71 @@ Query plans and EXPLAIN visualisation, server-side cursors for DML, scheduled jo
 - `oracle_autocommit_off_does_not_commit` (`QRY_TEST_ORACLE_URL`)
 
 **Benchmark** (T006): `stream_first_1000_of_1m_sqlite`, gated at ≤ 50 ms (CI ≤ 100 ms).
+
+## Implementation notes
+
+Done in this pass:
+
+- **Registry.** `qry_core::jobs` holds `JobId`, `JobKind`, `JobState`, `Job`
+  and a pure, generic `Jobs<S>` registry (FIFO per session, one running per
+  session, cancel of queued vs running, close-session, 50 finished kept),
+  with `format_elapsed` (`0 ms`, `2.4 s`, `1 m 12 s`) and `format_rows`
+  (thin-space thousands; `status_line::thousands` now uses it). Unit tests
+  and the `prop_jobs_registry_invariants` proptest are in `jobs_tests.rs`.
+  `theme::JobKind`/`JobState` are now re-exports of these.
+- **App.** Every statement a run queues is a job (`Queued.job`); it starts
+  when sent and ends with the worker's own elapsed time. `State.now` is the
+  time since the first tick, from the ticks' `Instant`s, so the harness's
+  virtual clock drives it; a running job's time therefore moves in tick
+  steps (250 ms). Schema loads are not jobs.
+- **Cancel.** `CancelHandle` / `Database::cancel_handle()`: Postgres
+  `cancel_token()`, MySQL/MariaDB `KILL QUERY <id>` on a short-lived second
+  connection, SQLite `InterruptHandle`; Oracle has none. The worker leaves
+  the handle in a slot the `SessionManager` holds, and
+  `Effect::CancelQuery(session)` uses it on a task of its own. `ctrl-c` in
+  the editor (copy when nothing runs) and the results, or `c` in the drawer,
+  cancels the running job and drops the rest of its run, with a toast
+  `query cancelled`. The worker's failure for a cancelled job, or the late
+  result of a driver that cannot cancel, is dropped. Without a handle the
+  runtime warns `cancellation not supported by this driver; the server
+  statement continues`.
+- **Row limit.** Config `max_rows` (default 1000, 0 = all).
+  `Database::query_limited(sql, max_rows)` stops reading at the limit:
+  SQLite stops stepping, Postgres stops reading the `simple_query_raw`
+  stream, MySQL/MariaDB stop at `next()` (the rest is read off the wire and
+  dropped), Oracle stops iterating the cursor. A truncated result has a dim
+  footer `… more rows — showing the first 1 000 · A fetch all`, and the title
+  says `(first rows only)` / `sorted … (fetched rows only)`.
+- **Feedback.** Results title and status line show `⠹ running · 2.2 s`
+  while the active session runs; the hint line leads with `ctrl-c cancel`.
+- **Drawer.** `J` (Tree, Results) toggles it; height `1 + min(n, 7)`;
+  j/k move, `c` cancels (a queued job is dropped unsent), Enter goes to the
+  job's session, `J`/Esc close. Newest first.
+- **Transactions.** The status line shows `auto` (dim) or an amber ` TX `
+  pill; `SET autocommit=0/1` is also recognised. Palette `Commit` and
+  `Rollback` send the statement on the active session. Quitting with an
+  open transaction asks (`Open Transaction`, Cancel default, `Roll back &
+  quit` runs ROLLBACK in each such session, then quits); closing such a
+  session asks too (dropping the connection rolls it back).
+- **Fixes on the way.** Statements a failure stops are now cancelled jobs
+  rather than left queued.
+
+Not done, and why:
+
+- **`L` load more / keeping a cursor open.** Not built: `A` re-runs the
+  statement with no limit (`DbCommand::QueryAll`) and has no confirm.
+  `FetchMore` exists only as a kind. The memory box needs the streaming
+  `RowStream`, which is not built; the limit is applied while reading, but
+  there is no counting-stream assertion.
+- **Live row counts.** No progress answers from the worker yet, so a
+  running job shows time only.
+- **Autocommit toggle and Oracle.** No `set_autocommit`; Oracle still
+  commits after each non-query statement.
+- **Integration tests** (`cancel_*`, `stream_*`, rollback-on-quit) against
+  real servers are not written; SQLite's limit and interrupt are tested in
+  `qry-core/src/lib_tests.rs` (the interrupt test waits 100 ms of real time
+  for the statement to start, so the "no test sleeps" box stays open).
+- **Snapshots.** `results_running_spinner` and `results_truncated_footer`
+  are 120x24, as 120x20 is under the 80x24 minimum; there is no
+  `results_failed_mid_stream` (no streaming errors yet).
+

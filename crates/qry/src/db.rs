@@ -4,11 +4,11 @@
 //! outcome comes back later as [`DbAnswer`]s, tagged with the session's id.
 
 use std::{
-    sync::Arc,
+    sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 
-use qry_core::{Driver, ExportConfig, Exporter, QueryResult};
+use qry_core::{Driver, ExportConfig, Exporter, QueryResult, shared::CancelHandle};
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 use crate::{
@@ -26,7 +26,10 @@ pub enum DbCommand {
     /// A prompted password is waiting in the stash, under the id of the
     /// connection the worker last asked about.
     PasswordEntered,
+    /// Runs a statement, keeping the first `max_rows` rows.
     Query(String),
+    /// Runs a statement and keeps every row.
+    QueryAll(String),
     /// Writes the last result to a file; no second trip to the database.
     Export(ExportConfig),
     /// The tables of the open connection, for the tree.
@@ -40,16 +43,42 @@ struct Worker {
     last: Option<Arc<QueryResult>>,
     /// The connection waiting for a password to be typed.
     asked: Option<StoredConnection>,
+    /// The most rows a query keeps; 0 keeps all.
+    max_rows: usize,
+    /// Where the open connection's cancel handle is left, for the runtime
+    /// to stop a statement while this worker waits on it.
+    cancel: CancelSlot,
 }
+
+/// The cancel handle of a session's open connection, if it has one.
+pub(crate) type CancelSlot = Arc<Mutex<Option<Arc<dyn CancelHandle>>>>;
 
 /// Answers as they arrive from the workers, each tagged with its session.
 pub(crate) type Answers = UnboundedSender<(SessionId, DbAnswer)>;
 
-/// Starts the worker for session `id` and returns the sender used to reach
-/// it. Commands run one at a time, in order. The worker stops once every
-/// sender has been dropped, or once nobody listens to its answers.
-pub(crate) fn spawn(id: SessionId, answers: Answers) -> UnboundedSender<DbCommand> {
-    spawn_worker(Worker::default(), id, answers)
+/// Starts the worker for session `id`, keeping at most `max_rows` rows of
+/// a query, and returns the sender used to reach it and where it leaves
+/// its connection's cancel handle. Commands run one at a time, in order.
+/// The worker stops once every sender has been dropped, or once nobody
+/// listens to its answers.
+pub(crate) fn spawn(
+    id: SessionId,
+    answers: Answers,
+    max_rows: usize,
+) -> (UnboundedSender<DbCommand>, CancelSlot) {
+    let cancel = CancelSlot::default();
+    let worker = Worker {
+        max_rows,
+        cancel: cancel.clone(),
+        ..Worker::default()
+    };
+    (spawn_worker(worker, id, answers), cancel)
+}
+
+/// Locks the cancel slot, even if a panic poisoned it: it only ever holds
+/// a handle or nothing.
+pub(crate) fn lock(slot: &CancelSlot) -> MutexGuard<'_, Option<Arc<dyn CancelHandle>>> {
+    slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Runs `worker` on its own task; tests hand in one whose driver is a fake.
@@ -78,24 +107,29 @@ impl Worker {
                 }
                 None => Vec::new(),
             },
-            DbCommand::Query(sql) => {
-                let started = Instant::now();
-                let outcome = self.driver.query(&sql).await;
-                // Where in the statement the server stopped, when it says.
-                let position = outcome
-                    .as_ref()
-                    .err()
-                    .and_then(|e| e.downcast_ref::<qry_core::shared::QueryError>())
-                    .and_then(|e| e.position);
-                let answers = query_answer(outcome, started.elapsed(), position);
-                if let Some(DbAnswer::QueryDone(result)) = answers.first() {
-                    self.last = Some(result.clone());
-                }
-                answers
-            }
+            DbCommand::Query(sql) => self.query(&sql, self.max_rows).await,
+            DbCommand::QueryAll(sql) => self.query(&sql, 0).await,
             DbCommand::Export(config) => self.export(config).await,
             DbCommand::ListTables => tables_answer(self.driver.tables().await),
         }
+    }
+
+    /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all), and
+    /// remembers the result for an export.
+    async fn query(&mut self, sql: &str, max_rows: usize) -> Vec<DbAnswer> {
+        let started = Instant::now();
+        let outcome = self.driver.query_limited(sql, max_rows).await;
+        // Where in the statement the server stopped, when it says.
+        let position = outcome
+            .as_ref()
+            .err()
+            .and_then(|e| e.downcast_ref::<qry_core::shared::QueryError>())
+            .and_then(|e| e.position);
+        let answers = query_answer(outcome, started.elapsed(), position);
+        if let Some(DbAnswer::QueryDone(result)) = answers.first() {
+            self.last = Some(result.clone());
+        }
+        answers
     }
 
     /// Finds the password this record says it uses, and opens the
@@ -153,6 +187,7 @@ impl Worker {
             Err(e) => return failed(&format!("{e:#}")),
         };
 
+        *lock(&self.cancel) = self.driver.cancel_handle();
         let mut answers = connected_answer(&record, label);
 
         // Only a freshly typed password is worth storing, and only once it is
@@ -265,11 +300,7 @@ pub(crate) fn connected_answer(record: &StoredConnection, label: String) -> Vec<
 /// How long something took, in the unit that reads best: `0.4 ms`, `12 ms`,
 /// `1.40 s`.
 pub(crate) fn took(elapsed: Duration) -> String {
-    match elapsed.as_secs_f64() {
-        seconds if seconds >= 1.0 => format!("{seconds:.2} s"),
-        _ if elapsed.as_millis() >= 1 => format!("{} ms", elapsed.as_millis()),
-        _ => format!("{:.1} ms", elapsed.as_secs_f64() * 1000.0),
-    }
+    qry_core::jobs::format_elapsed(elapsed)
 }
 
 fn success(message: String) -> DbAnswer {

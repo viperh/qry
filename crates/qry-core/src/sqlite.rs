@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use shared::QueryResult;
 use tokio_rusqlite::{Connection, OpenFlags, rusqlite, types::ValueRef};
 
-use crate::{DatabaseType, shared, shared::Database};
+use crate::{
+    DatabaseType, shared,
+    shared::{CancelHandle, Database},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SqliteConfig {
@@ -27,6 +30,18 @@ impl SqliteConfig {
 pub struct Sqlite {
     conn: Connection,
     config: SqliteConfig,
+    interrupt: Arc<rusqlite::InterruptHandle>,
+}
+
+/// Interrupts the statement SQLite is stepping through.
+struct Interrupt(Arc<rusqlite::InterruptHandle>);
+
+#[async_trait]
+impl CancelHandle for Interrupt {
+    async fn cancel(&self) -> Result<()> {
+        self.0.interrupt();
+        Ok(())
+    }
 }
 
 /// Shows only the (redacted) config: the driver's connection handle has no
@@ -48,7 +63,14 @@ impl Sqlite {
         };
 
         let conn = Connection::open_with_flags(&config.path, flags).await?;
-        Ok(Self { conn, config })
+        let interrupt = conn
+            .call(|conn| Ok::<_, tokio_rusqlite::Error>(conn.get_interrupt_handle()))
+            .await?;
+        Ok(Self {
+            conn,
+            config,
+            interrupt: Arc::new(interrupt),
+        })
     }
 }
 
@@ -62,7 +84,11 @@ impl Database for Sqlite {
         self.config.path.display().to_string()
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(Interrupt(self.interrupt.clone())))
+    }
+
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
 
         let result = self
@@ -76,9 +102,15 @@ impl Database for Sqlite {
                 let mut types: Vec<&'static str> = vec![""; names.len()];
 
                 let mut rows = Vec::new();
+                let mut truncated = false;
                 let mut cursor = stmt.query([])?;
 
                 while let Some(row) = cursor.next()? {
+                    // Stepping stops here; the rest is never read.
+                    if max_rows > 0 && rows.len() == max_rows {
+                        truncated = true;
+                        break;
+                    }
                     let mut cells = Vec::with_capacity(names.len());
                     for (i, type_name) in types.iter_mut().enumerate() {
                         let value = row.get_ref(i)?;
@@ -107,7 +139,7 @@ impl Database for Sqlite {
                     rows,
                     affected: Some(affected),
                     elapsed: std::time::Duration::ZERO,
-                    truncated: false,
+                    truncated,
                 })
             })
             .await

@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use mysql_async::{Conn, OptsBuilder, Row, Value, prelude::*};
+use mysql_async::{Conn, OptsBuilder, Value, prelude::*};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseType,
-    shared::{ColumnMeta, QueryResult, SslMode},
+    shared::{CancelHandle, ColumnMeta, QueryResult, SslMode},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +49,8 @@ impl MariadbConfig {
 
 pub struct MariaDb {
     conn: Mutex<Conn>,
+    /// The server's id for the connection, which `KILL QUERY` names.
+    id: u32,
     config: MariadbConfig,
 }
 
@@ -65,6 +69,7 @@ impl MariaDb {
         config.ssl_mode.ensure_supported()?;
         let conn = Conn::new(config.opts()).await?;
         Ok(Self {
+            id: conn.id(),
             conn: Mutex::new(conn),
             config,
         })
@@ -88,6 +93,23 @@ fn value_to_string(value: Value) -> Option<String> {
     }
 }
 
+/// Stops a statement from a short-lived second connection, as the busy
+/// one cannot be asked.
+struct KillQuery {
+    opts: OptsBuilder,
+    id: u32,
+}
+
+#[async_trait]
+impl CancelHandle for KillQuery {
+    async fn cancel(&self) -> Result<()> {
+        let mut conn = Conn::new(self.opts.clone()).await?;
+        conn.query_drop(format!("KILL QUERY {}", self.id)).await?;
+        conn.disconnect().await?;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl Database for MariaDb {
     fn kind(&self) -> DatabaseType {
@@ -101,7 +123,7 @@ impl Database for MariaDb {
         )
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let mut conn = self.conn.lock().await;
         let mut result = conn.query_iter(sql).await?;
 
@@ -112,12 +134,16 @@ impl Database for MariaDb {
             .map(|c| ColumnMeta::new(c.name_str().into_owned(), format!("{:?}", c.column_type())))
             .collect();
 
-        let rows = result
-            .collect::<Row>()
-            .await?
-            .into_iter()
-            .map(|row| row.unwrap().into_iter().map(value_to_string).collect())
-            .collect();
+        let mut rows = Vec::new();
+        let mut truncated = false;
+        while let Some(row) = result.next().await? {
+            // The rest is read off the wire and dropped, never kept.
+            if max_rows > 0 && rows.len() == max_rows {
+                truncated = true;
+                break;
+            }
+            rows.push(row.unwrap().into_iter().map(value_to_string).collect());
+        }
 
         let affected = result.affected_rows();
         result.drop_result().await?;
@@ -127,8 +153,15 @@ impl Database for MariaDb {
             rows,
             affected: Some(affected),
             elapsed: std::time::Duration::ZERO,
-            truncated: false,
+            truncated,
         })
+    }
+
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(KillQuery {
+            opts: self.config.opts(),
+            id: self.id,
+        }))
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {

@@ -1,0 +1,5 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: status
+---
+ scratch · sqlite · :memory: ·  TX

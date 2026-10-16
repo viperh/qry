@@ -124,24 +124,8 @@ pub enum ToastLevel {
     Error,
 }
 
-/// What a job does (T305, which moves this next to its registry).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum JobKind {
-    Query,
-    FetchMore,
-    Export,
-    Schema,
-}
-
-/// Where a job is (T305, which moves this next to its registry).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum JobState {
-    Queued,
-    Running { rows: u64 },
-    Done { rows: u64 },
-    Failed(String),
-    Cancelled,
-}
+/// What a job does and where it is, from the jobs registry.
+pub use qry_core::jobs::{JobKind, JobState};
 
 impl Theme {
     /// Names accepted by [`Theme::by_name`] (and `--theme`). Only `dark` exists for now.
