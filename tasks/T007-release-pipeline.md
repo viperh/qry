@@ -108,7 +108,7 @@ The `i686-unknown-linux-gnu` target is dropped. Say so in the CHANGELOG under "R
 Before the musl targets ship:
 
 - [ ] Identify which backend features `keyring` 4.2 enables by default, and whether they link `libdbus`. Use `cargo tree -e features -p qry --target x86_64-unknown-linux-musl`, plus `ldd` and `file` on a test build.
-- [ ] Choose one of these and record the decision in `docs/release.md`:
+- [x] Choose one of these and record the decision in `docs/release.md`:
   - (a) Enable a pure-Rust Secret Service backend, so the static build keeps keychain support.
   - (b) Use keyutils on musl only. Passwords then survive only until reboot or logout, which the UI must say.
   - (c) Ship glibc builds (`x86_64-unknown-linux-gnu` built on the oldest supported Ubuntu runner) instead of musl.
@@ -191,22 +191,22 @@ A `packaging` job in `ci.yml` (added to `ci-ok`'s `needs`):
 
 ## Acceptance criteria
 
-- [ ] `qry generate man` prints a valid man page (`groff -man -ww -z` reports no warnings), and `qry generate completions bash|zsh|fish|powershell` print completion scripts. `bash -n` passes on the bash one.
+- [x] `qry generate man` prints a valid man page (`groff -man -ww -z` reports no warnings), and `qry generate completions bash|zsh|fish|powershell` print completion scripts. `bash -n` passes on the bash one.
 - [ ] `cd.yml` triggers on `v[0-9]+.[0-9]+.[0-9]+*` tags and on `workflow_dispatch`. A dispatch run builds every target and uploads `release-dry-run` without creating a release (link the run).
 - [ ] A tag that does not match `workspace.package.version` fails the `meta` job with a clear error (verify on a fork or a throwaway tag).
 - [ ] A tag with no `CHANGELOG.md` section fails the `release` job.
 - [ ] The Linux binaries are static (the `file` check is in the workflow), and the x86_64 binary is byte-identical across the two builds (the `cmp` step is in the workflow and passes).
-- [ ] Building the same archive twice with `scripts/release-package.sh` gives byte-identical `.tar.gz` files.
+- [x] Building the same archive twice with `scripts/release-package.sh` gives byte-identical `.tar.gz` files.
 - [ ] The macOS archive contains one universal binary with both `x86_64` and `arm64`. Signing runs only when its secrets are present.
 - [ ] The Windows zip runs `qry.exe --version` on a Windows runner and shows the embedded icon.
 - [ ] Every release has `SHA256SUMS`, and the workflow verifies it before publishing.
 - [ ] The keyring decision (section 3) is made and documented in `docs/release.md`, and the stated manual verification has been done on Linux desktop, headless Linux, macOS and Windows.
 - [ ] `packaging/` holds the four manifests with placeholders. `scripts/update-packaging.py --self-test` passes, and the `packaging` CI job is green.
 - [ ] The `channels` job skips each channel cleanly when its secret is empty, and the logs show a `::notice::`.
-- [ ] `CHANGELOG.md` exists in Keep a Changelog format, with `[Unreleased]` and the backfilled `[0.1.0]`.
-- [ ] `docs/release.md` holds the checklist above.
+- [x] `CHANGELOG.md` exists in Keep a Changelog format, with `[Unreleased]` and the backfilled `[0.1.0]`.
+- [x] `docs/release.md` holds the checklist above.
 - [ ] `flake.nix` exists, the `nix` CI job is green, and `nix develop` gives a shell where `cargo test --workspace` passes.
-- [ ] The old six-target `cd.yml` matrix and its `use-cross` gnu entries are gone.
+- [x] The old six-target `cd.yml` matrix and its `use-cross` gnu entries are gone.
 
 ## Tests
 
@@ -231,3 +231,41 @@ Workflow verification, done once and recorded in the PR:
 | Tag `v9.9.9` with version `0.1.0` | `meta` fails with the mismatch message |
 | Matching tag, no changelog section | `release` fails |
 | Matching tag with a changelog section (on a fork) | release created with notes from the changelog, `SHA256SUMS` and all archives |
+
+## Implementation notes
+
+- **Unticked boxes need GitHub, a tag or other machines.** Nothing was pushed or tagged, so none of the runs in the table above exist, and no box that asks for a run or a green job is ticked: the dispatch run, the `v9.9.9` mismatch, the missing-changelog failure, the static and `cmp` checks, the macOS universal binary and signing, the Windows zip and icon, `SHA256SUMS` on a real release, the `packaging` and `nix` jobs going green, and the `channels` notices. Local stand-ins:
+  - **`meta` and the release notes.** A scratch script loaded `cd.yml` with PyYAML and ran the two steps' `run:` text under bash with simulated events. Dispatch gives `publish=false` and a `::notice::`. Tag `v0.1.0` gives `publish=true`. Tag `v9.9.9` exits 1 with `::error title=Tag does not match the version::tag v9.9.9 is version 9.9.9, but workspace.package.version in Cargo.toml is 0.1.0 …`. Release notes for `0.1.0` come out without the link definitions. `9.9.9` with `PUBLISH=true` exits 1 with `::error::CHANGELOG.md has no section for 9.9.9`, and with `PUBLISH=false` it only warns.
+  - **Lint.** `actionlint` 1.7.7 with `shellcheck` reports nothing for `cd.yml` and `ci.yml`. PyYAML loads both. `bash -n` passes on both PKGBUILDs and on `release-package.sh`, `ruby -c` on the formula, and `jq -e .` on the Scoop manifest. `shellcheck` is clean on `release-package.sh`.
+  - **Assets.** `qry generate man` passes `groff -man -ww -z` with no output. `bash -n` passes on the bash completions and `zsh -n` on the zsh ones (groff 1.23 and zsh from apt).
+  - **Archives.** `release-package.sh` was run twice on the same binary, the second time under `umask 077` and generating its own assets, for `linux-x86_64` (`tar.gz`) and `windows-x86_64` (`zip`). Both pairs are byte-identical (`cmp`), `sha256sum -c` passes, and the listing is the one the `packaging` job diffs against. A bad version (`1.2`) and an unknown label (`linux-i686`) exit 2.
+  - **Flake.** `nix flake check --no-build` passes (`all checks passed!`). The session's proxy refuses GitHub tarball and API downloads, so the inputs were overridden with `git+https://…?shallow=1` and no lock was written. `nix build` was started and then given up when the shared disk filled. **There is no `flake.lock`.** Run `nix flake lock` once on a normal machine and commit the result. Until then the `nix` job resolves the inputs fresh on each run.
+  - **musl.** A local `x86_64-unknown-linux-musl` release build (musl-tools from apt) was stopped half-way because the shared disk filled. So `file` and `ldd` were never run on a musl binary here. The evidence for section 3 is the dependency tree only, see below.
+  - `cargo package -p qry-core --locked --no-verify` packages 31 files.
+- **Section 3, the keychain decision: (a).** `cargo tree -e features -p qry --target x86_64-unknown-linux-musl` shows that `keyring` 4.2's defaults (`v1`) enable `zbus-secret-service-keyring-store`, then `secret-service` 5.2 with `crypto-rust`, on `zbus` 5. That is pure Rust: the tree has no `libdbus-sys`, `openssl-sys` or keyutils. So the static build keeps keychain support with no change, and the decision and the reasons are in `docs/release.md`. The first box stays unticked because it also asks for `ldd`/`file` on a test build, which never finished here (see musl above). The third box (desktop, headless, macOS and Windows checks) is a manual job for the maintainer. `docs/release.md` has the table.
+- **`qry generate`** is a hidden subcommand (`Command::Generate { asset: Asset }`, `Asset::Man` and `Asset::Completions { shell: clap_complete::Shell }`). `main.rs` handles it before `errors::init` and `logging::init`, so it creates no log file and touches no terminal. The test checks that the data directory is never created.
+  - The assets are built from `asset_command()`. That is a copy of the user-facing flags, the about text and the author, without the hidden subcommand, so neither the man page synopsis nor the completions mention `generate` or `[subcommands]`. Its version is the plain `CARGO_PKG_VERSION`: `--version`'s text has the build machine's config and data directories in it. clap_mangen has no environment section, so `ENVIRONMENT` is hand-written roff placed between OPTIONS and VERSION.
+  - **New dependencies:** `clap_complete` 4.6.11 and `clap_mangen` 0.3.3 (plus `roff`), all `MIT OR Apache-2.0`, in `[workspace.dependencies]`. `deny.toml` already listed them as `clap` wrappers. `cargo-deny` is not installed here, so `deny` was not run.
+  - **Tests.** `cli_tests.rs` has `help_output_snapshot`, `generate_man_contains_the_environment_section`, `generate_completions_for_every_shell` (all five shells, none mention `generate`), plus `generate_parses_man_and_completions`, `generate_is_hidden_from_the_help` and `generate_man_is_the_same_on_every_machine`. Two deviations:
+    - The snapshot renders at `term_width(100)`. With `wrap_help`, clap otherwise wraps to whatever terminal runs the test. The snapshot lists `--theme`'s possible values, so it changes whenever a theme is added.
+    - `generate_never_touches_the_terminal` is in `crates/qry/tests/generate.rs`, not `cli_tests.rs`. `CARGO_BIN_EXE_qry` is only set for integration tests. That file also runs the completions through the binary and checks that an unknown shell exits 2.
+- **`cd.yml` deviations and details:**
+  - The secrets used in `if:` conditions are first copied into env (`HAVE_CERTIFICATE`, and `AUR_SSH_PRIVATE_KEY` and the others in `channels`). GitHub does not allow `secrets` in a step's `if`. Every skipped channel logs `::notice::skipping <channel> (… is not set)`.
+  - The reproducibility build gives the second worktree its own `--remap-path-prefix=$other=/build/qry`. With the same flags as the first build it would embed a different path. Its `CARGO_TARGET_DIR` is inside that worktree, so both builds remap their `OUT_DIR` paths the same way.
+  - Release notes: after the spec's `awk`, a `sed` drops the Keep a Changelog link definitions. Without it, the last section (`[0.1.0]`) runs to the end of the file and carries them along.
+  - A dry run with no changelog section writes a one-line placeholder `notes.md`, so the artifact is complete.
+  - The Windows icon check loads `qry.exe` as a data file (`LoadLibraryEx`) and counts its `RT_GROUP_ICON` and `RT_VERSION` resources, in PowerShell. `zip` comes from `choco`, because Git Bash has none. The zip is also unpacked and `qry.exe --version` is run from it.
+  - The SBOM (`cargo-cyclonedx`) files go into `dist/` with their own `.sha256` before `SHA256SUMS` is built, so they are covered too. Both SBOM steps are `continue-on-error`.
+  - The Homebrew tap is `viperh/homebrew-tap` and the Scoop bucket `viperh/scoop-bucket`, set as workflow env. Those repositories do not exist yet.
+- **`release-package.sh`** sets `LC_ALL=C TZ=UTC` and `umask 022` and uses `install -m` for fixed modes. `SOURCE_DATE_EPOCH` defaults to the last commit's time. It uses `gtar` when present and refuses a non-GNU tar. For zip it sets every mtime with `touch -d @…`, then zips a sorted file list next to the directory and moves the result, so a native Windows `zip.exe` never gets an MSYS path. Without `[assets-dir]` it generates the man page and completions with the binary itself.
+- **`update-packaging.py`** is stdlib only.
+  - It fills each manifest by meaning, not by position: PKGBUILD `sha256sums*` arrays by name, each formula `sha256` from the `url` right above it, and Scoop through `json`.
+  - It regenerates `.SRCINFO` with a small PKGBUILD parser: assignments and arrays with `$var` expansion, function bodies skipped.
+  - Extra modes: `--check-srcinfo`, and `--write-srcinfo` to run after editing a PKGBUILD.
+  - `--self-test` checks the committed `.SRCINFO` files and does a full rewrite against a synthetic `SHA256SUMS`, with a different hash per archive, so a swapped hash is caught. It then checks that no `0.0.0` or zero hash is left, that each hash sits where it belongs, that `.SRCINFO` matches its PKGBUILD, and that Scoop's `autoupdate` keeps `$version`. Finally it checks that a `SHA256SUMS` missing an archive is rejected (exit 2).
+- **`ci.yml`** gains `packaging` and `nix`, both in `ci-ok`'s `needs`. `packaging` packs a debug build: how the binary was built does not affect whether the archive is deterministic, and it saves a full LTO build.
+- **Other changes outside new files:**
+  - `crates/qry/Cargo.toml`'s description is now "A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle" instead of the template text. It is clap's `about`, so it shows in `--help`, the man page and the snapshot.
+  - `build.rs`'s Windows `ProductName`/`FileDescription` say `qry` instead of `MyTool`.
+  - The README's Releases section describes the new pipeline and the install commands.
+- **The CHANGELOG** was not seeded from `git log` alone. The history begins at the redesign (59 commits since 2026-10-13), so `[0.1.0]` lists what the code and fixtures show existed before it, and `[Unreleased]` covers the redesign commits. "Removed" records the `i686-unknown-linux-gnu` and glibc builds.
