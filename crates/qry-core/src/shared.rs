@@ -57,6 +57,25 @@ pub trait Database: Send + Sync {
     async fn query(&self, query: &str) -> Result<QueryResult>;
     async fn execute(&self, query: &str) -> Result<u64>;
 
+    /// What the server says it is, such as `PostgreSQL 16.4` or `3.45.1`,
+    /// for the connection dialog's test message. Each backend asks in its
+    /// own words; one with a cheaper way of its own can override this.
+    async fn server_version(&self) -> Result<String> {
+        let sql = match self.kind() {
+            DatabaseType::Sqlite => "SELECT 'SQLite ' || sqlite_version()",
+            DatabaseType::Postgres => "SELECT 'PostgreSQL ' || current_setting('server_version')",
+            DatabaseType::Mysql => "SELECT CONCAT('MySQL ', VERSION())",
+            DatabaseType::MariaDb => "SELECT CONCAT('MariaDB ', VERSION())",
+            DatabaseType::Oracle => "SELECT banner FROM v$version WHERE ROWNUM = 1",
+        };
+        let result = self.query(sql).await?;
+        result
+            .rows
+            .first()
+            .and_then(|row| row.first().cloned().flatten())
+            .ok_or_else(|| anyhow::anyhow!("the server did not say what version it is"))
+    }
+
     /// The tables and views this connection can see, for the tree. Each
     /// backend keeps its list somewhere else, so the query differs; a
     /// backend with a cheaper way of its own can override this.

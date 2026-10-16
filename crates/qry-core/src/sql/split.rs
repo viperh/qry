@@ -194,3 +194,28 @@ pub fn is_ddl(dialect: Dialect, statement: &str) -> bool {
                 )
         })
 }
+
+/// Whether `statement` only reads: `SELECT`, `WITH` without `INSERT`,
+/// `UPDATE`, `DELETE` or `MERGE` in it, `SHOW`, `EXPLAIN`, `DESCRIBE` /
+/// `DESC`, `VALUES`, or transaction control (`BEGIN`, `COMMIT`, `ROLLBACK`
+/// and the like), which writes nothing by itself. Anything else, including
+/// a statement qry cannot read, counts as a write.
+pub fn is_read_only(dialect: Dialect, statement: &str) -> bool {
+    let words: Vec<String> = lex(dialect, statement)
+        .iter()
+        .filter(|t| !is_trivia(t.kind))
+        .filter(|t| matches!(t.kind, TokenKind::Keyword | TokenKind::Ident))
+        .map(|t| statement[t.span.clone()].to_ascii_uppercase())
+        .collect();
+    let Some(first) = words.first() else {
+        return true;
+    };
+    match first.as_str() {
+        "SELECT" | "SHOW" | "EXPLAIN" | "DESCRIBE" | "DESC" | "VALUES" | "BEGIN" | "START"
+        | "COMMIT" | "ROLLBACK" | "END" | "ABORT" | "SAVEPOINT" | "RELEASE" => true,
+        "WITH" => !words
+            .iter()
+            .any(|w| matches!(w.as_str(), "INSERT" | "UPDATE" | "DELETE" | "MERGE")),
+        _ => false,
+    }
+}

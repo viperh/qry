@@ -53,6 +53,7 @@ pub struct FakeDatabase {
     script: Arc<Mutex<VecDeque<Reply>>>,
     calls: Arc<Mutex<Vec<String>>>,
     tables: Vec<String>,
+    version: String,
 }
 
 /// A SQLite-flavoured fake with an empty script.
@@ -79,7 +80,21 @@ impl FakeDatabase {
             script: Arc::default(),
             calls: Arc::default(),
             tables: Vec::new(),
+            version: "fake 1.0".to_string(),
         }
+    }
+
+    /// What [`Database::server_version`] answers; `fake 1.0` unless set.
+    /// Asking does not use up a scripted reply and is not recorded.
+    #[must_use]
+    pub fn version(mut self, version: &str) -> Self {
+        self.version = version.to_string();
+        self
+    }
+
+    /// The version it reports, as [`Database::server_version`] returns it.
+    pub fn server_version_text(&self) -> String {
+        self.version.clone()
     }
 
     /// Queues the answer to the next statement. Replies are used once each,
@@ -167,6 +182,10 @@ impl Database for FakeDatabase {
 
     async fn tables(&self) -> Result<Vec<String>> {
         Ok(self.table_names())
+    }
+
+    async fn server_version(&self) -> Result<String> {
+        Ok(self.server_version_text())
     }
 }
 

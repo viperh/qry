@@ -197,3 +197,34 @@ proptest! {
         }
     }
 }
+
+#[test]
+fn is_read_only_tells_reads_from_writes() {
+    for sql in [
+        "SELECT 1",
+        "  -- a comment\n select * from t",
+        "WITH x AS (SELECT 1) SELECT * FROM x",
+        "EXPLAIN SELECT 1",
+        "show tables",
+        "BEGIN",
+        "commit",
+        "",
+    ] {
+        assert!(is_read_only(Dialect::Postgres, sql), "{sql}");
+    }
+    for sql in [
+        "INSERT INTO t VALUES (1)",
+        "update t set a = 1",
+        "DELETE FROM t",
+        "WITH gone AS (DELETE FROM t RETURNING *) SELECT * FROM gone",
+        "DROP TABLE t",
+        "CALL refresh()",
+    ] {
+        assert!(!is_read_only(Dialect::Postgres, sql), "{sql}");
+    }
+    // A word in a string does not count.
+    assert!(is_read_only(
+        Dialect::Postgres,
+        "WITH x AS (SELECT 'DELETE') SELECT * FROM x"
+    ));
+}

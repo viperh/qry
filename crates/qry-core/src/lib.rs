@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
+pub mod connspec;
 pub mod copy;
 pub mod exporter;
 pub mod grid;
@@ -184,6 +185,15 @@ impl Driver {
             bail!("not connected to a database");
         };
         db.query(sql).await
+    }
+
+    /// What the open connection's server says it is; see
+    /// [`Database::server_version`].
+    pub async fn server_version(&self) -> Result<String> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.server_version().await
     }
 
     /// The tables of the open connection, for the connection tree.

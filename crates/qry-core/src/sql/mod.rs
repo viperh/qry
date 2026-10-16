@@ -9,7 +9,7 @@ mod lex;
 mod split;
 
 pub use lex::{Token, TokenKind, lex};
-pub use split::{Statement, is_ddl, split, statement_at};
+pub use split::{Statement, is_ddl, is_read_only, split, statement_at};
 
 /// The SQL flavour, for the quoting and comment rules that differ.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
