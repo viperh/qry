@@ -18,8 +18,8 @@ fn main() -> Result<()> {
     if std::env::var("CARGO_CFG_TARGET_OS")? == "windows" {
         let mut res = WindowsResource::new();
         res.set_icon("assets/icon.ico")
-            .set("ProductName", "MyTool")
-            .set("FileDescription", "MyTool command-line utility")
+            .set("ProductName", "qry")
+            .set("FileDescription", "qry, a terminal SQL client")
             .set("LegalCopyright", "© 2026 Viper");
         res.compile()?;
     }
