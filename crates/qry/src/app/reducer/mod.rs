@@ -87,6 +87,11 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     if inspector::step_profile(state) {
         state.dirty = true;
     }
+    // The editors' tokens and statements follow whatever changed the text.
+    for session in state.sessions.iter_mut() {
+        let dialect = session.dialect();
+        session.editor.sync(dialect);
+    }
     fx
 }
 

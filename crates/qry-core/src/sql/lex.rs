@@ -57,17 +57,57 @@ impl Lexer<'_> {
     }
 
     fn eat_while(&mut self, mut keep: impl FnMut(char) -> bool) {
-        while let Some(c) = self.peek() {
-            if !keep(c) {
-                break;
+        let rest = self.rest();
+        self.at += rest
+            .char_indices()
+            .find(|&(_, c)| !keep(c))
+            .map_or(rest.len(), |(i, _)| i);
+    }
+
+    /// [`eat_while`](Self::eat_while) a byte at a time while the text is
+    /// ASCII, which `ascii` must judge as `keep` does.
+    fn eat_while_ascii(&mut self, ascii: impl Fn(u8) -> bool, keep: impl FnMut(char) -> bool) {
+        let rest = &self.src.as_bytes()[self.at..];
+        let n = rest.iter().position(|&b| !ascii(b)).unwrap_or(rest.len());
+        self.at += n;
+        if rest.get(n).is_some_and(|b| !b.is_ascii()) {
+            self.eat_while(keep);
+        }
+    }
+
+    /// The commonest one-byte tokens, told apart without decoding a
+    /// character.
+    fn one_byte(&mut self) -> Option<TokenKind> {
+        let kind = match *self.src.as_bytes().get(self.at)? {
+            b'(' | b')' | b',' => TokenKind::Punct,
+            b';' => TokenKind::Delimiter,
+            b'=' | b'<' | b'>' | b'*' | b'+' => TokenKind::Operator,
+            _ => return None,
+        };
+        self.at += 1;
+        Some(kind)
+    }
+
+    /// Moves to just past the next byte that `stop` picks, which must be
+    /// ASCII (so never part of a longer character), and returns it; to the
+    /// end of the text and `None` if there is none.
+    fn skip_to(&mut self, stop: impl Fn(u8) -> bool) -> Option<u8> {
+        let rest = &self.src.as_bytes()[self.at..];
+        match rest.iter().position(|&b| stop(b)) {
+            Some(i) => {
+                self.at += i + 1;
+                Some(rest[i])
             }
-            self.bump();
+            None => {
+                self.at = self.src.len();
+                None
+            }
         }
     }
 
     /// Up to the end of the line, not including it.
     fn line_comment(&mut self) -> TokenKind {
-        self.eat_while(|c| c != '\n');
+        self.at += self.rest().find('\n').unwrap_or(self.rest().len());
         TokenKind::Comment
     }
 
@@ -75,17 +115,17 @@ impl Lexer<'_> {
     fn block_comment(&mut self) -> TokenKind {
         let nests = self.dialect == Dialect::Postgres;
         let mut depth = 1;
-        while let Some(c) = self.bump() {
-            match c {
-                '*' if self.peek() == Some('/') => {
-                    self.bump();
+        while let Some(b) = self.skip_to(|b| b == b'*' || b == b'/') {
+            match b {
+                b'*' if self.peek() == Some('/') => {
+                    self.at += 1;
                     depth -= 1;
                     if depth == 0 {
                         return TokenKind::Comment;
                     }
                 }
-                '/' if nests && self.peek() == Some('*') => {
-                    self.bump();
+                b'/' if nests && self.peek() == Some('*') => {
+                    self.at += 1;
                     depth += 1;
                 }
                 _ => {}
@@ -96,16 +136,14 @@ impl Lexer<'_> {
 
     /// After the opening `quote`: up to the closing one, a doubled quote
     /// standing for itself, and with backslash escapes if asked.
-    fn quoted(&mut self, quote: char, backslash: bool, kind: TokenKind) -> TokenKind {
-        while let Some(c) = self.bump() {
-            if backslash && c == '\\' {
+    fn quoted(&mut self, quote: u8, backslash: bool, kind: TokenKind) -> TokenKind {
+        while let Some(b) = self.skip_to(|b| b == quote || (backslash && b == b'\\')) {
+            if b == b'\\' {
                 self.bump();
-            } else if c == quote {
-                if self.peek() == Some(quote) {
-                    self.bump();
-                } else {
-                    return kind;
-                }
+            } else if self.src.as_bytes().get(self.at) == Some(&quote) {
+                self.at += 1;
+            } else {
+                return kind;
             }
         }
         TokenKind::Unterminated
@@ -113,12 +151,10 @@ impl Lexer<'_> {
 
     /// After `[` in SQLite: up to `]`.
     fn bracketed(&mut self) -> TokenKind {
-        while let Some(c) = self.bump() {
-            if c == ']' {
-                return TokenKind::QuotedIdent;
-            }
+        match self.skip_to(|b| b == b']') {
+            Some(_) => TokenKind::QuotedIdent,
+            None => TokenKind::Unterminated,
         }
-        TokenKind::Unterminated
     }
 
     /// At `$`: a Postgres dollar quote `$tag$ … $tag$`, if one starts here.
@@ -209,7 +245,10 @@ impl Lexer<'_> {
 
     fn word(&mut self) -> TokenKind {
         let start = self.at;
-        self.eat_while(|c| c == '_' || c == '$' || c.is_alphanumeric());
+        self.eat_while_ascii(
+            |b| b == b'_' || b == b'$' || b.is_ascii_alphanumeric(),
+            |c| c == '_' || c == '$' || c.is_alphanumeric(),
+        );
         if is_keyword(self.dialect, &self.src[start..self.at]) {
             TokenKind::Keyword
         } else {
@@ -219,11 +258,21 @@ impl Lexer<'_> {
 
     fn next_token(&mut self) -> Option<Token> {
         let start = self.at;
+        if let Some(kind) = self.one_byte() {
+            return Some(Token {
+                kind,
+                span: start..self.at,
+            });
+        }
         let c = self.peek()?;
         let mysql = self.dialect == Dialect::MySql;
         let kind = match c {
             c if c.is_whitespace() => {
-                self.eat_while(char::is_whitespace);
+                // The ASCII ones are those `char::is_whitespace` takes.
+                self.eat_while_ascii(
+                    |b| matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c),
+                    char::is_whitespace,
+                );
                 TokenKind::Whitespace
             }
             '-' if self.peek_at(1) == Some('-') => self.line_comment(),
@@ -234,11 +283,11 @@ impl Lexer<'_> {
             }
             '\'' => {
                 self.bump();
-                self.quoted('\'', mysql, TokenKind::String)
+                self.quoted(b'\'', mysql, TokenKind::String)
             }
             'e' | 'E' if self.dialect == Dialect::Postgres && self.peek_at(1) == Some('\'') => {
                 self.at += 2;
-                self.quoted('\'', true, TokenKind::String)
+                self.quoted(b'\'', true, TokenKind::String)
             }
             'q' | 'Q' if self.dialect == Dialect::Oracle && self.peek_at(1) == Some('\'') => {
                 match self.q_quote() {
@@ -249,14 +298,14 @@ impl Lexer<'_> {
             '"' => {
                 self.bump();
                 if mysql {
-                    self.quoted('"', true, TokenKind::String)
+                    self.quoted(b'"', true, TokenKind::String)
                 } else {
-                    self.quoted('"', false, TokenKind::QuotedIdent)
+                    self.quoted(b'"', false, TokenKind::QuotedIdent)
                 }
             }
             '`' if matches!(self.dialect, Dialect::MySql | Dialect::Sqlite) => {
                 self.bump();
-                self.quoted('`', false, TokenKind::QuotedIdent)
+                self.quoted(b'`', false, TokenKind::QuotedIdent)
             }
             '[' if self.dialect == Dialect::Sqlite => {
                 self.bump();
@@ -303,14 +352,16 @@ impl Lexer<'_> {
 /// once; text that never closes (a string, a comment) is one
 /// [`TokenKind::Unterminated`] token to the end.
 pub fn lex(dialect: Dialect, src: &str) -> Vec<Token> {
-    let mut lexer = Lexer {
-        dialect,
-        src,
-        at: 0,
-    };
-    let mut tokens = Vec::new();
-    while let Some(token) = lexer.next_token() {
-        tokens.push(token);
-    }
+    // About one token in four bytes of typical SQL.
+    let mut tokens = Vec::with_capacity(src.len() / 4);
+    tokens.extend(lex_from(dialect, src, 0));
     tokens
+}
+
+/// The tokens of `src` from byte `at`, which must be where a token of
+/// [`lex`] starts: the lexer keeps nothing from one token to the next, so
+/// these are the same as the rest of [`lex`]'s.
+pub(super) fn lex_from(dialect: Dialect, src: &str, at: usize) -> impl Iterator<Item = Token> {
+    let mut lexer = Lexer { dialect, src, at };
+    std::iter::from_fn(move || lexer.next_token())
 }

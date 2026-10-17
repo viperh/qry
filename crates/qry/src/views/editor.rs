@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use qry_core::sql::{Token, TokenKind, lex, split, statement_at};
+use qry_core::sql::{Outline, Token, TokenKind};
 use ratatui::prelude::*;
 
 use crate::{
@@ -22,7 +22,7 @@ pub(crate) fn position(state: &State) -> String {
     let session = state.sessions.active();
     let editor = &session.editor;
     let cursor = editor.textarea.cursor();
-    let statements = split(session.dialect(), &editor.query()).len();
+    let statements = editor.outline(session.dialect()).statements().len();
     let mut text = format!("ln {}, col {}", cursor.0 + 1, cursor.1 + 1);
     if statements > 1 {
         text.push_str(&format!(" · {statements} statements"));
@@ -46,35 +46,42 @@ fn token_style(kind: TokenKind, theme: &Theme) -> Style {
 }
 
 /// The bracket at or just before `offset` and the one that matches it, as
-/// byte offsets; the second is `None` when nothing matches.
-fn brackets(text: &str, tokens: &[Token], offset: usize) -> Option<(usize, Option<usize>)> {
-    let parens: Vec<(usize, char)> = tokens
-        .iter()
-        .filter(|t| t.kind == TokenKind::Punct)
-        .filter_map(|t| match &text[t.span.clone()] {
-            "(" => Some((t.span.start, '(')),
-            ")" => Some((t.span.start, ')')),
-            _ => None,
-        })
-        .collect();
-    let at = parens
-        .iter()
-        .position(|&(o, _)| o == offset)
-        .or_else(|| parens.iter().position(|&(o, _)| o + 1 == offset))?;
-    let (start, c) = parens[at];
+/// byte offsets; the second is `None` when nothing matches. Only the
+/// tokens between the two are looked at.
+fn brackets(outline: &Outline, offset: usize) -> Option<(usize, Option<usize>)> {
+    let text = outline.text();
+    let tokens = outline.tokens();
+    let paren = |t: &Token| match (t.kind, &text[t.span.clone()]) {
+        (TokenKind::Punct, "(") => Some((t.span.start, '(')),
+        (TokenKind::Punct, ")") => Some((t.span.start, ')')),
+        _ => None,
+    };
+    let starting = |o: usize| {
+        let i = tokens.partition_point(|t| t.span.start < o);
+        tokens
+            .get(i)
+            .filter(|t| t.span.start == o)
+            .and_then(paren)
+            .map(|(_, c)| (i, c))
+    };
+    let (at, c) = starting(offset).or_else(|| starting(offset.checked_sub(1)?))?;
     let mut depth = 0i32;
     let found = if c == '(' {
-        parens[at..].iter().find(|&&(_, p)| {
+        tokens[at..].iter().filter_map(paren).find(|&(_, p)| {
             depth += if p == '(' { 1 } else { -1 };
             depth == 0
         })
     } else {
-        parens[..=at].iter().rev().find(|&&(_, p)| {
-            depth += if p == ')' { 1 } else { -1 };
-            depth == 0
-        })
+        tokens[..=at]
+            .iter()
+            .rev()
+            .filter_map(paren)
+            .find(|&(_, p)| {
+                depth += if p == ')' { 1 } else { -1 };
+                depth == 0
+            })
     };
-    Some((start, found.map(|&(o, _)| o)))
+    Some((tokens[at].span.start, found.map(|(o, _)| o)))
 }
 
 /// How wide `c` is drawn.
@@ -94,30 +101,28 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     let editor = &session.editor;
     let focused = state.focus == Focus::Editor;
     let lines = editor.textarea.lines();
-    let text = editor.query();
-    let dialect = session.dialect();
-    let tokens = lex(dialect, &text);
+    // Kept up to date by the reducer, so a draw lexes nothing and looks
+    // only at the tokens of the rows in view.
+    let outline = editor.outline(session.dialect());
+    let tokens = outline.tokens();
     let cursor = editor.textarea.cursor();
     let cursor_offset = editor.cursor_offset();
 
     // Which rows get a marker, and what is underlined or highlighted.
-    let statements = split(dialect, &text);
-    let current: Option<Range<usize>> = statement_at(&statements, cursor_offset).map(|i| {
-        let span = &statements[i].span;
+    let current: Option<Range<usize>> = outline.statement_at(cursor_offset).map(|i| {
+        let span = &outline.statements()[i];
         editor.position_of(span.start).0..editor.position_of(span.end).0 + 1
     });
     let failed = session.failed.as_ref();
     let failed_rows =
         failed.map(|f| editor.position_of(f.span.start).0..editor.position_of(f.span.end).0 + 1);
     let error_span: Option<Range<usize>> = failed.and_then(|f| f.position).and_then(|p| {
-        tokens
-            .iter()
-            .find(|t| t.span.contains(&p) && t.kind != TokenKind::Whitespace)
+        outline
+            .token_at(p)
+            .filter(|t| t.kind != TokenKind::Whitespace)
             .map(|t| t.span.clone())
     });
-    let bracket = focused
-        .then(|| brackets(&text, &tokens, cursor_offset))
-        .flatten();
+    let bracket = focused.then(|| brackets(&outline, cursor_offset)).flatten();
     let selection = editor
         .textarea
         .selection_range()
@@ -148,8 +153,8 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     }
     editor.scroll.set((top, left));
 
-    let mut token = 0;
     let mut line_start: usize = lines.iter().take(top).map(|l| l.len() + 1).sum();
+    let mut token = tokens.partition_point(|t| t.span.end <= line_start);
     for (screen_row, row) in (top..lines.len()).take(height).enumerate() {
         let line = &lines[row];
         let y = area.y + u16::try_from(screen_row).unwrap_or(0);

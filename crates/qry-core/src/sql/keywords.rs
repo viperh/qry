@@ -141,23 +141,38 @@ const ORACLE: &[&str] = &[
     "SYSDATE",
 ];
 
-fn sorted_contains(list: &[&str], word: &str) -> bool {
-    list.binary_search(&word).is_ok()
+fn sorted_contains(list: &[&str], word: &[u8]) -> bool {
+    // The first bytes settle most comparisons without a call to `memcmp`.
+    let first = word.first();
+    list.binary_search_by(|k| {
+        k.as_bytes()
+            .first()
+            .cmp(&first)
+            .then_with(|| k.as_bytes().cmp(word))
+    })
+    .is_ok()
 }
+
+/// No keyword is longer than this.
+const LONGEST: usize = 24;
 
 /// Whether `word` is a keyword in `dialect`, ignoring case.
 pub(super) fn is_keyword(dialect: Dialect, word: &str) -> bool {
-    if word.len() > 24 || !word.is_ascii() {
+    if word.len() > LONGEST || !word.is_ascii() {
         return false;
     }
-    let upper = word.to_ascii_uppercase();
+    // Upper-cased on the stack: this runs for every word lexed.
+    let mut buffer = [0; LONGEST];
+    let upper = &mut buffer[..word.len()];
+    upper.copy_from_slice(word.as_bytes());
+    upper.make_ascii_uppercase();
     let extra = match dialect {
         Dialect::Postgres => POSTGRES,
         Dialect::MySql => MYSQL,
         Dialect::Sqlite => SQLITE,
         Dialect::Oracle => ORACLE,
     };
-    sorted_contains(COMMON, &upper) || sorted_contains(extra, &upper)
+    sorted_contains(COMMON, upper) || sorted_contains(extra, upper)
 }
 
 #[cfg(test)]

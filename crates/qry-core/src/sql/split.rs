@@ -1,6 +1,6 @@
 //! The splitter: SQL text into the statements a server runs one at a time.
 
-use std::ops::Range;
+use std::{ops::Range, sync::Arc};
 
 use super::{
     Dialect,
@@ -19,23 +19,13 @@ fn is_trivia(kind: TokenKind) -> bool {
     matches!(kind, TokenKind::Whitespace | TokenKind::Comment)
 }
 
-/// Whether a byte is code, where a terminator counts: not inside a string,
-/// a quoted identifier or a comment.
-fn code_mask(src: &str, tokens: &[Token]) -> Vec<bool> {
-    let mut mask = vec![false; src.len()];
-    for token in tokens {
-        let code = !matches!(
-            token.kind,
-            TokenKind::String
-                | TokenKind::QuotedIdent
-                | TokenKind::Comment
-                | TokenKind::Unterminated
-        );
-        if code {
-            mask[token.span.clone()].fill(true);
-        }
-    }
-    mask
+/// Whether a token is code, where a terminator counts: not a string, a
+/// quoted identifier or a comment.
+fn is_code(kind: TokenKind) -> bool {
+    !matches!(
+        kind,
+        TokenKind::String | TokenKind::QuotedIdent | TokenKind::Comment | TokenKind::Unterminated
+    )
 }
 
 /// The tokens in `region`, found by binary search, their spans clipped to
@@ -80,7 +70,7 @@ fn plsql_block(words: &[String]) -> bool {
 
 /// The statement in `region`, trimmed to its first and last tokens that
 /// are not trivia; `None` when there are none.
-fn statement(tokens: &[Token], src: &str, region: Range<usize>) -> Option<Statement> {
+fn statement(tokens: &[Token], src: &str, region: Range<usize>) -> Option<Range<usize>> {
     let inside = within(tokens, region).filter(|t| !is_trivia(t.kind));
     let mut first = None;
     let mut last = None;
@@ -95,11 +85,123 @@ fn statement(tokens: &[Token], src: &str, region: Range<usize>) -> Option<Statem
             t.span.end
         });
     }
-    let span = first?..last?;
-    Some(Statement {
-        text: src[span.clone()].to_string(),
-        span,
-    })
+    Some(first?..last?)
+}
+
+/// Where a statement may start: the start of the text, or just past a
+/// terminator, a `DELIMITER` line or an Oracle `/` line; and the
+/// terminator in force from there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Boundary {
+    pub(super) at: usize,
+    pub(super) delimiter: Arc<str>,
+}
+
+impl Boundary {
+    pub(super) fn start() -> Self {
+        Self {
+            at: 0,
+            delimiter: ";".into(),
+        }
+    }
+}
+
+/// Splits `src`, whose tokens are `tokens`, from `from` on, as [`split`]
+/// does: each statement's span goes into `spans`, and each boundary,
+/// `from` first, into `boundaries`. It stops at the first later boundary
+/// that `stop` takes, leaving it out and returning it; it returns `None`
+/// at the end of the text.
+///
+/// Nothing before `from` is looked at but the byte just before it, so a
+/// run from a boundary of an earlier split goes on as that split did.
+pub(super) fn split_from(
+    dialect: Dialect,
+    src: &str,
+    tokens: &[Token],
+    from: Boundary,
+    spans: &mut Vec<Range<usize>>,
+    boundaries: &mut Vec<Boundary>,
+    mut stop: impl FnMut(&Boundary) -> bool,
+) -> Option<Boundary> {
+    let Boundary {
+        at: mut begin,
+        mut delimiter,
+    } = from.clone();
+    boundaries.push(from);
+    let mut at = begin;
+    let mut token = tokens.partition_point(|t| t.span.end <= at);
+    let line_rules = matches!(dialect, Dialect::MySql | Dialect::Oracle);
+    while at < src.len() {
+        while tokens[token].span.end <= at {
+            token += 1;
+        }
+        let t = &tokens[token];
+        // Nothing ends a statement inside a string or a comment, and a
+        // line that starts inside one is not a `DELIMITER` or `/` line.
+        if !is_code(t.kind) {
+            at = t.span.end;
+            continue;
+        }
+        let mut next = None;
+        if line_rules && (at == 0 || src.as_bytes()[at - 1] == b'\n') {
+            let end = src[at..].find('\n').map_or(src.len(), |n| at + n);
+            let line = &src[at..end];
+            let trimmed = line.trim_start();
+            let first = at + line.len() - trimmed.len();
+            let starts_code = tokens[token..]
+                .iter()
+                .find(|t| t.span.end > first)
+                .is_some_and(|t| is_code(t.kind));
+            if dialect == Dialect::MySql
+                && starts_code
+                && trimmed
+                    .get(..10)
+                    .is_some_and(|w| w.eq_ignore_ascii_case("DELIMITER "))
+            {
+                spans.extend(statement(tokens, src, begin..at));
+                let new = trimmed[10..].trim();
+                delimiter = if new.is_empty() { ";" } else { new }.into();
+                next = Some((end + 1).min(src.len()));
+            } else if dialect == Dialect::Oracle && starts_code && line.trim() == "/" {
+                spans.extend(statement(tokens, src, begin..at));
+                next = Some((end + 1).min(src.len()));
+            }
+        }
+        if next.is_none()
+            && src[at..].starts_with(&*delimiter)
+            && !(dialect == Dialect::Oracle
+                && plsql_block(&leading_words(tokens, src, begin..at, 4)))
+        {
+            spans.extend(statement(tokens, src, begin..at));
+            next = Some(at + delimiter.len());
+        }
+        if let Some(next) = next {
+            let boundary = Boundary {
+                at: next,
+                delimiter: delimiter.clone(),
+            };
+            if stop(&boundary) {
+                return Some(boundary);
+            }
+            boundaries.push(boundary);
+            begin = next;
+            at = next;
+        } else if &*delimiter == ";" {
+            // `;` is always a token of its own, and of the code tokens only
+            // whitespace holds line breaks: the next place that matters is
+            // the next token or line.
+            at = match t.kind {
+                TokenKind::Whitespace if line_rules => src[at..t.span.end]
+                    .find('\n')
+                    .map_or(t.span.end, |n| at + n + 1),
+                _ => t.span.end,
+            };
+        } else {
+            at += src[at..].chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    spans.extend(statement(tokens, src, begin..src.len()));
+    None
 }
 
 /// The statements of `src`, in order. `;` outside strings and comments
@@ -110,67 +212,43 @@ fn statement(tokens: &[Token], src: &str, region: Range<usize>) -> Option<Statem
 /// of only comments are left out.
 pub fn split(dialect: Dialect, src: &str) -> Vec<Statement> {
     let tokens = lex(dialect, src);
-    let code = code_mask(src, &tokens);
-    let mut statements = Vec::new();
-    let mut delimiter = ";".to_string();
-    let mut begin = 0;
-    let mut at = 0;
-    let line_start = |i: usize| i == 0 || src.as_bytes()[i - 1] == b'\n';
-    while at < src.len() {
-        if line_start(at) {
-            let end = src[at..].find('\n').map_or(src.len(), |n| at + n);
-            let line = &src[at..end];
-            let lead = line.len() - line.trim_start().len();
-            let next = (end + 1).min(src.len());
-            let is_code = code.get(at + lead).copied().unwrap_or(false);
-            let trimmed = line.trim_start();
-            if dialect == Dialect::MySql
-                && is_code
-                && trimmed
-                    .get(..10)
-                    .is_some_and(|w| w.eq_ignore_ascii_case("DELIMITER "))
-            {
-                statements.extend(statement(&tokens, src, begin..at));
-                delimiter = trimmed[10..].trim().to_string();
-                if delimiter.is_empty() {
-                    delimiter = ";".into();
-                }
-                begin = next;
-                at = next;
-                continue;
-            }
-            if dialect == Dialect::Oracle && is_code && line.trim() == "/" {
-                statements.extend(statement(&tokens, src, begin..at));
-                begin = next;
-                at = next;
-                continue;
-            }
-        }
-        if code[at] && src[at..].starts_with(delimiter.as_str()) {
-            let words = leading_words(&tokens, src, begin..at, 4);
-            if !(dialect == Dialect::Oracle && plsql_block(&words)) {
-                statements.extend(statement(&tokens, src, begin..at));
-                at += delimiter.len();
-                begin = at;
-                continue;
-            }
-        }
-        at += src[at..].chars().next().map_or(1, char::len_utf8);
-    }
-    statements.extend(statement(&tokens, src, begin..src.len()));
-    statements
+    let mut spans = Vec::new();
+    split_from(
+        dialect,
+        src,
+        &tokens,
+        Boundary::start(),
+        &mut spans,
+        &mut Vec::new(),
+        |_| false,
+    );
+    spans
+        .into_iter()
+        .map(|span| Statement {
+            text: src[span.clone()].to_string(),
+            span,
+        })
+        .collect()
 }
 
 /// The statement to run for a cursor at byte `offset`: the one it is in,
 /// or the one whose `;` it is right after, else the next one below it,
 /// else the last one.
 pub fn statement_at(statements: &[Statement], offset: usize) -> Option<usize> {
-    statements
-        .iter()
-        .position(|s| s.span.start <= offset && offset <= s.span.end)
-        .or_else(|| statements.iter().position(|s| s.span.end + 1 == offset))
-        .or_else(|| statements.iter().position(|s| s.span.start > offset))
-        .or_else(|| statements.len().checked_sub(1))
+    span_at(statements.iter().map(|s| &s.span), offset)
+}
+
+/// [`statement_at`] over the statements' spans.
+pub(super) fn span_at<'a>(
+    spans: impl Iterator<Item = &'a Range<usize>> + Clone,
+    offset: usize,
+) -> Option<usize> {
+    spans
+        .clone()
+        .position(|s| s.start <= offset && offset <= s.end)
+        .or_else(|| spans.clone().position(|s| s.end + 1 == offset))
+        .or_else(|| spans.clone().position(|s| s.start > offset))
+        .or_else(|| spans.count().checked_sub(1))
 }
 
 /// Whether `statement` changes the schema: `CREATE`, `ALTER`, `DROP`,

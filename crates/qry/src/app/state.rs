@@ -7,6 +7,7 @@
 //! reducer reads back for paging.
 
 use std::{
+    borrow::Cow,
     cell::Cell,
     collections::{BTreeMap, VecDeque},
     hash::{DefaultHasher, Hash, Hasher},
@@ -20,6 +21,7 @@ use qry_core::{
     QueryResult,
     jobs::{JobId, Jobs},
     schema::SchemaCache,
+    sql::{Dialect, Outline},
 };
 use ratatui_textarea::TextArea;
 
@@ -372,6 +374,11 @@ impl Sessions {
     /// The sessions in tab order.
     pub(crate) fn iter(&self) -> impl Iterator<Item = &SessionState> + '_ {
         self.order.iter().filter_map(|id| self.by_id.get(id))
+    }
+
+    /// The sessions, in no particular order.
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut SessionState> + '_ {
+        self.by_id.values_mut()
     }
 
     /// Adds a session on `record` at the end of the tabs, without switching
@@ -897,11 +904,55 @@ pub(crate) struct EditorState {
     pub(crate) scroll: Cell<(usize, usize)>,
     /// Rows that fit, from the last draw, for PageUp/PageDown.
     pub(crate) page: Cell<usize>,
+    /// The text's tokens and statements, for the view: lexing a long
+    /// buffer on every draw is too slow. The reducer brings it up to date
+    /// after each event with [`sync`](Self::sync).
+    pub(crate) outline: Outline,
 }
 
 impl EditorState {
     pub(crate) fn query(&self) -> String {
         self.textarea.lines().join("\n")
+    }
+
+    /// Brings the outline up to date with the text in `dialect`, lexing
+    /// and splitting again only around what changed.
+    pub(crate) fn sync(&mut self, dialect: Dialect) {
+        if !self.outline_is_current(dialect) {
+            self.outline.update(dialect, self.query());
+        }
+    }
+
+    /// The outline of the text in `dialect`: the one kept, or a new one if
+    /// the text changed without the reducer seeing it.
+    pub(crate) fn outline(&self, dialect: Dialect) -> Cow<'_, Outline> {
+        if self.outline_is_current(dialect) {
+            Cow::Borrowed(&self.outline)
+        } else {
+            Cow::Owned(Outline::new(dialect, self.query()))
+        }
+    }
+
+    /// Whether the outline is of the text as it is, compared line by line
+    /// rather than joining the lines.
+    fn outline_is_current(&self, dialect: Dialect) -> bool {
+        if self.outline.dialect() != dialect {
+            return false;
+        }
+        let mut rest = self.outline.text().as_bytes();
+        for (row, line) in self.textarea.lines().iter().enumerate() {
+            if row > 0 {
+                match rest.split_first() {
+                    Some((b'\n', after)) => rest = after,
+                    _ => return false,
+                }
+            }
+            match rest.strip_prefix(line.as_bytes()) {
+                Some(after) => rest = after,
+                None => return false,
+            }
+        }
+        rest.is_empty()
     }
 
     /// The byte offset of `(row, col)`, a char column, in [`query`](Self::query).
@@ -943,7 +994,7 @@ impl EditorState {
 }
 
 /// Compares what was typed, where the cursor is and what is selected; the
-/// styling and the undo history are not part of it.
+/// styling, the undo history and the outline are not part of it.
 impl PartialEq for EditorState {
     fn eq(&self, other: &Self) -> bool {
         self.textarea.lines() == other.textarea.lines()
