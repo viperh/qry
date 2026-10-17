@@ -1,5 +1,6 @@
-# Nightly fuzzing: every target for 10 minutes (or `seconds` when run by
-# hand), each from the corpus the previous run left in the cache. A green
+# Long fuzzing, run by hand (Actions → Fuzz → Run workflow; there is no
+# schedule): every target for `seconds` (10 minutes by default), each from
+# the corpus the previous run left in the cache. A green
 # run minimises the corpus before it is saved; a crash uploads its input.
 # The 30 s smoke run on every PR is `fuzz-smoke` in ci.yml.
 #
@@ -9,8 +10,6 @@
 name: Fuzz
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       seconds:

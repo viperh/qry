@@ -67,7 +67,7 @@ python3 scripts/bench-gate.py gate --baseline local
 ```
 
 `scripts/bench-gates.toml` holds each gated bench's limit, for a local
-machine and for CI; the nightly `bench.yml` workflow also fails on a regression of more than
+machine and for CI; the `bench.yml` workflow (run by hand from the Actions tab) also fails on a regression of more than
 15% against `master`.
 
 ## Generated docs

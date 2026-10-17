@@ -203,3 +203,8 @@ CI:
 - **`ci.yml`**: `bench-build` no longer needs the `hashFiles` condition on the self-test step, so it is gone; the job's comment says what it does now.
 - **Unticked boxes need GitHub:** `bench.yml` running nightly and on dispatch, `bench-build` green on a PR, and the planted-sleep run link. Nothing was pushed. Local stand-ins: the bench build (`cargo bench --workspace --no-run`) and `bench-gate.py self-test` pass, and the gate script passes against a real criterion tree (baseline `local`). The box about the PR recording the numbers is ticked because the table above holds them, ready for the PR.
 - **Checks run locally:** `cargo fmt --all`, `cargo clippy --all-targets --all-features --workspace --locked -- -D warnings`, `QRY_KEYRING=off CI=true cargo test --workspace --all-features --locked` (403 `qry` unit tests, 90 in `qry-core`, plus the integration tests; the start-up test is ignored), the CI docs command, `scripts/check-layering.py`, every bench once, and the start-up test in release mode.
+
+Schedule removed at the owner's request: `bench.yml` no longer runs on a cron;
+it runs only by hand (`workflow_dispatch`, Actions → Run workflow). The
+boxes about it running nightly no longer apply as written.
+

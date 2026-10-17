@@ -313,3 +313,8 @@ CI:
   Because the disk was shared and nearly full, these ran with `CARGO_INCREMENTAL=0` and, for clippy and tests, `CARGO_PROFILE_{DEV,TEST}_DEBUG=0`.
 
 Fuzzing run (later): nightly (`cargo 1.101.0-nightly 2026-10-12`) and `cargo-fuzz` were installed. `fuzz/seed-corpus.sh` seeded all 11 targets, `cargo +nightly fuzz build --fuzz-dir fuzz` built them, and `cargo +nightly fuzz list` printed the 11 names that `fuzz_inventory` matches against `fuzz.yml`'s matrix, so the third box is ticked. Each target then ran for 60 s (`-max_total_time=60`, one job). There were no crashes, timeouts or OOMs, and `fuzz/artifacts` stayed empty. Runs per target: `connections_parse` 1.82 M, `copy_render` 99 k, `grid` 483 k, `import_auto` 1.64 M, `import_dbeaver` 1.74 M, `import_qry` 1.88 M, `import_sqldeveloper` 1.64 M, `keymap_parse` 1.83 M, `palette_score` 704 k, `sql_lex` 297 k, `sql_split` 87 k. No new regression inputs were needed. `fuzz/target`, the corpus and `fuzz/Cargo.lock` were deleted afterwards. The `fuzz-smoke` box (CI and the planted panic) and the `fuzz.yml` box still need GitHub runs. On Rust 1.99, clippy's new `chunks_exact_to_as_chunks` lint rejected `qry_core::fuzz::fuzz_grid`'s `chunks_exact(2)`, so it now uses `as_chunks::<2>()`.
+
+Schedule removed at the owner's request: `fuzz.yml` no longer runs on a cron;
+it runs only by hand (`workflow_dispatch`, Actions → Run workflow). The
+boxes about it running nightly no longer apply as written.
+

@@ -1,6 +1,7 @@
 name: Benchmarks
 
-# Nightly benchmarks and performance gates (tasks/T006-benchmarks.md),
+# Benchmarks and performance gates (tasks/T006-benchmarks.md), run by hand
+# (Actions → Benchmarks → Run workflow; there is no schedule),
 # modelled on sverb's bench.yml. Not run on pull requests, where shared
 # runners are too noisy; ci.yml's bench-build job only compiles the benches
 # and self-tests the gate script there.
@@ -13,8 +14,6 @@ name: Benchmarks
 # 5. On master only, promote `ci` to `main` and cache it for the next run.
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
 
 concurrency:
