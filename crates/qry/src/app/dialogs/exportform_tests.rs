@@ -683,11 +683,10 @@ fn dialog_after(result: QueryResult, keys: &str) -> AppHarness {
     h
 }
 
-/// The screen, with Windows' `\` path separators shown as `/`: the
-/// harness's home is `/home/test` on every platform, and joining under it
-/// on Windows mixes the two.
-fn screen(h: &mut AppHarness, w: u16, height: u16) -> String {
-    let text = h.render(w, height);
+/// `text` with Windows' `\` path separators shown as `/`: the harness's
+/// home is `/home/test` on every platform, and joining under it on Windows
+/// mixes the two.
+fn unix_paths(text: String) -> String {
     if cfg!(windows) {
         text.replace('\\', "/")
     } else {
@@ -695,11 +694,15 @@ fn screen(h: &mut AppHarness, w: u16, height: u16) -> String {
     }
 }
 
+fn screen(h: &mut AppHarness, w: u16, height: u16) -> String {
+    unix_paths(h.render(w, height))
+}
+
 fn snapshot(h: &mut AppHarness, name: &str, w: u16, height: u16) {
     insta::assert_snapshot!(name, screen(h, w, height));
     insta::assert_snapshot!(
         format!("{name}_styled"),
-        styled(&h.render_buffer(w, height))
+        unix_paths(styled(&h.render_buffer(w, height)))
     );
 }
 
