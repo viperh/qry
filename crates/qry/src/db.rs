@@ -395,13 +395,16 @@ impl Worker {
         let ok = !answers
             .iter()
             .any(|a| matches!(a, DbAnswer::QueryFailed { .. }));
-        if ok && self.manual && begins_again(kind) && crate::app::tx_change(sql) == Some(false) {
-            if let Err(e) = self.driver.set_autocommit(false).await {
-                answers.push(error(format!(
-                    "could not begin the next transaction: {}",
-                    first_line(&format!("{e:#}"))
-                )));
-            }
+        if ok
+            && self.manual
+            && begins_again(kind)
+            && crate::app::tx_change(sql) == Some(false)
+            && let Err(e) = self.driver.set_autocommit(false).await
+        {
+            answers.push(error(format!(
+                "could not begin the next transaction: {}",
+                first_line(&format!("{e:#}"))
+            )));
         }
         answers
     }
