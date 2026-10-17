@@ -39,6 +39,9 @@ The interface redesign. Everything below lands in the first release after
 - Query jobs: a spinner and elapsed time while running, `ctrl-c` cancels on
   the server (Postgres, MySQL, MariaDB, SQLite), a `max_rows` limit (1000 by
   default) with a fetch-all, and a jobs drawer (`J`).
+- Exporting every row streams from every backend, MySQL, MariaDB and Oracle
+  now included: rows are read and written a batch at a time, so memory
+  stays bounded by the fetch size.
 - A transaction pill in the status line, Commit and Rollback in the
   palette, and a confirmation before quitting or closing a session with an
   open transaction.

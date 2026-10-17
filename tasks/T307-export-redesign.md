@@ -108,7 +108,7 @@ Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, sch
 - [x] The amber export dialog uses the T203 frame, `› ` focus marker, `‹ ›` choices, live path preview, and format-dependent fields.
 - [x] All eight formats are written correctly. Excel cells are typed by `ValueKind`, with a bold frozen header and autofilter.
 - [x] Header and NULL-as options apply to every format they make sense for.
-- [ ] Fetched-row exports of truncated results are visibly labelled. All-rows exports stream through a cancellable job, with no full materialisation (memory bounded by `fetch_size`).
+- [x] Fetched-row exports of truncated results are visibly labelled. All-rows exports stream through a cancellable job, with no full materialisation (memory bounded by `fetch_size`).
 - [x] An existing file prompts before overwrite. Writes are atomic: a failed or cancelled export leaves the original intact and no temp file behind.
 - [x] Non-SELECT re-runs are warned about and confirmed.
 - [x] The existing modal behaviours (wait, keep path on failure, close on success, ignore answers meant for other modals) still hold, with their tests ported.
@@ -188,10 +188,25 @@ Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, sch
   32 767), and says so through `RowSink::warning`.
 - **Streaming.** `Database::query_stream(sql, fetch_size, RowSender)` and
   `StreamItem::{Columns, Rows}`. SQLite steps on its connection thread with
-  `blocking_send`; Postgres reads the `simple_query_raw` stream; both hold
-  at most a batch. The default (MySQL, MariaDB, Oracle, the fake) runs the
-  query whole and sends it in batches, so those backends still materialise
-  the result: that is why the fourth box is not ticked.
+  `blocking_send`; Postgres reads the `simple_query_raw` stream. MySQL and
+  MariaDB share `mysql::stream`, which reads `query_iter` a row at a time
+  and, once the reader has gone, drains the rest off the wire (dropping
+  it) so the connection stays usable. Oracle walks its cursor inside
+  `with_conn` on the blocking pool, with `fetch_array_size` set to the
+  fetch size, sending through `shared::blocking_send`; once the reader has
+  gone the cursor is dropped with the rest unread. All three gather rows
+  in `shared::Batches` (one batch at most) and write cells with the same
+  `column_meta` / `cell` as `query_limited`. So every backend holds at
+  most a batch plus the bounded channel's one; only the trait's default
+  (used by the test fake) still reads the whole result first. A dropped
+  receiver ends every backend's stream with `the rows' reader stopped`.
+  Tests: `shared_tests.rs` (batching, a gone reader, `send_result`);
+  `db_contract::a_streamed_result_matches_the_query` (streamed columns and
+  rows equal `query`'s, in batches of 2); and in `db_export.rs`
+  `a_failure_part_way_comes_after_the_rows_before_it` (a row that errors
+  late, so a materialising backend would deliver nothing first) and
+  `a_reader_that_goes_stops_the_stream_and_the_connection_works_on`. Only
+  SQLite ran here; the server backends run in CI's containers.
 - **The dialog** (`app/dialogs/exportform.rs`, the spec's
   `components/exportform.rs`): amber, 80 wide, rows Path, Format, Rows,
   Separator, Custom (for `other`), Line ends (CSV), Header, NULL as, Table

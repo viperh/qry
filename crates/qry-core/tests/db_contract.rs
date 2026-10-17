@@ -16,7 +16,7 @@ use common::{Backend, TestDb, assert_no_rows, column, lower, lower_names, q, run
 use qry_core::{
     ConnectionConfig, Driver, ValueKind,
     copy::{self, CopyFormat, Selection},
-    shared::QueryError,
+    shared::{QueryError, StreamItem},
     sql,
 };
 
@@ -61,6 +61,7 @@ contract!(
     error_position_reported,
     column_kinds_mapped,
     copy_insert_round_trip,
+    a_streamed_result_matches_the_query,
 );
 
 /// `FROM dual` where Oracle needs a table to select from.
@@ -465,4 +466,35 @@ async fn copy_insert_round_trip(db: &TestDb) {
     )
     .await;
     assert_eq!(copied.rows, original.rows, "{inserts}");
+}
+
+/// T307: `query_stream` writes columns and values exactly as `query` does,
+/// whatever the batch size.
+async fn a_streamed_result_matches_the_query(db: &TestDb) {
+    let driver = db.connect().await;
+    let sql = "SELECT * FROM people ORDER BY id";
+    let whole = q(&driver, sql).await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let reader = tokio::spawn(async move {
+        let mut items = Vec::new();
+        while let Some(item) = rx.recv().await {
+            items.push(item);
+        }
+        items
+    });
+    let sent = driver.query_stream(sql, 2, tx).await.unwrap();
+    let mut items = reader.await.unwrap().into_iter();
+    assert_eq!(sent, 5);
+    assert_eq!(
+        items.next(),
+        Some(StreamItem::Columns(whole.columns.clone()))
+    );
+    let batches: Vec<_> = items
+        .map(|item| match item {
+            StreamItem::Rows(rows) => rows,
+            StreamItem::Columns(c) => panic!("columns sent twice: {c:?}"),
+        })
+        .collect();
+    assert_eq!(batches.iter().map(Vec::len).collect::<Vec<_>>(), [2, 2, 1]);
+    assert_eq!(batches.concat(), whole.rows);
 }

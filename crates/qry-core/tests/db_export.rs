@@ -42,6 +42,8 @@ per_backend!(
     export_all_rows_streams_without_materialising,
     export_sql_insert_reimports_identically,
     cancelled_export_removes_temp_and_keeps_original,
+    a_failure_part_way_comes_after_the_rows_before_it,
+    a_reader_that_goes_stops_the_stream_and_the_connection_works_on,
 );
 
 const FETCH_SIZE: usize = 1000;
@@ -75,6 +77,105 @@ fn series(backend: Backend) -> (String, u64) {
                 .into(),
             200_000,
         ),
+    }
+}
+
+/// The series with one row that fails, the 150 000th (the 99 999th for
+/// MySQL and MariaDB, whose series is shorter), in each backend's words.
+/// A backend that read the whole result before sending any of it would
+/// fail with nothing sent.
+fn failing_series(backend: Backend) -> String {
+    match backend {
+        // `abs` of the smallest integer is an overflow error.
+        Backend::Sqlite => {
+            "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 200000) \
+             SELECT n, CASE WHEN n = 150000 THEN abs(n - 150000 - 9223372036854775807 - 1) \
+             ELSE n END AS v FROM s"
+        }
+        Backend::Postgres => {
+            "SELECT n, CASE WHEN n = 150000 THEN 1 / (n - 150000) ELSE n END AS v \
+             FROM generate_series(1, 200000) AS n"
+        }
+        // An unsigned overflow is an error even in a SELECT. 99 999 is the
+        // last row whichever table the join walks innermost.
+        Backend::Mysql | Backend::MariaDb => {
+            "WITH d(x) AS (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 \
+             UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 \
+             UNION ALL SELECT 8 UNION ALL SELECT 9), \
+             s(n) AS (SELECT a.x + 10 * b.x + 100 * c.x + 1000 * e.x + 10000 * f.x \
+             FROM d a, d b, d c, d e, d f) \
+             SELECT n, IF(n = 99999, ~0 + n, n) AS v FROM s"
+        }
+        Backend::Oracle => {
+            "SELECT LEVEL AS n, CASE WHEN LEVEL = 150000 THEN 1 / (LEVEL - 150000) \
+             ELSE LEVEL END AS v FROM dual CONNECT BY LEVEL <= 200000"
+        }
+    }
+    .into()
+}
+
+/// Every backend streams (T307): the batches read before a failure reach
+/// the reader before the failure does.
+async fn a_failure_part_way_comes_after_the_rows_before_it(db: &TestDb) {
+    let driver = db.connect().await;
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let reader = tokio::spawn(async move {
+        let mut rows = 0u64;
+        while let Some(item) = rx.recv().await {
+            if let StreamItem::Rows(batch) = item {
+                rows += batch.len() as u64;
+            }
+        }
+        rows
+    });
+    let outcome = driver
+        .query_stream(&failing_series(db.backend), FETCH_SIZE, tx)
+        .await;
+    let rows = reader.await.unwrap();
+    assert!(outcome.is_err(), "the failing row fails it: {outcome:?}");
+    assert!(
+        rows >= FETCH_SIZE as u64,
+        "only {rows} rows arrived before the failure"
+    );
+    // The connection is still usable.
+    let after = q(&driver, &format!("SELECT 1 AS one{}", dual(db.backend))).await;
+    assert_eq!(after.rows, [vec![Some("1".to_string())]]);
+}
+
+/// Dropping the receiver stops the stream: the query fails at its next
+/// batch rather than reading on into memory, and the connection can run
+/// the next statement.
+async fn a_reader_that_goes_stops_the_stream_and_the_connection_works_on(db: &TestDb) {
+    let driver = db.connect().await;
+    let (sql, n) = series(db.backend);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+    let reader = tokio::spawn(async move {
+        let mut rows = 0;
+        while let Some(item) = rx.recv().await {
+            if let StreamItem::Rows(batch) = item {
+                rows += batch.len();
+                break;
+            }
+        }
+        rows
+    });
+    let outcome = driver.query_stream(&sql, FETCH_SIZE, tx).await;
+    assert!(reader.await.unwrap() <= FETCH_SIZE);
+    let err = outcome.expect_err("the reader went after one batch");
+    assert!(
+        format!("{err:#}").contains("reader stopped"),
+        "{err:#} (of {n} rows)"
+    );
+    let after = q(&driver, &format!("SELECT 1 AS one{}", dual(db.backend))).await;
+    assert_eq!(after.rows, [vec![Some("1".to_string())]]);
+}
+
+/// `FROM dual` where Oracle needs a table to select from.
+fn dual(backend: Backend) -> &'static str {
+    if backend == Backend::Oracle {
+        " FROM dual"
+    } else {
+        ""
     }
 }
 
@@ -202,8 +303,9 @@ async fn cancelled_export_removes_temp_and_keeps_original(db: &TestDb) {
             if db.backend == Backend::Sqlite {
                 assert!(outcome.is_err(), "SQLite streams, so it stops part-way");
             }
-            // A backend that read everything before the first batch may
-            // still finish; the file is then whole, never half-written.
+            // A cancel that reaches the server after its last row (MySQL's
+            // `KILL QUERY` on a result already in the socket) is too late;
+            // the file is then whole, never half-written.
             if outcome.is_ok() {
                 assert!(
                     std::fs::read_to_string(&path)

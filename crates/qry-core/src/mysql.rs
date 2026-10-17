@@ -8,7 +8,10 @@ use tokio::sync::Mutex;
 
 use crate::{
     Database, DatabaseType,
-    shared::{CancelHandle, ColumnMeta, QueryResult, SslMode, ValueKind, first_column},
+    shared::{
+        self, Batches, CancelHandle, ColumnMeta, QueryResult, RowSender, SslMode, StreamItem,
+        ValueKind, first_column,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,6 +214,48 @@ pub(crate) async fn exec_bound(
     })
 }
 
+/// Reads `sql`'s result a row at a time with `query_iter`, handing on
+/// `fetch_size` rows at a time to `out`, written as `query_limited` writes
+/// them; returns the rows sent. MariaDB shares it.
+///
+/// No more than a batch is held: a reader that falls behind holds the
+/// reading back, and the server waits on the socket. Once the reader has
+/// gone, the rest of the result is read off the wire and dropped (the
+/// connection cannot be used again until it is), and the stream fails.
+pub(crate) async fn stream(
+    conn: &mut Conn,
+    sql: &str,
+    fetch_size: usize,
+    out: &RowSender,
+) -> Result<u64> {
+    let mut result = conn.query_iter(sql).await?;
+    let (columns, shown): (Vec<ColumnMeta>, Vec<_>) =
+        result.columns_ref().iter().map(column_meta).unzip();
+    let mut batches = Batches::new(fetch_size);
+    let read = async {
+        shared::send(out, StreamItem::Columns(columns)).await?;
+        while let Some(row) = result.next().await? {
+            let cells = row
+                .unwrap()
+                .into_iter()
+                .zip(&shown)
+                .map(|(value, &shown)| cell(value, shown))
+                .collect();
+            if let Some(full) = batches.push(cells) {
+                shared::send(out, StreamItem::Rows(full)).await?;
+            }
+        }
+        if let Some(rest) = batches.rest() {
+            shared::send(out, StreamItem::Rows(rest)).await?;
+        }
+        anyhow::Ok(())
+    }
+    .await;
+    // Whether or not the reading stopped early.
+    result.drop_result().await?;
+    read.map(|()| batches.sent())
+}
+
 #[async_trait]
 impl Database for MySql {
     fn kind(&self) -> DatabaseType {
@@ -259,6 +304,11 @@ impl Database for MySql {
             elapsed: std::time::Duration::ZERO,
             truncated,
         })
+    }
+
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let mut conn = self.conn.lock().await;
+        stream(&mut conn, sql, fetch_size, &out).await
     }
 
     fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {

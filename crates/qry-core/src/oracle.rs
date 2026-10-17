@@ -32,7 +32,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     DatabaseType,
-    shared::{ColumnMeta, Database, QueryError, QueryResult, SslMode, first_column},
+    shared::{
+        self, Batches, ColumnMeta, Database, QueryError, QueryResult, RowSender, SslMode,
+        StreamItem, first_column,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -502,6 +505,56 @@ impl Database for Oracle {
                 elapsed: std::time::Duration::ZERO,
                 truncated,
             })
+        })
+        .await
+    }
+
+    /// Walks the cursor on the blocking pool, `fetch_size` rows to a round
+    /// trip, handing each batch on as it fills. No more than a batch is
+    /// held: a reader that falls behind blocks the walk, and once it has
+    /// gone the cursor is closed with the rest unread.
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let sql = sql.to_string();
+        self.with_conn(move |conn| {
+            let failed = |e| query_error(e, &sql);
+            let mut batches = Batches::new(fetch_size);
+            let array_size = u32::try_from(fetch_size.max(1)).unwrap_or(u32::MAX);
+            let mut stmt = conn
+                .statement(&sql)
+                .map_err(failed)?
+                .fetch_array_size(array_size)
+                .build()
+                .map_err(failed)?;
+            // As in `query_limited`: anything but a query is run, and sends
+            // no rows.
+            if !stmt.is_query() {
+                stmt.execute(&[]).map_err(failed)?;
+                conn.commit().ora()?;
+                shared::blocking_send(&out, StreamItem::Columns(Vec::new()))?;
+                return Ok(0);
+            }
+            let cursor = stmt.query(&[]).map_err(failed)?;
+            let columns: Vec<ColumnMeta> = cursor
+                .columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
+                .collect();
+            let width = columns.len();
+            shared::blocking_send(&out, StreamItem::Columns(columns))?;
+            for row in cursor {
+                let row = row.map_err(failed)?;
+                let mut cells = Vec::with_capacity(width);
+                for i in 0..width {
+                    cells.push(cell(&row, i)?);
+                }
+                if let Some(full) = batches.push(cells) {
+                    shared::blocking_send(&out, StreamItem::Rows(full))?;
+                }
+            }
+            if let Some(rest) = batches.rest() {
+                shared::blocking_send(&out, StreamItem::Rows(rest))?;
+            }
+            Ok(batches.sent())
         })
         .await
     }

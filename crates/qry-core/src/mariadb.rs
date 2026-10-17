@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use crate::{
     Database, DatabaseType,
     mysql::{KillQuery, TABLES_SQL, cell, column_meta},
-    shared::{CancelHandle, ColumnMeta, QueryResult, SslMode, first_column},
+    shared::{CancelHandle, ColumnMeta, QueryResult, RowSender, SslMode, first_column},
 };
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,6 +130,12 @@ impl Database for MariaDb {
             elapsed: std::time::Duration::ZERO,
             truncated,
         })
+    }
+
+    /// The same protocol as MySQL, so the same stream.
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let mut conn = self.conn.lock().await;
+        crate::mysql::stream(&mut conn, sql, fetch_size, &out).await
     }
 
     fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {

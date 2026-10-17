@@ -98,10 +98,59 @@ pub async fn send_result(result: QueryResult, fetch_size: usize, out: &RowSender
 
 /// Sends one item, or says the reader has gone.
 pub(crate) async fn send(out: &RowSender, item: StreamItem) -> Result<()> {
-    if out.send(item).await.is_err() {
-        bail!("the rows' reader stopped");
+    out.send(item).await.map_err(|_| reader_stopped())
+}
+
+/// [`send`] from a blocking thread (Oracle's), which cannot await.
+pub(crate) fn blocking_send(out: &RowSender, item: StreamItem) -> Result<()> {
+    out.blocking_send(item).map_err(|_| reader_stopped())
+}
+
+/// What a stream ends with when its reader has gone.
+fn reader_stopped() -> anyhow::Error {
+    anyhow::anyhow!("the rows' reader stopped")
+}
+
+/// Rows read one at a time gathered into batches of `fetch_size`, for the
+/// backends whose driver hands over a row at a time (MySQL, MariaDB,
+/// Oracle). It holds no more than one batch.
+#[derive(Debug)]
+pub(crate) struct Batches {
+    size: usize,
+    rows: Vec<Vec<Option<String>>>,
+    sent: u64,
+}
+
+impl Batches {
+    pub(crate) fn new(fetch_size: usize) -> Self {
+        let size = fetch_size.max(1);
+        Self {
+            size,
+            rows: Vec::with_capacity(size),
+            sent: 0,
+        }
     }
-    Ok(())
+
+    /// Adds a row, and hands back the batch it filled.
+    pub(crate) fn push(&mut self, row: Vec<Option<String>>) -> Option<Vec<Vec<Option<String>>>> {
+        self.rows.push(row);
+        (self.rows.len() == self.size).then(|| self.take())
+    }
+
+    /// The rows not yet handed back, if there are any.
+    pub(crate) fn rest(&mut self) -> Option<Vec<Vec<Option<String>>>> {
+        (!self.rows.is_empty()).then(|| self.take())
+    }
+
+    /// How many rows have been handed back.
+    pub(crate) fn sent(&self) -> u64 {
+        self.sent
+    }
+
+    fn take(&mut self) -> Vec<Vec<Option<String>>> {
+        self.sent += self.rows.len() as u64;
+        std::mem::replace(&mut self.rows, Vec::with_capacity(self.size))
+    }
 }
 
 #[async_trait]
@@ -119,9 +168,10 @@ pub trait Database: Send + Sync {
 
     /// Runs `query` with no row limit and sends its columns, then its rows
     /// in batches of at most `fetch_size`, to `out`; returns how many rows
-    /// it sent. A backend that streams (SQLite, Postgres) holds no more
-    /// than a batch at a time. This default reads the whole result first,
-    /// for the backends that cannot.
+    /// it sent. Every backend overrides it to stream: it holds no more than
+    /// a batch at a time, and stops reading once `out`'s reader has gone.
+    /// This default reads the whole result first, for one that cannot (the
+    /// test fake).
     async fn query_stream(&self, query: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
         let result = self.query_limited(query, 0).await?;
         send_result(result, fetch_size, &out).await
@@ -399,3 +449,7 @@ impl QueryError {
         sql.char_indices().nth(index).map(|(byte, _)| byte)
     }
 }
+
+#[cfg(test)]
+#[path = "shared_tests.rs"]
+mod shared_tests;
