@@ -9,6 +9,7 @@ use tokio::sync::Mutex;
 use crate::{
     Database, DatabaseType,
     mysql::{KillQuery, TABLES_SQL, cell, column_meta},
+    schema::{self, Column},
     shared::{CancelHandle, ColumnMeta, QueryResult, RowSender, SslMode, first_column},
 };
 
@@ -164,5 +165,18 @@ impl Database for MariaDb {
     async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
         let mut conn = self.conn.lock().await;
         crate::mysql::exec_bound(&mut conn, sql, params).await
+    }
+
+    /// MySQL's columns, but MariaDB writes a column without a default as
+    /// the text `NULL` in `COLUMN_DEFAULT` (a string default comes quoted,
+    /// `'NULL'`), so that one means none.
+    async fn columns(&self, catalog: &str, object: &str) -> Result<Vec<Column>> {
+        let mut columns = schema::load_columns(self, catalog, object).await?;
+        for column in &mut columns {
+            if column.default.as_deref() == Some("NULL") {
+                column.default = None;
+            }
+        }
+        Ok(columns)
     }
 }

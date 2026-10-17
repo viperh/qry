@@ -5,7 +5,10 @@
 mod common;
 
 use common::{Backend, leftover_test_databases, q, skip_or_fail};
-use qry_core::{ConnectionConfig, Driver, SslMode};
+use qry_core::{
+    ConnectionConfig, Driver, SslMode,
+    schema::{Children, Index, ObjectKind, SchemaPath},
+};
 
 #[tokio::test]
 async fn ssl_mode_require_against_a_non_tls_server_fails_clearly() {
@@ -46,6 +49,61 @@ async fn search_path_decides_current_schema_for_tables() {
     other.connect(config).await.unwrap();
     assert_eq!(other.tables().await.unwrap(), ["only_here"]);
     drop((driver, other));
+    db.cleanup().await;
+}
+
+/// The catalog queries' Postgres-only parts: `unnest(indkey)` gives an
+/// expression's slot as `(expression)`, in index order, and materialized
+/// views come from `pg_matviews`.
+#[tokio::test]
+async fn expression_indexes_and_materialized_views_load() {
+    let db = db_or_skip!(Backend::Postgres);
+    let driver = db.connect().await;
+    q(
+        &driver,
+        "CREATE INDEX people_lower_name ON people (lower(name), id)",
+    )
+    .await;
+    q(
+        &driver,
+        "CREATE MATERIALIZED VIEW people_count AS SELECT count(*) AS n FROM people",
+    )
+    .await;
+
+    let Children::Details(details) = driver
+        .load_schema(&SchemaPath::details("public", "people"))
+        .await
+        .unwrap()
+    else {
+        panic!("not details")
+    };
+    let index = details
+        .indexes
+        .iter()
+        .find(|i| i.name == "people_lower_name")
+        .unwrap_or_else(|| panic!("{:?}", details.indexes));
+    assert_eq!(
+        *index,
+        Index {
+            name: "people_lower_name".into(),
+            columns: vec!["(expression)".into(), "id".into()],
+            unique: false,
+        }
+    );
+
+    let Children::Objects(objects) = driver
+        .load_schema(&SchemaPath::objects("public"))
+        .await
+        .unwrap()
+    else {
+        panic!("not objects")
+    };
+    let matview = objects
+        .iter()
+        .find(|o| o.name == "people_count")
+        .unwrap_or_else(|| panic!("{objects:?}"));
+    assert_eq!(matview.kind, ObjectKind::MaterializedView);
+    drop(driver);
     db.cleanup().await;
 }
 
