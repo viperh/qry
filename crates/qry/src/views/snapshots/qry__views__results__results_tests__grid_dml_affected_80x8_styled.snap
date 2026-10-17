@@ -1,0 +1,21 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+                                ✓ 3 rows affected                               
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(159, 211, 138) Reset NONE
+0,1 Rgb(159, 211, 138) Reset NONE
+0,2 Rgb(159, 211, 138) Reset NONE
+0,3 Rgb(159, 211, 138) Reset NONE
+0,4 Rgb(159, 211, 138) Reset NONE
+0,5 Rgb(159, 211, 138) Reset NONE
+0,6 Rgb(159, 211, 138) Reset NONE
+0,7 Rgb(159, 211, 138) Reset NONE

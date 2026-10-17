@@ -1,0 +1,7 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "styled(&drawn(&toast, queued, width))"
+---
+ Fetched 204 rows in 38 ms                                                                                              
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE

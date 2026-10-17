@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/dialogs/conndialog_tests.rs
+expression: buffer_to_string(&buffer)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌ New Connection ───────────────────────────────────────────────── oracle ─┐            
+            │   Driver       ‹ Oracle ›                                                │            
+            │ › Name          prod                                                     │            
+            │                [ ] use a DSN instead                                     │            
+            │   Host         db.local                                                  │            
+            │   Port         1521                                                      │            
+            │   User         alice                                                     │            
+            │   Password     ••••••••                                                  │            
+            │   Password in  ‹ keychain ›                                              │            
+            │   Service/SID  ORCLPDB1                                                  │            
+            │   Schema       reporting                                                 │            
+            │   SSL          ‹ verify-full ›                                           │            
+            │   Wallet dir   /etc/oracle/wallet                                        │            
+            │   Label        ‹ none ›                                                  │            
+            │                [ Test ]                                                  │            
+            │                                                                          │            
+            │ Enter save & connect · ctrl-t test · Tab next · → change · Esc cancel    │            
+            └──────────────────────────────────────────────────────────────────────────┘

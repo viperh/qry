@@ -1,0 +1,5 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "text(&toast, queued, width)"
+---
+ ✓ Connected to app@db.local:5432/app

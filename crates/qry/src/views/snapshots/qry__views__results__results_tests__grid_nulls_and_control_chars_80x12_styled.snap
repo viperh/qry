@@ -1,0 +1,49 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+  │v      │?column?                                                             
+1 │NULL   │NULL                                                                 
+2 │a→b↵c␀d│xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…                             
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+4,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+10,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+11,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,1 Rgb(242, 176, 74) Rgb(27, 37, 51) NONE
+2,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+3,1 Rgb(138, 148, 163) Rgb(242, 176, 74) BOLD | ITALIC
+7,1 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+10,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+11,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+0,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+4,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+5,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+6,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+7,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+8,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+9,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+10,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+11,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE

@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/overlay_tests.rs
+expression: "h.render(80, 24)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+▌▸ ● sq  scratch              │  1 │                                            
+ ▸ ○ sq  prod                 │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+            ┌ Delete Connection ───────────────────────────────────┐            
+            │ Delete "prod"? This cannot be undone.                │            
+            │ [x] also remove its password from the keychain       │            
+            │ [x] also delete its query history                    │            
+            │                                                      │            
+            │                               [ Cancel ]    Delete   │            
+            └ Enter confirm · Space toggle · Esc cancel ───────────┘            
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+ scratch · sqlite · :memory: · auto                                             
+ Enter submit  Tab next field  Esc cancel                               F1 help

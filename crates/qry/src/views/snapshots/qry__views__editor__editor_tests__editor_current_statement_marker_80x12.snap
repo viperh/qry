@@ -1,0 +1,54 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: "styled(&drawn(&h, 80, 12))"
+---
+▌ 1 │ select 1;                                                                 
+  2 │                                                                           
+  3 │ select 2                                                                  
+  4 │   from t;                                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 176, 74) Reset NONE
+4,0 Rgb(35, 42, 52) Reset NONE
+5,0 Reset Reset NONE
+6,0 Rgb(79, 193, 201) Reset NONE
+12,0 Reset Reset NONE
+13,0 Rgb(199, 166, 255) Reset NONE
+14,0 Rgb(211, 217, 224) Reset NONE
+15,0 Rgb(14, 17, 22) Rgb(242, 176, 74) NONE
+16,0 Reset Reset NONE
+0,1 Reset Reset NONE
+1,1 Rgb(138, 148, 163) Reset NONE
+4,1 Rgb(35, 42, 52) Reset NONE
+5,1 Reset Reset NONE
+0,2 Reset Reset NONE
+1,2 Rgb(138, 148, 163) Reset NONE
+4,2 Rgb(35, 42, 52) Reset NONE
+5,2 Reset Reset NONE
+6,2 Rgb(79, 193, 201) Reset NONE
+12,2 Reset Reset NONE
+13,2 Rgb(199, 166, 255) Reset NONE
+14,2 Reset Reset NONE
+0,3 Reset Reset NONE
+1,3 Rgb(138, 148, 163) Reset NONE
+4,3 Rgb(35, 42, 52) Reset NONE
+5,3 Reset Reset NONE
+8,3 Rgb(79, 193, 201) Reset NONE
+12,3 Reset Reset NONE
+13,3 Rgb(211, 217, 224) Reset NONE
+15,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE

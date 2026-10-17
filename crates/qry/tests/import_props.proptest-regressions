@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc f93cce2a7eb54fc0e9cdb7b165612be8d27bb039a7a100bca018d7b54122b748 # shrinks to records = [StoredConnection { id: "00aa0a0a", name: "", driver: Postgres, host: None, port: None, user: None, database: None, service: None, path: None, schema: None, tls: None, wallet: None, mode: None, dsn: None, secret: Keyring, extra: {"x_pwd": String("")}, ephemeral: false }]

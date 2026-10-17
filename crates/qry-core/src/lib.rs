@@ -1,21 +1,35 @@
 use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
-pub mod shared;
-pub mod postgres;
-pub mod sqlite;
+pub mod connspec;
+pub mod copy;
+pub mod exporter;
+#[doc(hidden)]
+pub mod fuzz;
+pub mod fuzzy;
+pub mod grid;
+pub mod history;
+pub mod inspect;
+pub mod jobs;
+pub mod mariadb;
 pub mod mysql;
 pub mod oracle;
-pub mod mariadb;
-pub mod exporter;
+pub mod postgres;
+pub mod schema;
+pub mod shared;
+pub mod snippets;
+pub mod sql;
+pub mod sqlite;
+/// Fakes and fixtures for tests; never in a release build.
+#[cfg(any(test, feature = "test-util"))]
+pub mod testing;
 
-pub use exporter::Exporter;
-pub use shared::{Database, QueryResult, SslMode};
-
+pub use exporter::{ExportOptions, RowSink};
 use mariadb::{MariaDb, MariadbConfig};
 use mysql::{MySql, MySqlConfig};
 use oracle::{Oracle, OracleConfig};
 use postgres::{Postgres, PostgresConfig};
+pub use shared::{ColumnMeta, Database, QueryResult, SslMode, ValueKind};
 use sqlite::{Sqlite, SqliteConfig};
 
 #[derive(Debug, Clone)]
@@ -24,46 +38,97 @@ pub enum DatabaseType {
     Postgres,
     Mysql,
     Oracle,
-    MariaDb
+    MariaDb,
 }
 #[derive(Debug, Default, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ExportType {
     #[default]
     Csv,
+    Tsv,
+    Json,
+    JsonLines,
     Excel,
+    Markdown,
+    SqlInsert,
     Text,
-    Json
 }
 
 impl ExportType {
-    /// In the order the export form offers them.
-    pub const ALL: [ExportType; 4] =
-        [ExportType::Csv, ExportType::Excel, ExportType::Text, ExportType::Json];
+    /// In the order the export dialog offers them.
+    pub const ALL: [ExportType; 8] = [
+        ExportType::Csv,
+        ExportType::Tsv,
+        ExportType::Json,
+        ExportType::JsonLines,
+        ExportType::Excel,
+        ExportType::Markdown,
+        ExportType::SqlInsert,
+        ExportType::Text,
+    ];
 
     /// Whether the rows are separated by a character the user chooses.
-    /// Excel writes cells and JSON writes objects, so neither uses one.
+    /// TSV is always tabs, and the others write cells, objects or
+    /// statements.
     pub fn uses_separator(self) -> bool {
         matches!(self, ExportType::Csv | ExportType::Text)
+    }
+
+    /// Whether a header line can be left out: JSON names every value
+    /// anyway.
+    pub fn has_header(self) -> bool {
+        !matches!(self, ExportType::Json | ExportType::JsonLines)
+    }
+
+    /// Whether a NULL is written as some text the user chooses. JSON has
+    /// `null` and SQL `NULL`.
+    pub fn uses_null_as(self) -> bool {
+        !matches!(
+            self,
+            ExportType::Json | ExportType::JsonLines | ExportType::SqlInsert
+        )
+    }
+
+    /// Whether the file is text, with an encoding to choose.
+    pub fn is_text(self) -> bool {
+        self != ExportType::Excel
+    }
+
+    /// The most rows the format holds, if it has a limit: a worksheet has
+    /// 1 048 576 rows, one of them the header.
+    pub fn row_limit(self) -> Option<usize> {
+        (self == ExportType::Excel).then_some(exporter::EXCEL_MAX_ROWS)
     }
 
     pub fn extension(self) -> &'static str {
         match self {
             ExportType::Csv => "csv",
-            ExportType::Excel => "xlsx",
-            ExportType::Text => "txt",
+            ExportType::Tsv => "tsv",
             ExportType::Json => "json",
+            ExportType::JsonLines => "jsonl",
+            ExportType::Excel => "xlsx",
+            ExportType::Markdown => "md",
+            ExportType::SqlInsert => "sql",
+            ExportType::Text => "txt",
         }
     }
 
-    /// The path with this type's extension, added unless it is already there.
+    /// The path with this type's extension: added unless it is already
+    /// there, or put in place of another export format's.
     /// The check ignores case, so `ROWS.CSV` is left alone.
     pub fn with_extension(self, path: &str) -> String {
         let extension = self.extension();
-        let present = path
-            .rsplit_once('.')
-            .is_some_and(|(_, last)| last.eq_ignore_ascii_case(extension));
-        match path {
+        let last = path.rsplit_once('.');
+        let present = last.is_some_and(|(_, last)| last.eq_ignore_ascii_case(extension));
+        // Another format's extension, left from before the format changed,
+        // is swapped for this one's; anything else stays part of the name.
+        let other = last.filter(|(_, last)| {
+            Self::ALL
+                .iter()
+                .any(|t| last.eq_ignore_ascii_case(t.extension()))
+        });
+        match (path, other) {
             _ if present => path.to_string(),
+            (_, Some((stem, _))) => format!("{stem}.{extension}"),
             // A trailing dot already separates the extension.
             _ if path.ends_with('.') => format!("{path}{extension}"),
             _ => format!("{path}.{extension}"),
@@ -75,9 +140,13 @@ impl std::fmt::Display for ExportType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             ExportType::Csv => "CSV",
-            ExportType::Excel => "Excel",
-            ExportType::Text => "Text",
+            ExportType::Tsv => "TSV",
             ExportType::Json => "JSON",
+            ExportType::JsonLines => "JSON lines",
+            ExportType::Excel => "Excel",
+            ExportType::Markdown => "Markdown",
+            ExportType::SqlInsert => "SQL INSERT",
+            ExportType::Text => "Text",
         })
     }
 }
@@ -86,7 +155,7 @@ impl std::fmt::Display for ExportType {
 pub struct ExportConfig {
     pub path: String,
     pub separator: String,
-    pub etype: ExportType
+    pub etype: ExportType,
 }
 
 impl ExportConfig {
@@ -109,30 +178,51 @@ pub enum ConnectionConfig {
     Oracle(OracleConfig),
 }
 
-
 impl std::fmt::Debug for ConnectionConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Sqlite(c) => write!(f, "Sqlite({})", c.path.display()),
-            Self::Postgres(c) => write!(f, "Postgres({}@{}:{}/{})", c.user, c.host, c.port, c.database),
+            Self::Postgres(c) => write!(
+                f,
+                "Postgres({}@{}:{}/{})",
+                c.user, c.host, c.port, c.database
+            ),
             Self::Mysql(c) => write!(f, "Mysql({}@{}:{}/{})", c.user, c.host, c.port, c.database),
-            Self::MariaDb(c) => write!(f, "MariaDb({}@{}:{}/{})", c.user, c.host, c.port, c.database),
+            Self::MariaDb(c) => write!(
+                f,
+                "MariaDb({}@{}:{}/{})",
+                c.user, c.host, c.port, c.database
+            ),
             Self::Oracle(c) => write!(f, "Oracle({}@{}:{}/{})", c.user, c.host, c.port, c.service),
         }
     }
 }
 
-
 #[derive(Default)]
 pub struct Driver {
     db: Option<Box<dyn Database>>,
+}
 
+/// Shows the label of the open connection, if any; the connection itself has
+/// no `Debug`.
+impl std::fmt::Debug for Driver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Driver")
+            .field("connected_to", &self.db.as_ref().map(|db| db.label()))
+            .finish()
+    }
 }
 
 impl Driver {
-
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A driver already connected to `db`, so the worker can be tested with a
+    /// [`FakeDatabase`](crate::testing::FakeDatabase) instead of a server.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn with_database(db: Box<dyn Database>) -> Self {
+        Self { db: Some(db) }
     }
 
     /// Opens a connection, replacing any previous one, and returns its label.
@@ -156,7 +246,63 @@ impl Driver {
         db.query(sql).await
     }
 
-    /// The tables of the open connection, for the connection tree.
+    /// Runs `sql` and streams every row to `out`, `fetch_size` at a time
+    /// (see [`Database::query_stream`]).
+    pub async fn query_stream(
+        &self,
+        sql: &str,
+        fetch_size: usize,
+        out: shared::RowSender,
+    ) -> Result<u64> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.query_stream(sql, fetch_size, out).await
+    }
+
+    /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all).
+    pub async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.query_limited(sql, max_rows).await
+    }
+
+    /// What kind of database the open connection is to, if one is open.
+    pub fn kind(&self) -> Option<DatabaseType> {
+        Some(self.db.as_ref()?.kind())
+    }
+
+    /// Whether the open connection streams rows as it reads them; see
+    /// [`Database::streams_rows`].
+    pub fn streams_rows(&self) -> bool {
+        self.db.as_ref().is_some_and(|db| db.streams_rows())
+    }
+
+    /// Turns the open connection's autocommit on or off; see
+    /// [`Database::set_autocommit`].
+    pub async fn set_autocommit(&self, on: bool) -> Result<()> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.set_autocommit(on).await
+    }
+
+    /// What stops the open connection's running statement, if it can be.
+    pub fn cancel_handle(&self) -> Option<std::sync::Arc<dyn shared::CancelHandle>> {
+        self.db.as_ref()?.cancel_handle()
+    }
+
+    /// What the open connection's server says it is; see
+    /// [`Database::server_version`].
+    pub async fn server_version(&self) -> Result<String> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.server_version().await
+    }
+
+    /// The tables of the open connection's own catalog.
     pub async fn tables(&self) -> Result<Vec<String>> {
         let Some(db) = &self.db else {
             bail!("not connected to a database");
@@ -164,112 +310,15 @@ impl Driver {
         db.tables().await
     }
 
-
+    /// Loads one node of the schema browser: the catalogs, a catalog's
+    /// objects, or an object's columns and indexes.
+    pub async fn load_schema(&self, path: &schema::SchemaPath) -> Result<schema::Children> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        schema::load(db.as_ref(), path).await
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn in_memory() -> ConnectionConfig {
-        ConnectionConfig::Sqlite(SqliteConfig::new(":memory:", false))
-    }
-
-    #[tokio::test]
-    async fn query_without_connection_is_err() {
-        assert!(Driver::new().query("SELECT 1").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn sqlite_round_trip() {
-        let mut driver = Driver::new();
-        assert_eq!(driver.connect(in_memory()).await.unwrap(), ":memory:");
-
-        let result = driver
-            .query("WITH t(id, name) AS (VALUES (1, 'alice'), (2, NULL)) SELECT * FROM t")
-            .await
-            .unwrap();
-        assert_eq!(result.columns, ["id", "name"]);
-        assert_eq!(
-            result.rows,
-            [
-                vec![Some("1".to_string()), Some("alice".to_string())],
-                vec![Some("2".to_string()), None],
-            ]
-        );
-    }
-
-    fn postgres(ssl_mode: SslMode) -> ConnectionConfig {
-        ConnectionConfig::Postgres(PostgresConfig {
-            host: "db.invalid".into(),
-            port: 5432,
-            user: "alice".into(),
-            password: "hunter2".into(),
-            database: "app".into(),
-            schema: None,
-            ssl_mode,
-        })
-    }
-
-    #[tokio::test]
-    async fn tls_only_ssl_modes_are_refused_before_connecting() {
-        for mode in [SslMode::Require, SslMode::VerifyCa, SslMode::VerifyFull] {
-            let err = Driver::new().connect(postgres(mode)).await.unwrap_err();
-            assert!(err.to_string().contains("does not support"), "{mode}: {err}");
-        }
-    }
-
-    #[test]
-    fn each_type_has_an_extension_and_adds_it_once() {
-        let extensions: Vec<&str> = ExportType::ALL.iter().map(|t| t.extension()).collect();
-        assert_eq!(extensions, ["csv", "xlsx", "txt", "json"]);
-
-        assert_eq!(ExportType::Csv.with_extension("rows"), "rows.csv");
-        assert_eq!(ExportType::Csv.with_extension("rows.csv"), "rows.csv");
-        // Already there, whatever the case.
-        assert_eq!(ExportType::Csv.with_extension("ROWS.CSV"), "ROWS.CSV");
-        assert_eq!(ExportType::Csv.with_extension("rows."), "rows.csv");
-        // A different extension is kept, and the right one added after it.
-        assert_eq!(ExportType::Csv.with_extension("rows.txt"), "rows.txt.csv");
-        assert_eq!(ExportType::Excel.with_extension(r"C:\data\rows"), r"C:\data\rows.xlsx");
-        assert_eq!(ExportType::Json.with_extension("rows.json"), "rows.json");
-    }
-
-    #[test]
-    fn a_config_gets_the_extension_of_its_type() {
-        let config = ExportConfig::new("rows", ",", ExportType::Json);
-        assert_eq!(config.path, "rows.json");
-        assert_eq!(config.separator, ",");
-    }
-
-    #[test]
-    fn debug_output_never_contains_the_password() {
-        let shown = format!("{:?}", postgres(SslMode::Prefer));
-        assert_eq!(shown, "Postgres(alice@db.invalid:5432/app)");
-    }
-
-    #[tokio::test]
-    async fn tables_lists_what_the_connection_can_see() {
-        let mut driver = Driver::new();
-        assert!(driver.tables().await.is_err(), "not connected");
-
-        driver.connect(in_memory()).await.unwrap();
-        assert!(driver.tables().await.unwrap().is_empty());
-
-        driver.query("CREATE TABLE people (name TEXT)").await.unwrap();
-        driver.query("CREATE TABLE addresses (line TEXT)").await.unwrap();
-        driver.query("CREATE VIEW recent AS SELECT * FROM people").await.unwrap();
-        assert_eq!(driver.tables().await.unwrap(), ["addresses", "people", "recent"]);
-    }
-
-    #[tokio::test]
-    async fn state_persists_between_queries() {
-        let mut driver = Driver::new();
-        driver.connect(in_memory()).await.unwrap();
-        driver.query("CREATE TABLE t (x INTEGER)").await.unwrap();
-        driver.query("INSERT INTO t VALUES (7)").await.unwrap();
-
-        let result = driver.query("SELECT x FROM t").await.unwrap();
-        assert_eq!(result.rows, [vec![Some("7".to_string())]]);
-    }
-}
+mod lib_tests;

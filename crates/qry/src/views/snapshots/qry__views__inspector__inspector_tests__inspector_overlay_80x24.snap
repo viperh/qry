@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/inspector_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  l│ INSPECTOR                             
+▌▸ ● sq  scratch              │▌ 1 │ sel│ COLUMN                                
+                              │         │ email · text · col 3/5                
+                              │         │ nulls 1 / 6 · distinct 2              
+                              │         │                                       
+                              │         │ TOP VALUES · 6 fetched rows           
+                              │         │ alice@example.com          ████████ 3 
+                              │         │ bob@example.com            █████▍   2 
+                              │         │                                       
+                              │ RESULTS │ RECORD · row 3 / 6                    
+                              │  │id  │n│ id          3                         
+                              │  │int8│t│ name        carol                     
+                              │1 │   1│a│ email       alice@example.com         
+                              │2 │   2│b│ created_at  2026-10-03 11:30:00       
+                              │3 │   3│c│ notes       first line↵second line t… 
+                              │4 │   4│d│                                       
+                              │5 │   5│e│                                       
+                              │6 │   6│f│                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+ scratch · sqlite · :memory: · auto                              R 3 / 6  C 3/5 
+ Enter inspect  y copy  ctrl-e export  Tab next pane  : commands         ? help

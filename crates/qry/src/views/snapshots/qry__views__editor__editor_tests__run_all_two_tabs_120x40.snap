@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: text
+---
+ qry  1 scratch                                                                               sqlite · :memory:   EDIT  
+ SCHEMA                       │ QUERY  ln 1, col 20 · 2 statements                                                      
+▌▸ ● sq  scratch              │▌ 1 │ select 1; select 2;                                                                
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS   1 result · 1  2 result · 1                                                    
+                              │  │c0                                                                                    
+                              │1 │r0c0                                                                                  
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ ✓ Connected to scratch (fake)                                                      (+1) 
+ scratch · sqlite · :memory: · auto                                                                      R 1 / 1  C 1/1 
+ F5 run  F8 run all  F6 next pane  ctrl-p commands  ctrl-n new conn  ctrl-q quit                                F1 help

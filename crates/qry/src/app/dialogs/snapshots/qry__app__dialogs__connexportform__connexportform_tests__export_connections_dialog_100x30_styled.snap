@@ -1,0 +1,110 @@
+---
+source: crates/qry/src/app/dialogs/connexportform_tests.rs
+expression: "crate::testing::styled(&buffer)"
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                  ┌ Export Connections ───────────── passwords are not included ─┐                  
+                  │ › File     ~/qry-backup.json                                 │                  
+                  │   Include  [x] local                                         │                  
+                  │            [x] prod                                          │                  
+                  │                                                              │                  
+                  │ Enter export · Space toggle · Tab next · Esc cancel          │                  
+                  └──────────────────────────────────────────────────────────────┘                  
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+--- styles (x,y fg bg modifiers) ---
+0,0 Reset Reset NONE
+0,1 Reset Reset NONE
+0,2 Reset Reset NONE
+0,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE
+0,12 Reset Reset NONE
+18,12 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,12 Rgb(242, 176, 74) Rgb(30, 38, 50) BOLD
+39,12 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+52,12 Rgb(169, 180, 194) Rgb(22, 28, 37) NONE
+80,12 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,12 Reset Reset NONE
+0,13 Reset Reset NONE
+18,13 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+20,13 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+31,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+48,13 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+49,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+81,13 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,13 Reset Reset NONE
+0,14 Reset Reset NONE
+18,14 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+22,14 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+81,14 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,14 Reset Reset NONE
+0,15 Reset Reset NONE
+18,15 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+22,15 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+31,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+81,15 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,15 Reset Reset NONE
+0,16 Reset Reset NONE
+18,16 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+81,16 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,16 Reset Reset NONE
+0,17 Reset Reset NONE
+18,17 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+19,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+20,17 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+25,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+35,17 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+40,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+50,17 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+53,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+61,17 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+64,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+71,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+81,17 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,17 Reset Reset NONE
+0,18 Reset Reset NONE
+18,18 Rgb(242, 176, 74) Rgb(22, 28, 37) NONE
+82,18 Reset Reset NONE
+0,19 Reset Reset NONE
+0,20 Reset Reset NONE
+0,21 Reset Reset NONE
+0,22 Reset Reset NONE
+0,23 Reset Reset NONE
+0,24 Reset Reset NONE
+0,25 Reset Reset NONE
+0,26 Reset Reset NONE
+0,27 Reset Reset NONE
+0,28 Reset Reset NONE
+0,29 Reset Reset NONE

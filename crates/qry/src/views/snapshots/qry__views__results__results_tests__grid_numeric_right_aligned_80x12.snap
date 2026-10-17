@@ -1,0 +1,8 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: "buffer_lines(&buffer).join(\"\\n\")"
+---
+  │n   │f     │s                                                                
+  │int4│float8│text                                                             
+1 │   1│   1.5│1                                                                
+2 │1000│-22.25│1000

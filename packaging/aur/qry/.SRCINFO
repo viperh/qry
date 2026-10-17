@@ -1,0 +1,17 @@
+pkgbase = qry
+	pkgdesc = A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle
+	pkgver = 0.0.0
+	pkgrel = 1
+	url = https://github.com/viperh/qry
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	depends = gcc-libs
+	depends = glibc
+	conflicts = qry-bin
+	options = !lto
+	source = qry-0.0.0.tar.gz::https://github.com/viperh/qry/archive/refs/tags/v0.0.0.tar.gz
+	sha256sums = 0000000000000000000000000000000000000000000000000000000000000000
+
+pkgname = qry

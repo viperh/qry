@@ -1,0 +1,5 @@
+edition = "2024"
+# Unstable: stable rustfmt ignores them and nightly applies them. The code
+# should already follow this layout so both agree.
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"

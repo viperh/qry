@@ -1,0 +1,9 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "styled(&drawn(&toast, queued, width))"
+---
+ ✗ cannot save connections: permission denied (os error 13)                                                        (+2) 
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE
+113,0 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+119,0 Rgb(242, 139, 107) Rgb(14, 17, 22) NONE

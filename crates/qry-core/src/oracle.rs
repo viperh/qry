@@ -9,11 +9,16 @@
 //! protocol, and checks the server's certificate and host name against the
 //! Mozilla roots plus any certificates in the wallet.
 
-use std::collections::HashMap;
-use std::fmt::Write as _;
-use std::fs;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    fmt::Write as _,
+    fs,
+    path::Path,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
 
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
@@ -25,8 +30,13 @@ use oracledb::{
 use rustls_pki_types::ServerName;
 use serde::{Deserialize, Serialize};
 
-use crate::DatabaseType;
-use crate::shared::{Database, QueryResult, SslMode};
+use crate::{
+    DatabaseType,
+    shared::{
+        self, Batches, ColumnMeta, Database, QueryError, QueryResult, RowSender, SslMode,
+        StreamItem, first_column,
+    },
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OracleConfig {
@@ -46,6 +56,22 @@ pub struct OracleConfig {
     /// certificate with its key for mutual TLS. Only used over TCPS.
     #[serde(default)]
     pub wallet: Option<String>,
+}
+
+/// Written by hand so the password never reaches a log or panic message.
+impl std::fmt::Debug for OracleConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OracleConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"[redacted]")
+            .field("service", &self.service)
+            .field("schema", &self.schema)
+            .field("ssl_mode", &self.ssl_mode)
+            .field("wallet", &self.wallet)
+            .finish()
+    }
 }
 
 impl OracleConfig {
@@ -135,6 +161,96 @@ impl<T> OraResult<T> for std::result::Result<T, oracledb::Error> {
     }
 }
 
+/// A failed statement as a [`QueryError`], with the position the server
+/// reported. Oracle counts it from 0, in characters, and sends 0 when it
+/// has none, so a statement that fails at its very first character gets no
+/// position.
+fn query_error(e: oracledb::Error, sql: &str) -> anyhow::Error {
+    match e.kind() {
+        oracledb::ErrorKind::DbError(db) => anyhow::Error::new(QueryError {
+            message: e.to_string(),
+            position: match db.offset() {
+                0 => None,
+                offset => QueryError::char_position(sql, offset + 1),
+            },
+        }),
+        _ => anyhow!("{e}"),
+    }
+}
+
+/// How a date or timestamp column's values are written.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Temporal {
+    /// `DATE`: always has a time of day, written only when it is not
+    /// midnight.
+    Date,
+    Timestamp,
+    /// `TIMESTAMP WITH TIME ZONE`: the offset follows, as `+02:00`.
+    TimestampTz,
+}
+
+impl Temporal {
+    /// From the column's type as `Metadata::data_type` writes it.
+    fn of(data_type: &str) -> Self {
+        if data_type.starts_with("DATE") {
+            Self::Date
+        } else if data_type.ends_with("WITH TIME ZONE") && !data_type.contains("LOCAL") {
+            Self::TimestampTz
+        } else {
+            Self::Timestamp
+        }
+    }
+}
+
+/// `YYYY-MM-DD`, or `YYYY-MM-DD HH:MM:SS[.fff]`: the form every backend
+/// shows dates and timestamps in. The driver's own `Display` writes
+/// `1990-04-01T00:00:00.000000000Z`, even for a `DATE`.
+fn temporal_text(ts: &OracleTimestamp, kind: Temporal) -> String {
+    let date = format!("{:04}-{:02}-{:02}", ts.year(), ts.month(), ts.day());
+    let (hour, minute, second, nanos) = (ts.hour(), ts.minute(), ts.second(), ts.nanoseconds());
+    if kind == Temporal::Date && (hour, minute, second, nanos) == (0, 0, 0, 0) {
+        return date;
+    }
+    let mut out = format!("{date} {hour:02}:{minute:02}:{second:02}");
+    if nanos > 0 {
+        let fraction = format!("{nanos:09}");
+        out.push('.');
+        out.push_str(fraction.trim_end_matches('0'));
+    }
+    if kind == Temporal::TimestampTz {
+        let _ = write!(
+            out,
+            "{:+03}:{:02}",
+            ts.tz_hour_offset(),
+            ts.tz_minute_offset().unsigned_abs()
+        );
+    }
+    out
+}
+
+/// A `NUMBER(p,s)` with its `s` decimals, as the other backends write a
+/// `numeric(p,s)`: `-12.50`, not the driver's `-12.5`.
+fn number_text(text: String, scale: i8) -> String {
+    let Ok(scale) = usize::try_from(scale) else {
+        return text;
+    };
+    if scale == 0 || text.contains(['e', 'E']) {
+        return text;
+    }
+    let decimals = text
+        .split_once('.')
+        .map_or(0, |(_, fraction)| fraction.len());
+    if decimals >= scale {
+        return text;
+    }
+    let mut out = text;
+    if decimals == 0 {
+        out.push('.');
+    }
+    out.extend(std::iter::repeat_n('0', scale - decimals));
+    out
+}
+
 /// Quotes an identifier for use in SQL, e.g. `my"schema` → `"my""schema"`.
 fn quote_ident(ident: &str) -> String {
     format!("\"{}\"", ident.replace('"', "\"\""))
@@ -152,20 +268,27 @@ fn cell(row: &Row, i: usize) -> Result<Option<String>> {
             }
         };
     }
+    let column = &row.columns()[i];
     try_as!(String, |v| v);
-    try_as!(OracleNumber, |v| v.to_string());
+    // `precision` 0 is a `NUMBER` without one, whose scale means nothing.
+    let scale = if column.precision() == 0 {
+        0
+    } else {
+        column.scale()
+    };
+    try_as!(OracleNumber, |v| number_text(v.to_string(), scale));
     try_as!(f64, |v| v.to_string());
     try_as!(f32, |v| v.to_string());
-    try_as!(OracleTimestamp, |v| v.to_string());
+    let temporal = Temporal::of(&column.data_type());
+    try_as!(OracleTimestamp, |v| temporal_text(&v, temporal));
     try_as!(OracleIntervalDS, |v| v.to_string());
     try_as!(OracleIntervalYM, |v| v.to_string());
     try_as!(bool, |v| v.to_string());
-    // Written the way the SQLite backend writes a BLOB.
-    try_as!(Vec<u8>, |v| format!("x'{}'", encode(v)));
+    // `\x` and lowercase hex, as Postgres writes a `bytea`.
+    try_as!(Vec<u8>, |v| format!("\\x{}", encode(v)));
     try_as!(JsonValue, |v| json(&v));
     try_as!(Vector, |v| format!("{v:?}"));
 
-    let column = &row.columns()[i];
     bail!(
         "column {} has type {}, which qry cannot show",
         column.name(),
@@ -247,6 +370,20 @@ pub struct Oracle {
     /// `Connection`. The driver has no async API of its own.
     conn: Arc<Mutex<Connection>>,
     config: OracleConfig,
+    /// Commit after each statement that is not a query. The driver has no
+    /// autocommit switch of its own, so this is it; on by default, as the
+    /// other backends commit as they go.
+    autocommit: Arc<AtomicBool>,
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for Oracle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Oracle")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Oracle {
@@ -275,6 +412,7 @@ impl Oracle {
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
             config,
+            autocommit: Arc::new(AtomicBool::new(true)),
         })
     }
 
@@ -295,12 +433,13 @@ impl Oracle {
     }
 }
 
-/// Runs a statement that is not a query, then commits. The driver has no
-/// autocommit switch, and the other backends commit as they go, so this one
-/// does too. A statement that fails is not committed.
-fn execute_and_commit(conn: &Connection, sql: &str) -> Result<u64> {
+/// Runs a statement that is not a query, then commits if `autocommit`
+/// says to. A statement that fails is not committed.
+fn execute_and_commit(conn: &Connection, sql: &str, autocommit: bool) -> Result<u64> {
     let affected = conn.execute(sql, &[]).ora()?.rows_affected();
-    conn.commit().ora()?;
+    if autocommit {
+        conn.commit().ora()?;
+    }
     Ok(affected)
 }
 
@@ -314,33 +453,43 @@ impl Database for Oracle {
         self.config.label()
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
         self.with_conn(move |conn| {
-            let mut stmt = conn.statement(&sql).ora()?.build().ora()?;
+            let failed = |e| query_error(e, &sql);
+            let mut stmt = conn
+                .statement(&sql)
+                .map_err(failed)?
+                .build()
+                .map_err(failed)?;
             // The driver refuses to run anything but a query through
             // `query`. The editor sends every statement through here, so a
             // CREATE or an INSERT is run instead of rejected.
             if !stmt.is_query() {
-                let affected = stmt.execute(&[]).ora()?.rows_affected();
-                conn.commit().ora()?;
-                return Ok(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    affected: Some(affected),
-                });
+                let affected = stmt.execute(&[]).map_err(failed)?.rows_affected();
+                if autocommit {
+                    conn.commit().ora()?;
+                }
+                return Ok(QueryResult::affected(affected));
             }
-            let cursor = stmt.query(&[]).ora()?;
+            let cursor = stmt.query(&[]).map_err(failed)?;
 
-            let columns: Vec<String> = cursor
+            let columns: Vec<ColumnMeta> = cursor
                 .columns()
                 .iter()
-                .map(|c| c.name().to_string())
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
                 .collect();
 
             let mut rows: Vec<Vec<Option<String>>> = Vec::new();
+            let mut truncated = false;
             for row in cursor {
-                let row = row.ora()?;
+                // The cursor fetches as it goes; the rest is never read.
+                if max_rows > 0 && rows.len() == max_rows {
+                    truncated = true;
+                    break;
+                }
+                let row = row.map_err(failed)?;
                 let mut cells = Vec::with_capacity(columns.len());
                 for i in 0..columns.len() {
                     cells.push(cell(&row, i)?);
@@ -353,15 +502,87 @@ impl Database for Oracle {
                 columns,
                 rows,
                 affected: Some(affected),
+                elapsed: std::time::Duration::ZERO,
+                truncated,
             })
+        })
+        .await
+    }
+
+    /// Walks the cursor on the blocking pool, `fetch_size` rows to a round
+    /// trip, handing each batch on as it fills. No more than a batch is
+    /// held: a reader that falls behind blocks the walk, and once it has
+    /// gone the cursor is closed with the rest unread.
+    /// Rows arrive a batch at a time (see `query_stream`), so a kept stream
+    /// can be read on later (`L`).
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let sql = sql.to_string();
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
+        self.with_conn(move |conn| {
+            let failed = |e| query_error(e, &sql);
+            let mut batches = Batches::new(fetch_size);
+            let array_size = u32::try_from(fetch_size.max(1)).unwrap_or(u32::MAX);
+            let mut stmt = conn
+                .statement(&sql)
+                .map_err(failed)?
+                .fetch_array_size(array_size)
+                .build()
+                .map_err(failed)?;
+            // As in `query_limited`: anything but a query is run, and sends
+            // no rows.
+            if !stmt.is_query() {
+                stmt.execute(&[]).map_err(failed)?;
+                if autocommit {
+                    conn.commit().ora()?;
+                }
+                shared::blocking_send(&out, StreamItem::Columns(Vec::new()))?;
+                return Ok(0);
+            }
+            let cursor = stmt.query(&[]).map_err(failed)?;
+            let columns: Vec<ColumnMeta> = cursor
+                .columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
+                .collect();
+            let width = columns.len();
+            shared::blocking_send(&out, StreamItem::Columns(columns))?;
+            for row in cursor {
+                let row = row.map_err(failed)?;
+                let mut cells = Vec::with_capacity(width);
+                for i in 0..width {
+                    cells.push(cell(&row, i)?);
+                }
+                if let Some(full) = batches.push(cells) {
+                    shared::blocking_send(&out, StreamItem::Rows(full))?;
+                }
+            }
+            if let Some(rest) = batches.rest() {
+                shared::blocking_send(&out, StreamItem::Rows(rest))?;
+            }
+            Ok(batches.sent())
         })
         .await
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
         let sql = sql.to_string();
-        self.with_conn(move |conn| execute_and_commit(conn, &sql))
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
+        self.with_conn(move |conn| execute_and_commit(conn, &sql, autocommit))
             .await
+    }
+
+    /// Sets the flag statements follow. Turning it on commits what is
+    /// pending, as MySQL's `SET autocommit=1` does.
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        if on {
+            self.with_conn(|conn| conn.commit().ora()).await?;
+        }
+        self.autocommit.store(on, Ordering::SeqCst);
+        Ok(())
     }
 
     /// Oracle keeps no `information_schema`. This follows `CURRENT_SCHEMA`,
@@ -379,289 +600,46 @@ impl Database for Oracle {
                  ORDER BY 1",
             )
             .await?;
-        Ok(result
-            .rows
-            .iter()
-            .filter_map(|row| row.first().cloned().flatten())
-            .collect())
+        Ok(first_column(result))
+    }
+
+    /// Binds each value to `:1`, `:2`, … by position. The catalog queries
+    /// return only character columns.
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let sql = sql.to_string();
+        let params = params.to_vec();
+        self.with_conn(move |conn| {
+            let binds: Vec<&dyn oracledb::ToDbValue> = params
+                .iter()
+                .map(|p| p as &dyn oracledb::ToDbValue)
+                .collect();
+            let cursor = conn.query(&sql, &binds).ora()?;
+            let columns: Vec<ColumnMeta> = cursor
+                .columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.data_type().to_string()))
+                .collect();
+            let mut rows = Vec::new();
+            for row in cursor {
+                let row = row.ora()?;
+                let mut cells = Vec::with_capacity(columns.len());
+                for i in 0..columns.len() {
+                    cells.push(cell(&row, i)?);
+                }
+                rows.push(cells);
+            }
+            Ok(QueryResult {
+                columns,
+                rows,
+                affected: None,
+                elapsed: std::time::Duration::ZERO,
+                truncated: false,
+            })
+        })
+        .await
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ConnectionConfig;
-
-    fn config() -> OracleConfig {
-        OracleConfig {
-            host: "db.invalid".into(),
-            port: 1521,
-            user: "alice".into(),
-            password: "hunter2".into(),
-            service: "ORCLPDB1".into(),
-            schema: None,
-            ssl_mode: SslMode::Prefer,
-            wallet: None,
-        }
-    }
-
-    fn tls() -> OracleConfig {
-        OracleConfig {
-            ssl_mode: SslMode::VerifyFull,
-            ..config()
-        }
-    }
-
-    /// The wallet tests need real files; each gets its own directory.
-    fn wallet_dir(name: &str, pem: Option<&str>) -> String {
-        let dir = std::env::temp_dir().join(format!("qry-wallet-{}-{name}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        if let Some(pem) = pem {
-            fs::write(dir.join("ewallet.pem"), pem).unwrap();
-        }
-        dir.display().to_string()
-    }
-
-    /// Accepts one connection on loopback, connects to it with `config`,
-    /// and answers with the first bytes the driver sent.
-    async fn first_bytes(config: OracleConfig) -> [u8; 5] {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            use std::io::Read;
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut bytes = [0; 5];
-            stream.read_exact(&mut bytes).unwrap();
-            bytes
-        });
-        let config = OracleConfig {
-            host: "127.0.0.1".into(),
-            port,
-            ..config
-        };
-        // The server hangs up after reading, so this is always an error.
-        assert!(Oracle::connect(config).await.is_err());
-        server.join().unwrap()
-    }
-
-    #[test]
-    fn label_is_user_at_host_port_service() {
-        assert_eq!(config().label(), "alice@db.invalid:1521/ORCLPDB1");
-        assert_eq!(config().connect_string(), "//db.invalid:1521/ORCLPDB1");
-    }
-
-    #[test]
-    fn require_and_stricter_go_over_tcps() {
-        for mode in SslMode::ALL {
-            let config = OracleConfig {
-                ssl_mode: mode,
-                ..config()
-            };
-            let tls = matches!(
-                mode,
-                SslMode::Require | SslMode::VerifyCa | SslMode::VerifyFull
-            );
-            assert_eq!(config.uses_tls(), tls, "{mode}");
-            let expected = if tls { "tcps://" } else { "//" };
-            assert!(config.connect_string().starts_with(expected), "{mode}");
-        }
-        let descriptor = tls().driver_config().unwrap().get_connect_descriptor();
-        assert!(
-            descriptor.to_lowercase().contains("protocol=tcps"),
-            "{descriptor}"
-        );
-    }
-
-    #[test]
-    fn the_driver_accepts_the_connect_string() {
-        let parsed = config().driver_config().unwrap();
-        assert_eq!(parsed.user(), Some("alice"));
-        let descriptor = parsed.get_connect_descriptor();
-        assert!(descriptor.contains("db.invalid"), "{descriptor}");
-        assert!(descriptor.contains("1521"), "{descriptor}");
-        assert!(descriptor.contains("ORCLPDB1"), "{descriptor}");
-        assert!(!descriptor.contains("hunter2"), "{descriptor}");
-    }
-
-    #[test]
-    fn debug_output_never_contains_the_password() {
-        let shown = format!("{:?}", ConnectionConfig::Oracle(config()));
-        assert_eq!(shown, "Oracle(alice@db.invalid:1521/ORCLPDB1)");
-        assert!(!shown.contains("hunter2"));
-    }
-
-    #[test]
-    fn identifiers_are_quoted_for_the_session_schema() {
-        assert_eq!(quote_ident("hr"), "\"hr\"");
-        assert_eq!(quote_ident("my\"schema"), "\"my\"\"schema\"");
-    }
-
-    #[test]
-    fn json_columns_render_as_compact_json() {
-        let object = JsonValue::JsonObject(HashMap::from([
-            (
-                "name".to_string(),
-                JsonValue::String("a \"b\"\n\u{1}".into()),
-            ),
-            (
-                "tags".to_string(),
-                JsonValue::JsonArray(vec![
-                    JsonValue::Boolean(true),
-                    JsonValue::Null,
-                    JsonValue::BinaryDouble(1.5),
-                ]),
-            ),
-            ("id".to_string(), JsonValue::Raw(vec![0xde, 0xad])),
-        ]));
-        assert_eq!(
-            json(&object),
-            r#"{"id":"dead","name":"a \"b\"\n\u0001","tags":[true,null,1.5]}"#
-        );
-    }
-
-    #[tokio::test]
-    async fn a_wallet_without_tls_is_refused_before_connecting() {
-        let config = OracleConfig {
-            wallet: Some("/etc/oracle/wallet".into()),
-            ..config()
-        };
-        // `db.invalid` never resolves, so an error here could only come
-        // from the wallet check, which runs first.
-        let message = match Oracle::connect(config).await {
-            Ok(_) => panic!("a wallet over plain TCP must not connect"),
-            Err(err) => err.to_string(),
-        };
-        assert!(message.contains("only used over TLS"), "{message}");
-        assert!(message.contains("/etc/oracle/wallet"), "{message}");
-    }
-
-    #[tokio::test]
-    async fn a_host_no_certificate_can_name_is_refused_before_connecting() {
-        let config = OracleConfig {
-            host: "not a host".into(),
-            ..tls()
-        };
-        let message = Oracle::connect(config).await.err().unwrap().to_string();
-        assert!(message.contains("not a host name"), "{message}");
-    }
-
-    #[tokio::test]
-    async fn tls_is_negotiated_before_anything_else_is_sent() {
-        // A TLS record starts 0x16 0x03: a handshake, then the version.
-        let bytes = first_bytes(tls()).await;
-        assert_eq!(bytes[..2], [0x16, 0x03], "{bytes:02x?}");
-
-        // Without TLS the first thing on the wire is a TNS CONNECT packet,
-        // type 1 in the fifth byte, and never a TLS record.
-        let bytes = first_bytes(config()).await;
-        assert_eq!(bytes[4], 1, "{bytes:02x?}");
-        assert_ne!(bytes[0], 0x16, "{bytes:02x?}");
-    }
-
-    /// A TLS server on loopback with a certificate for 127.0.0.1, signed by
-    /// a test CA no system trusts. `testdata/ca.pem` is that CA; its key was
-    /// thrown away after signing. Answers with the first bytes read inside
-    /// the TLS session, or the handshake error.
-    fn tls_server() -> (u16, std::thread::JoinHandle<Result<[u8; 5], String>>) {
-        use rustls::pki_types::pem::PemObject;
-        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-        use std::io::Read;
-
-        let certs = CertificateDer::pem_slice_iter(include_bytes!("../testdata/server.pem"))
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .unwrap();
-        let key = PrivateKeyDer::from_pem_slice(include_bytes!("../testdata/server.key")).unwrap();
-        let tls = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .unwrap();
-
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let server = std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut conn = rustls::ServerConnection::new(Arc::new(tls)).unwrap();
-            let mut session = rustls::Stream::new(&mut conn, &mut stream);
-            let mut bytes = [0; 5];
-            session.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-            Ok(bytes)
-        });
-        (port, server)
-    }
-
-    #[tokio::test]
-    async fn an_untrusted_certificate_is_refused() {
-        let (port, server) = tls_server();
-        let config = OracleConfig {
-            host: "127.0.0.1".into(),
-            port,
-            ..tls()
-        };
-        let message = Oracle::connect(config).await.err().unwrap().to_string();
-        assert!(message.to_lowercase().contains("certificate"), "{message}");
-        assert!(
-            server.join().unwrap().is_err(),
-            "nothing may cross an untrusted session"
-        );
-    }
-
-    #[tokio::test]
-    async fn a_wallet_can_add_the_ca_to_trust() {
-        let dir = wallet_dir("ca", Some(include_str!("../testdata/ca.pem")));
-        let (port, server) = tls_server();
-        let config = OracleConfig {
-            host: "127.0.0.1".into(),
-            port,
-            wallet: Some(dir),
-            ..tls()
-        };
-        // The server hangs up once it has read, so connecting still fails,
-        // but only after the handshake: the TNS CONNECT came through TLS.
-        assert!(Oracle::connect(config).await.is_err());
-        let bytes = server.join().unwrap().unwrap();
-        assert_eq!(bytes[4], 1, "{bytes:02x?}");
-    }
-
-    #[tokio::test]
-    async fn a_missing_wallet_file_says_where_it_looked() {
-        let dir = wallet_dir("missing", None);
-        let config = OracleConfig {
-            wallet: Some(dir.clone()),
-            host: "127.0.0.1".into(),
-            port: 1,
-            ..tls()
-        };
-        let message = Oracle::connect(config).await.err().unwrap().to_string();
-        assert!(message.contains("ewallet.pem"), "{message}");
-        assert!(message.contains(&dir), "{message}");
-    }
-
-    #[tokio::test]
-    async fn an_encrypted_wallet_key_is_explained() {
-        let pem =
-            "-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----\n";
-        let dir = wallet_dir("encrypted", Some(pem));
-        let config = OracleConfig {
-            wallet: Some(dir),
-            host: "127.0.0.1".into(),
-            port: 1,
-            ..tls()
-        };
-        let message = Oracle::connect(config).await.err().unwrap().to_string();
-        assert!(message.contains("encrypted"), "{message}");
-        assert!(message.contains("wallet password"), "{message}");
-    }
-
-    /// Nothing listens on port 1 on loopback, so the connection is refused
-    /// at once rather than waiting for a timeout. It must be an `Err`.
-    #[tokio::test]
-    async fn an_unreachable_server_is_an_error_not_a_panic() {
-        let config = OracleConfig {
-            host: "127.0.0.1".into(),
-            port: 1,
-            ..config()
-        };
-        assert!(Oracle::connect(config).await.is_err());
-    }
-}
+#[path = "oracle_tests.rs"]
+mod oracle_tests;

@@ -1,26 +1,33 @@
 name: CI # Continuous Integration
 
+# Modelled on sverb's ci.yml (tasks/T003-ci-pipeline.md). Every cargo
+# invocation uses --locked; only fmt and fuzz cannot take it.
+
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: 0
+  # Secrets go to an in-memory map instead of the OS keyring (no keyring
+  # daemon on the runners).
+  QRY_KEYRING: "off"
 
 jobs:
 
-  test:
-    name: Test Suite
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run tests
-        run: cargo test --locked --all-features --workspace
-
-  rustfmt:
+  fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
@@ -40,13 +47,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # vergen-gix (crates/qry/build.rs) reads git history
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy check
-        run: cargo clippy --all-targets --all-features --workspace -- -D warnings
+      - name: Clippy (all features)
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Clippy (no default features)
+        run: cargo clippy --workspace --all-targets --no-default-features --locked -- -D warnings
 
   docs:
     name: Docs
@@ -54,10 +65,355 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps --document-private-items --all-features --workspace
+        run: cargo doc --no-deps --document-private-items --all-features --workspace --locked
+
+  # Unit tests, SQLite integration tests and snapshots. Real-server database
+  # tests (T004) skip here: their URLs are unset, and QRY_DB_TESTS=skip tells
+  # `db_or_skip!` that skipping is intended, because otherwise it panics
+  # under CI. The `db` job runs them.
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    env:
+      QRY_DB_TESTS: skip
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        env: # `runner` is only available at step level
+          QRY_CONFIG: ${{ runner.temp }}/qry/config
+          QRY_DATA: ${{ runner.temp }}/qry/data
+        run: cargo test --workspace --all-features --locked
+
+  # Database drivers against real servers (T004): the `db_*` integration
+  # tests in crates/qry-core/tests, one throw-away database per test. Under
+  # CI a missing QRY_TEST_*_URL makes those tests panic, so this job must
+  # set all four, and never sets QRY_DB_TESTS. deploy/docker-compose.test.yml
+  # runs the same services locally. If Oracle's start-up (60-90 s) comes to
+  # dominate, split it into a `db-oracle` job and add that to ci-ok's needs.
+  db:
+    name: Database (services)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: qry
+          POSTGRES_PASSWORD: qry
+          POSTGRES_DB: qry
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U qry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: qry
+          MYSQL_DATABASE: qry
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -pqry"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: qry
+          MARIADB_DATABASE: qry
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: qry
+        ports:
+          - 1521:1521
+        options: >-
+          --health-cmd healthcheck.sh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 60
+    env:
+      QRY_TEST_POSTGRES_URL: postgres://qry:qry@localhost:5432/qry
+      QRY_TEST_MYSQL_URL: mysql://root:qry@localhost:3306/qry
+      QRY_TEST_MARIADB_URL: mysql://root:qry@localhost:3307/qry
+      QRY_TEST_ORACLE_URL: oracle://system:qry@localhost:1521/FREEPDB1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run database tests
+        run: cargo test -p qry-core --all-features --locked --no-fail-fast --test 'db_*'
+      - name: Server logs
+        if: failure()
+        run: for c in $(docker ps -aq); do docker logs "$c" 2>&1 | tail -n 200; done
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install stable toolchain (to read the MSRV)
+        uses: dtolnay/rust-toolchain@stable
+      # The MSRV lives only in `[workspace.package] rust-version`; read it from there.
+      - name: Read rust-version
+        id: msrv
+        run: |
+          msrv="$(cargo metadata --no-deps --format-version 1 --locked \
+            | jq -r '[.packages[].rust_version // empty] | unique
+                     | if length == 1 then .[0]
+                       else error("workspace crates disagree on rust-version: \(.)") end')"
+          echo "MSRV is $msrv"
+          echo "version=$msrv" >> "$GITHUB_OUTPUT"
+      - name: Install MSRV toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-${{ steps.msrv.outputs.version }}
+      # `+toolchain` overrides rust-toolchain.toml (channel = "stable").
+      - name: Check on MSRV
+        run: cargo +${{ steps.msrv.outputs.version }} check --workspace --all-features --locked
+
+  deny:
+    name: cargo-deny
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # The action passes `arguments` before `command`, which is the order
+      # cargo-deny 0.20 needs for --all-features.
+      - name: Check advisories, bans, licenses and sources
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+          arguments: --all-features --locked
+
+  # qry-core must never depend on a UI crate, and nothing may depend on the
+  # binary. deny.toml bans the same crates; these are two more, independent
+  # implementations of the rule.
+  layering:
+    name: Crate layering
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Workspace metadata and layering test
+        run: cargo test -p qry --test workspace_metadata --locked
+      - name: Layering script self-test
+        run: python3 scripts/check-layering.py --self-test
+      - name: Check dependency direction (script)
+        run: python3 scripts/check-layering.py
+
+  # Every fuzz target for 30 s, from the seed corpus. The nightly runs, with
+  # a corpus kept between them, are fuzz.yml. cargo-fuzz needs nightly;
+  # `+nightly` overrides rust-toolchain.toml (channel = "stable").
+  fuzz-smoke:
+    name: Fuzz (30 s per target)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the targets link qry, whose build script runs vergen-gix
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - name: Seed the corpus
+        run: fuzz/seed-corpus.sh
+      - name: Build every target
+        run: cargo +nightly fuzz build --target x86_64-unknown-linux-gnu
+      - name: Run every target for 30 s
+        run: |
+          status=0
+          for target in $(cargo +nightly fuzz list); do
+            echo "::group::$target"
+            if ! cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "$target" "fuzz/corpus/$target" -- \
+                 -max_total_time=30 -rss_limit_mb=2048 -timeout=10; then
+              echo "::error::fuzz target $target crashed"
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $status
+      - name: Upload crashes
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: fuzz/artifacts
+          if-no-files-found: ignore
+
+  # Benchmarks must compile, and the gate script must work. They are run
+  # (and gated) nightly by bench.yml, not here: shared runners are too
+  # noisy for timing.
+  bench-build:
+    name: Benchmarks compile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build benchmarks
+        run: cargo bench --workspace --no-run --locked
+      - name: Gate script self-test
+        run: python3 scripts/bench-gate.py self-test
+
+  # The one non-Linux job: keeps the winresource build script and the
+  # cfg(not(windows)) signal-hook code honest. CD covers macOS.
+  windows-build:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+      # Snapshots and fixtures are compared byte for byte; keep LF endings.
+      - name: Disable CRLF conversion
+        run: git config --global core.autocrlf false
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build -p qry --locked
+      - name: Unit tests
+        run: cargo test -p qry --locked --lib
+
+  # The release tooling (T007), checked without a tag: the manifest
+  # rewriter's self-test, a lint of each manifest, two packings of the same
+  # binary that must be byte-identical, and qry-core's publishability.
+  packaging:
+    name: Packaging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # vergen-gix, and SOURCE_DATE_EPOCH from the last commit
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: update-packaging.py self-test
+        run: python3 scripts/update-packaging.py --self-test
+      - name: Lint the manifests
+        run: |
+          bash -n packaging/aur/qry/PKGBUILD
+          bash -n packaging/aur/qry-bin/PKGBUILD
+          ruby -c packaging/homebrew/qry.rb
+          jq -e . packaging/scoop/qry.json >/dev/null
+          bash -n scripts/release-package.sh
+      # The archive's determinism does not depend on how the binary was
+      # built, so a debug build is enough here; cd.yml packs release builds.
+      - name: Build
+        run: cargo build --locked -p qry
+      - name: Pack the Linux archive twice
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')"
+          scripts/release-package.sh "$version" linux-x86_64 target/debug/qry "$RUNNER_TEMP/a"
+          scripts/release-package.sh "$version" linux-x86_64 target/debug/qry "$RUNNER_TEMP/b"
+          archive="qry-$version-linux-x86_64.tar.gz"
+          cmp "$RUNNER_TEMP/a/$archive" "$RUNNER_TEMP/b/$archive"
+          cmp "$RUNNER_TEMP/a/$archive.sha256" "$RUNNER_TEMP/b/$archive.sha256"
+          (cd "$RUNNER_TEMP/a" && sha256sum -c "$archive.sha256")
+          stem="qry-$version-linux-x86_64"
+          printf '%s\n' "$stem/" "$stem/CHANGELOG.md" "$stem/LICENSE" "$stem/README.md" \
+            "$stem/completions/" "$stem/completions/_qry" "$stem/completions/_qry.ps1" \
+            "$stem/completions/qry.bash" "$stem/completions/qry.fish" \
+            "$stem/man/" "$stem/man/qry.1" "$stem/qry" > "$RUNNER_TEMP/expected"
+          tar -tzf "$RUNNER_TEMP/a/$archive" > "$RUNNER_TEMP/actual"
+          diff -u "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual"
+      - name: qry-core is publishable
+        run: cargo package -p qry-core --locked --no-verify
+
+  # The flake builds the package (tests off; this workflow runs them) and
+  # installs the man page.
+  nix:
+    name: Nix flake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Check the flake
+        run: nix flake check --no-build
+      - name: Build
+        run: nix build .#qry -L
+      - name: Smoke test
+        run: |
+          ./result/bin/qry --version
+          test -f result/share/man/man1/qry.1.gz
+
+  # The only required status check in branch protection. It needs every
+  # other job, so a job added later is covered here and needs no settings
+  # change: add it to `needs`. `always()` makes it run (and fail) when a
+  # needed job failed or was cancelled; a skipped job counts as passing.
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - fmt
+      - clippy
+      - docs
+      - test
+      - db
+      - msrv
+      - deny
+      - layering
+      - fuzz-smoke
+      - bench-build
+      - windows-build
+      - packaging
+      - nix
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null

@@ -1,0 +1,52 @@
+---
+source: crates/qry/src/views/views_tests.rs
+expression: "h.render(160, 48)"
+---
+ qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
+ SCHEMA                                 │ QUERY  ln 1, col 1                                                                                                    
+           No connections yet           │  1 │                                                                                                                  
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │ RESULTS                                                                                                               
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+                                        │                                                                                                                       
+ connecting to scratch… · sqlite · :memory:                                                                                                                     
+ Enter open  Space expand  n new conn  Tab next pane  : commands  ctrl-q quit                                                                            ? help

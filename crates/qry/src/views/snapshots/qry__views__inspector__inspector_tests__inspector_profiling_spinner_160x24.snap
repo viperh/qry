@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/inspector_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                                                                                                     sqlite · :memory:   NORMAL  
+ SCHEMA                                 │ QUERY  ln 1, col 20                                                          │ INSPECTOR                              
+▌▸ ● sq  scratch                        │▌ 1 │ select * from users                                                     │ COLUMN                                 
+                                        │                                                                              │ c0 · col 1/3                           
+                                        │                                                                              │ ⠙ counting… 20 000 / 50 000            
+                                        │                                                                              │                                        
+                                        │                                                                              │ RECORD · row 1 / 50 000                
+                                        │                                                                              │ c0  r0c0                               
+                                        │                                                                              │ c1  r0c1                               
+                                        │                                                                              │ c2  r0c2                               
+                                        │ RESULTS  50 000 rows                                                         │                                        
+                                        │      │c0    │c1    │c2                                                       │                                        
+                                        │    1 │r0c0  │r0c1  │r0c2                                                     │                                        
+                                        │    2 │r1c0  │r1c1  │r1c2                                                     │                                        
+                                        │    3 │r2c0  │r2c1  │r2c2                                                     │                                        
+                                        │    4 │r3c0  │r3c1  │r3c2                                                     │                                        
+                                        │    5 │r4c0  │r4c1  │r4c2                                                     │                                        
+                                        │    6 │r5c0  │r5c1  │r5c2                                                     │                                        
+                                        │    7 │r6c0  │r6c1  │r6c2                                                     │                                        
+                                        │    8 │r7c0  │r7c1  │r7c2                                                     │                                        
+                                        │    9 │r8c0  │r8c1  │r8c2                                                     │                                        
+                                        │   10 │r9c0  │r9c1  │r9c2                                                     │                                        
+ scratch · sqlite · :memory: · auto                                                                                                         R 1 / 50 000  C 1/3 
+ Enter inspect  y copy  ctrl-e export  Tab next pane  : commands  ctrl-q quit                                                                            ? help

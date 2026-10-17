@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/toast_tests.rs
+expression: text
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+▌▸ ⠋ sq  scratch              │  1 │                                                                                    
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                      ┌ New Connection ─────────────────────────────────────────────── postgres ─┐                      
+                      │   Driver       ‹ PostgreSQL ›                                            │                      
+                      │ › Name                                                                   │                      
+                      │                [ ] use a DSN instead                                     │                      
+                      │   Host                                                                   │                      
+                      │   Port         5432                                                      │                      
+                      │   User                                                                   │                      
+                      │   Password                                                               │                      
+                      │   Password in  ‹ keychain ›                                              │                      
+                      │   Database                                                               │                      
+                      │   Schema                                                                 │                      
+                      │   SSL          ‹ prefer ›                                                │                      
+                      │   Label        ‹ none ›                                                  │                      
+                      │                [ Test ]                                                  │                      
+                      │                                                                          │                      
+                      │ Enter save & connect · ctrl-t test · Tab next · → change · Esc cancel    │                      
+                      └──────────────────────────────────────────────────────────────────────────┘                      
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ ✗ cannot save connections: permission denied (os error 13)                              
+ connecting to scratch… · sqlite · :memory:                                                                             
+ Enter submit  Tab next field  Esc cancel                                                                       F1 help

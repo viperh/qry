@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/reducer/help_tests.rs
+expression: "h.render(w, ht)"
+---
+┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ Global                                                     Results · Copy & search                                   │
+│ ctrl-q               quit                                  ctrl-e      export the result to a file                   │
+│ ctrl-z               suspend to the shell                  /           search the results                            │
+│ F1                   show / hide the help                  y           copy the cell                                 │
+│ ctrl-p               command palette                       Y           copy the row                                  │
+│ Tab                  next pane                             n           next match                                    │
+│ shift-Tab            previous pane                         N           previous match                                │
+│ ctrl-n               new connection                        ctrl-y      copy as…                                      │
+│ ctrl-o               import connections                    Enter       inspect the value                             │
+│ ctrl-/               show / hide the key hints             i           show / hide the inspector                     │
+│ ctrl-↑               grow the editor                       Results · Other                                           │
+│ ctrl-↓               shrink the editor                     ?           show / hide the help                          │
+│ F11                  maximise the pane / restore           :           command palette                               │
+│ ctrl-l               show the messages                     ctrl-c      cancel the query (copy when none runs)        │
+│ Esc                  dismiss the message                   d           describe the table                            │
+│                                                            s           sort by the column                            │
+│ Tree                                                       S           add the column to the sort                    │
+│ ?                    show / hide the help                  ctrl-g      go to a row                                   │
+│ :                    command palette                       <           narrow the column                             │
+│ n                    new connection                        >           widen the column                              │
+│ e                    edit this connection                  =           reset the column widths                       │
+│ D Del                forget this connection                F           freeze the first column                       │
+│ c                    duplicate this connection             L           load the next rows                            │
+│ k ↑                  up                                    A           fetch every row                               │
+│ j ↓                  down                                  J           show / hide the jobs                          │
+│ h ←                  left                                                                                            │
+│ l →                  right                                 Inspector                                                 │
+│ PgUp                 up a page                             ?           show / hide the help                          │
+│ PgDn                 down a page                           :           command palette                               │
+│ g g Home             to the top                            Esc         go to the results                             │
+│ G End                to the bottom                         k ↑         up                                            │
+│ Space                expand / collapse                     j ↓         down                                          │
+│ Enter                connect / switch to its session       h ←         left                                          │
+│ shift-Enter          open another session on it            l →         right                                         │
+│ r                    refresh the node                      g g         to the top                                    │
+│                                                                                                                      │
+│ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value       │
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 1–35 of 105 ─┘

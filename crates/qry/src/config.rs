@@ -1,109 +1,393 @@
-use std::{collections::HashMap, env, path::PathBuf, sync::LazyLock};
+use std::{env, path::PathBuf, sync::LazyLock};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use color_eyre::eyre::{WrapErr, eyre};
 use directories::ProjectDirs;
-use ratatui::style::{Color, Modifier, Style};
-use serde::{Deserialize, de::Deserializer};
+use serde::{Deserialize, de::IgnoredAny};
+use serde_json::{Map, Value};
+use strum::IntoEnumIterator;
 use tracing::error;
 
-use crate::{action::Action, app::Mode, keymap::PaneKeys};
+use crate::{
+    action::Action,
+    config_migrate::{self as migrate, Migrated},
+    keymap::{KeyContext, Keymap, chord_to_string, display_order, parse_key_sequence},
+};
 
 /// The default config, baked into the binary at compile time. User config
 /// files found in [`get_config_dir`] are layered on top of it.
 const CONFIG: &str = include_str!("../../../.config/config.json");
+
+/// What errors and warnings call the built-in config.
+const EMBEDDED: &str = "the built-in config";
+
+/// The user config files looked for in [`get_config_dir`], in the order they
+/// are layered: a later one wins.
+const CONFIG_FILES: [(&str, config::FileFormat); 5] = [
+    ("config.json5", config::FileFormat::Json5),
+    // JSON5 reads every JSON file too, and lets `config.json` carry comments
+    // like the built-in one does: pointing `QRY_CONFIG` at the repo's
+    // `.config/` (as `.envrc` does) layers that very file.
+    ("config.json", config::FileFormat::Json5),
+    ("config.yaml", config::FileFormat::Yaml),
+    ("config.toml", config::FileFormat::Toml),
+    ("config.ini", config::FileFormat::Ini),
+];
 
 /// Reverse-domain qualifier and organization used to locate the per-user
 /// config and data directories. Change these when you rename the project.
 const APP_QUALIFIER: &str = "dev";
 const APP_ORGANIZATION: &str = "viperh";
 
-#[derive(Clone, Debug, Default, Deserialize)]
+/// The config in effect: the built-in one with the user's files over it.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Config {
+    /// Every key binding; see [`crate::keymap`].
+    pub(crate) keymap: Keymap,
+    /// The theme's name (`--theme` wins over it); see [`crate::theme`].
+    pub(crate) theme: Option<String>,
+    /// Run all keeps going after a statement fails, instead of stopping.
+    pub(crate) continue_on_error: bool,
+    /// The most rows a query keeps; 0 keeps every row.
+    pub(crate) max_rows: usize,
+    /// The first write of a session on a `prod` connection asks first.
+    pub(crate) confirm_writes_on_prod: bool,
+    /// What the query history records, and how much of it.
+    pub(crate) history: HistoryConfig,
+    /// Problems that did not stop the config from loading; see
+    /// [`Config::warnings`].
+    warnings: Vec<String>,
+}
+
+/// One config file as written, before its bindings are read.
+#[derive(Debug, Default, Deserialize)]
+struct RawFile {
     #[serde(default)]
-    pub keybindings: KeyBindings,
-    /// Keys that act inside one pane; see [`crate::keymap`].
+    theme: Option<String>,
     #[serde(default)]
-    pub panes: PaneKeys,
+    continue_on_error: Option<bool>,
     #[serde(default)]
-    pub styles: Styles,
+    max_rows: Option<usize>,
+    confirm_writes_on_prod: Option<bool>,
+    history: Option<RawHistory>,
+    /// `{ context: { chord: action or null } }`.
+    #[serde(default)]
+    keybindings: Option<Map<String, Value>>,
+    /// The old format's per-pane keys; see [`crate::config_migrate`].
+    #[serde(default)]
+    panes: Option<Map<String, Value>>,
+    /// The template's old `styles` section. Themes replaced it, so it is
+    /// only noticed, to warn that it is ignored.
+    #[serde(default)]
+    styles: Option<IgnoredAny>,
+}
+
+/// The query history's settings; see [`crate::history_store`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HistoryConfig {
+    /// Record statements at all.
+    pub(crate) enabled: bool,
+    /// The most entries one connection keeps.
+    pub(crate) max_entries: usize,
+    /// Write the scratch database's history to disk too, instead of only
+    /// keeping it for the run.
+    pub(crate) ephemeral_to_disk: bool,
+    /// The words whose string literal is stored as `'•••'`.
+    pub(crate) redact: Vec<String>,
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_entries: qry_core::history::DEFAULT_CAP,
+            ephemeral_to_disk: false,
+            redact: qry_core::history::DEFAULT_REDACT
+                .iter()
+                .map(|w| (*w).to_string())
+                .collect(),
+        }
+    }
+}
+
+/// The `history` section as written: each key is optional.
+#[derive(Debug, Default, Deserialize)]
+struct RawHistory {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    max_entries: Option<usize>,
+    #[serde(default)]
+    ephemeral_to_disk: Option<bool>,
+    #[serde(default)]
+    redact: Option<Vec<String>>,
 }
 
 /// Upper-cased crate name, used as the prefix for the `*_DATA`, `*_CONFIG`
 /// and `*_LOG_LEVEL` environment variables (see `.envrc`).
-pub static PROJECT_NAME: LazyLock<String> =
+pub(crate) static PROJECT_NAME: LazyLock<String> =
     LazyLock::new(|| env!("CARGO_CRATE_NAME").to_uppercase().to_string());
-pub static DATA_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+pub(crate) static DATA_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
     env::var(format!("{}_DATA", PROJECT_NAME.clone()))
         .ok()
         .map(PathBuf::from)
 });
-pub static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
+pub(crate) static CONFIG_FOLDER: LazyLock<Option<PathBuf>> = LazyLock::new(|| {
     env::var(format!("{}_CONFIG", PROJECT_NAME.clone()))
         .ok()
         .map(PathBuf::from)
 });
 
 impl Config {
-    pub fn new() -> color_eyre::Result<Self, config::ConfigError> {
-        let default_config: Config = json5::from_str(CONFIG)
-            .map_err(|e| config::ConfigError::Foreign(Box::new(e)))?;
-        let data_dir = get_data_dir();
+    /// The built-in config with every user file in [`get_config_dir`] over
+    /// it. A file that cannot be read, a key that cannot be parsed or an
+    /// unknown action or context is an error naming the file.
+    pub(crate) fn new() -> color_eyre::Result<Self> {
         let config_dir = get_config_dir();
-        let mut builder = config::Config::builder()
-            .set_default("data_dir", data_dir.to_str().unwrap())?
-            .set_default("config_dir", config_dir.to_str().unwrap())?;
-
-        let config_files = [
-            ("config.json5", config::FileFormat::Json5),
-            ("config.json", config::FileFormat::Json),
-            ("config.yaml", config::FileFormat::Yaml),
-            ("config.toml", config::FileFormat::Toml),
-            ("config.ini", config::FileFormat::Ini),
-        ];
-        let mut found_config = false;
-        for (file, format) in &config_files {
-            let source = config::File::from(config_dir.join(file))
-                .format(*format)
-                .required(false);
-            builder = builder.add_source(source);
-            if config_dir.join(file).exists() {
-                found_config = true
+        let mut files = Vec::new();
+        for (file, format) in CONFIG_FILES {
+            let path = config_dir.join(file);
+            if !path.exists() {
+                continue;
             }
+            let name = path.display().to_string();
+            let raw: RawFile = config::Config::builder()
+                .add_source(config::File::from(path).format(format))
+                .build()
+                .and_then(config::Config::try_deserialize)
+                .wrap_err_with(|| format!("cannot read {name}"))?;
+            files.push((name, raw));
         }
-        if !found_config {
+        if files.is_empty() {
             error!("No configuration file found. Application may not behave as expected");
         }
+        Self::layered(files)
+    }
 
-        let mut cfg: Self = builder.build()?.try_deserialize()?;
+    /// The built-in config with `files` over it, in order.
+    fn layered(files: Vec<(String, RawFile)>) -> color_eyre::Result<Self> {
+        let embedded: RawFile = json5::from_str(CONFIG).wrap_err("the built-in config")?;
+        let mut config = Self::default();
+        config.apply(EMBEDDED, embedded)?;
+        for (name, file) in files {
+            config.apply(&name, file)?;
+        }
+        config.check_prefixes();
+        Ok(config)
+    }
 
-        for (mode, default_bindings) in default_config.keybindings.0.iter() {
-            let user_bindings = cfg.keybindings.0.entry(*mode).or_default();
-            for (key, cmd) in default_bindings.iter() {
-                user_bindings
-                    .entry(key.clone())
-                    .or_insert_with(|| cmd.clone());
+    /// Layers one file over what is loaded so far: its theme, and each of
+    /// its bindings over the same chord's (`null` unbinds it).
+    fn apply(&mut self, name: &str, file: RawFile) -> color_eyre::Result<()> {
+        if file.styles.is_some() {
+            self.warnings.push(
+                "the config's \"styles\" section is ignored; colours come from the theme \
+                 (\"theme\": \"dark\")"
+                    .to_string(),
+            );
+        }
+        if file.theme.is_some() {
+            self.theme = file.theme;
+        }
+        if let Some(keep_going) = file.continue_on_error {
+            self.continue_on_error = keep_going;
+        }
+        if let Some(max_rows) = file.max_rows {
+            self.max_rows = max_rows;
+        }
+        if let Some(ask) = file.confirm_writes_on_prod {
+            self.confirm_writes_on_prod = ask;
+        }
+        if let Some(history) = file.history {
+            let h = &mut self.history;
+            h.enabled = history.enabled.unwrap_or(h.enabled);
+            h.max_entries = history.max_entries.unwrap_or(h.max_entries).max(1);
+            h.ephemeral_to_disk = history.ephemeral_to_disk.unwrap_or(h.ephemeral_to_disk);
+            if let Some(redact) = history.redact {
+                h.redact = redact;
             }
         }
-        cfg.panes.merge_defaults(&default_config.panes);
-        for (mode, default_styles) in default_config.styles.0.iter() {
-            let user_styles = cfg.styles.0.entry(*mode).or_default();
-            for (style_key, style) in default_styles.iter() {
-                user_styles.entry(style_key.clone()).or_insert(*style);
+
+        let mut old = Migrated::default();
+        let mut old_format = file.panes.is_some();
+        for (section, bindings) in file.keybindings.unwrap_or_default() {
+            if let Some(context) = context_named(&section) {
+                self.read_section(name, context, &bindings)?;
+            } else if let Some(context) = migrate::old_context(&section) {
+                old_format = true;
+                migrate::mode_section(&section, context, &bindings, &mut old);
+            } else {
+                let contexts: Vec<_> = KeyContext::iter().map(|c| c.to_string()).collect();
+                return Err(eyre!(
+                    "{name}: \"keybindings\" has an unknown context \"{section}\"; \
+                     the contexts are: {}",
+                    contexts.join(", ")
+                ));
             }
         }
+        if let Some(panes) = &file.panes {
+            migrate::panes(panes, &mut old);
+        }
+        if old_format {
+            for (context, chord, action) in &old.bindings {
+                self.keymap.bind(*context, chord, *action);
+            }
+            let mut warning = format!(
+                "{name}: config uses the old keybinding format; it was converted, run qry \
+                 --print-config to see the new one"
+            );
+            if !old.skipped.is_empty() {
+                warning.push_str(&format!(
+                    "; these keys could not be converted and were skipped: {}",
+                    old.skipped.join(", ")
+                ));
+            }
+            self.warnings.push(warning);
+        }
+        Ok(())
+    }
 
-        Ok(cfg)
+    /// Reads one context's `{ chord: action or null }`.
+    fn read_section(
+        &mut self,
+        name: &str,
+        context: KeyContext,
+        bindings: &Value,
+    ) -> color_eyre::Result<()> {
+        let Value::Object(bindings) = bindings else {
+            return Err(eyre!(
+                "{name}: keybindings.{context} must map keys to actions, not {bindings}"
+            ));
+        };
+        for (raw, action) in bindings {
+            let chord = parse_key_sequence(raw).map_err(|e| {
+                eyre!("{name}: keybindings.{context}: cannot read the key \"{raw}\": {e}")
+            })?;
+            if action.is_null() {
+                self.keymap.unbind(context, &chord);
+                continue;
+            }
+            let action = serde_json::from_value::<Action>(action.clone()).map_err(|e| {
+                eyre!(
+                    "{name}: keybindings.{context}: \"{raw}\" is bound to {action}, which \
+                     is not an action ({e})"
+                )
+            })?;
+            self.keymap.bind(context, &chord, action);
+        }
+        Ok(())
+    }
+
+    /// One warning for every binding that starts a longer one in the same
+    /// context: it can only run once the sequence times out.
+    fn check_prefixes(&mut self) {
+        let conflicts = self.keymap.prefix_conflicts();
+        if conflicts.is_empty() {
+            return;
+        }
+        let listed: Vec<String> = conflicts
+            .iter()
+            .map(|(context, short, long)| {
+                format!(
+                    "{context} `{}` and `{}`",
+                    chord_to_string(short),
+                    chord_to_string(long)
+                )
+            })
+            .collect();
+        self.warnings.push(format!(
+            "these keys start a longer binding, so they only run after waiting a second: {}",
+            listed.join("; ")
+        ));
+    }
+
+    /// Problems with the config that do not stop qry from starting, one line
+    /// each, for the runtime to report.
+    pub(crate) fn warnings(&self) -> Vec<String> {
+        self.warnings.clone()
+    }
+
+    /// The keymap in effect, written in the config's own format: what
+    /// `qry --print-config` prints. Contexts come in their usual order, and
+    /// within one the bindings follow the actions' order, an action's chords
+    /// plain and short first. Read back as a user file, it gives the same
+    /// keymap.
+    pub(crate) fn effective_json(&self) -> String {
+        let quote = |s: &str| Value::String(s.to_string()).to_string();
+        let mut out = String::from("{\n");
+        if let Some(theme) = &self.theme {
+            out.push_str(&format!("  \"theme\": {},\n", quote(theme)));
+        }
+        out.push_str(&format!(
+            "  \"continue_on_error\": {},\n",
+            self.continue_on_error
+        ));
+        out.push_str(&format!("  \"max_rows\": {},\n", self.max_rows));
+        out.push_str(&format!(
+            "  \"confirm_writes_on_prod\": {},\n",
+            self.confirm_writes_on_prod
+        ));
+        let h = &self.history;
+        let redact: Vec<String> = h.redact.iter().map(|w| quote(w)).collect();
+        out.push_str(&format!(
+            "  \"history\": {{\n    \"enabled\": {},\n    \"max_entries\": {},\n    \
+             \"ephemeral_to_disk\": {},\n    \"redact\": [{}]\n  }},\n",
+            h.enabled,
+            h.max_entries,
+            h.ephemeral_to_disk,
+            redact.join(", ")
+        ));
+        out.push_str("  \"keybindings\": {");
+        for (i, context) in KeyContext::iter().enumerate() {
+            let mut bindings: Vec<_> = self
+                .keymap
+                .bindings(context)
+                .map(|(chord, action)| (action.rank(), display_order(chord), *action))
+                .collect();
+            bindings.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
+            out.push_str(if i == 0 { "\n" } else { ",\n" });
+            out.push_str(&format!("    {}: {{", quote(&context.to_string())));
+            for (j, (_, (_, _, chord), action)) in bindings.iter().enumerate() {
+                out.push_str(if j == 0 { "\n" } else { ",\n" });
+                let action = serde_json::to_string(action).unwrap_or_default();
+                out.push_str(&format!("      {}: {action}", quote(chord)));
+            }
+            out.push_str(if bindings.is_empty() { "}" } else { "\n    }" });
+        }
+        out.push_str("\n  }\n}\n");
+        out
     }
 
     /// Only the built-in config, ignoring any user files. Keeps tests
     /// independent of the machine they run on.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
+    #[allow(
+        clippy::expect_used,
+        reason = "the embedded config is a constant that every test parses"
+    )]
     pub fn embedded() -> Self {
-        json5::from_str(CONFIG).expect("the embedded config is valid")
+        Self::layered(Vec::new()).expect("the embedded config is valid")
+    }
+
+    /// The built-in config with one user file over it, written as JSON and
+    /// read the way [`Config::new`] reads `config.json`. `path` only names it
+    /// in errors and warnings.
+    #[cfg(any(test, feature = "test-util"))]
+    pub fn with_user_file(path: &str, json: &str) -> color_eyre::Result<Self> {
+        let raw: RawFile = config::Config::builder()
+            .add_source(config::File::from_str(json, config::FileFormat::Json))
+            .build()
+            .and_then(config::Config::try_deserialize)
+            .wrap_err_with(|| format!("cannot read {path}"))?;
+        Self::layered(vec![(path.to_string(), raw)])
     }
 }
 
-pub fn get_data_dir() -> PathBuf {
+/// The context a `keybindings` section names, if it is one.
+fn context_named(section: &str) -> Option<KeyContext> {
+    KeyContext::iter().find(|context| context.to_string() == section)
+}
+
+pub(crate) fn get_data_dir() -> PathBuf {
     if let Some(s) = DATA_FOLDER.clone() {
         s
     } else if let Some(proj_dirs) = project_directory() {
@@ -113,7 +397,7 @@ pub fn get_data_dir() -> PathBuf {
     }
 }
 
-pub fn get_config_dir() -> PathBuf {
+pub(crate) fn get_config_dir() -> PathBuf {
     if let Some(s) = CONFIG_FOLDER.clone() {
         s
     } else if let Some(proj_dirs) = project_directory() {
@@ -127,492 +411,6 @@ fn project_directory() -> Option<ProjectDirs> {
     ProjectDirs::from(APP_QUALIFIER, APP_ORGANIZATION, env!("CARGO_PKG_NAME"))
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct KeyBindings(pub HashMap<Mode, HashMap<Vec<KeyEvent>, Action>>);
-
-impl<'de> Deserialize<'de> for KeyBindings {
-    fn deserialize<D>(deserializer: D) -> color_eyre::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed_map = HashMap::<Mode, HashMap<String, Action>>::deserialize(deserializer)?;
-
-        let keybindings = parsed_map
-            .into_iter()
-            .map(|(mode, inner_map)| {
-                let converted_inner_map = inner_map
-                    .into_iter()
-                    .map(|(key_str, cmd)| {
-                        parse_key_sequence(&key_str)
-                            .map(|keys| (keys, cmd))
-                            .map_err(|e| {
-                                serde::de::Error::custom(format!(
-                                    "invalid key sequence `{key_str}`: {e}"
-                                ))
-                            })
-                    })
-                    .collect::<Result<_, D::Error>>()?;
-                Ok((mode, converted_inner_map))
-            })
-            .collect::<Result<_, D::Error>>()?;
-
-        Ok(KeyBindings(keybindings))
-    }
-}
-
-fn parse_key_event(raw: &str) -> color_eyre::Result<KeyEvent, String> {
-    let raw_lower = raw.to_ascii_lowercase();
-    let (remaining, modifiers) = extract_modifiers(&raw_lower);
-    parse_key_code_with_modifiers(remaining, modifiers)
-}
-
-fn extract_modifiers(raw: &str) -> (&str, KeyModifiers) {
-    let mut modifiers = KeyModifiers::empty();
-    let mut current = raw;
-
-    loop {
-        match current {
-            rest if rest.starts_with("ctrl-") => {
-                modifiers.insert(KeyModifiers::CONTROL);
-                current = &rest[5..];
-            }
-            rest if rest.starts_with("alt-") => {
-                modifiers.insert(KeyModifiers::ALT);
-                current = &rest[4..];
-            }
-            rest if rest.starts_with("shift-") => {
-                modifiers.insert(KeyModifiers::SHIFT);
-                current = &rest[6..];
-            }
-            _ => break, // break out of the loop if no known prefix is detected
-        };
-    }
-
-    (current, modifiers)
-}
-
-fn parse_key_code_with_modifiers(
-    raw: &str,
-    mut modifiers: KeyModifiers,
-) -> color_eyre::Result<KeyEvent, String> {
-    let c = match raw {
-        "esc" => KeyCode::Esc,
-        "enter" => KeyCode::Enter,
-        "left" => KeyCode::Left,
-        "right" => KeyCode::Right,
-        "up" => KeyCode::Up,
-        "down" => KeyCode::Down,
-        "home" => KeyCode::Home,
-        "end" => KeyCode::End,
-        "pageup" => KeyCode::PageUp,
-        "pagedown" => KeyCode::PageDown,
-        "backtab" => {
-            modifiers.insert(KeyModifiers::SHIFT);
-            KeyCode::BackTab
-        }
-        "backspace" => KeyCode::Backspace,
-        "delete" => KeyCode::Delete,
-        "insert" => KeyCode::Insert,
-        "f1" => KeyCode::F(1),
-        "f2" => KeyCode::F(2),
-        "f3" => KeyCode::F(3),
-        "f4" => KeyCode::F(4),
-        "f5" => KeyCode::F(5),
-        "f6" => KeyCode::F(6),
-        "f7" => KeyCode::F(7),
-        "f8" => KeyCode::F(8),
-        "f9" => KeyCode::F(9),
-        "f10" => KeyCode::F(10),
-        "f11" => KeyCode::F(11),
-        "f12" => KeyCode::F(12),
-        "space" => KeyCode::Char(' '),
-        "hyphen" => KeyCode::Char('-'),
-        "minus" => KeyCode::Char('-'),
-        "tab" => KeyCode::Tab,
-        c if c.len() == 1 => {
-            let mut c = c.chars().next().unwrap();
-            if modifiers.contains(KeyModifiers::SHIFT) {
-                c = c.to_ascii_uppercase();
-            }
-            KeyCode::Char(c)
-        }
-        _ => return Err(format!("Unable to parse {raw}")),
-    };
-    Ok(KeyEvent::new(c, modifiers))
-}
-
 #[cfg(test)]
-pub fn key_event_to_string(key_event: &KeyEvent) -> String {
-    let char;
-    let key_code = match key_event.code {
-        KeyCode::Backspace => "backspace",
-        KeyCode::Enter => "enter",
-        KeyCode::Left => "left",
-        KeyCode::Right => "right",
-        KeyCode::Up => "up",
-        KeyCode::Down => "down",
-        KeyCode::Home => "home",
-        KeyCode::End => "end",
-        KeyCode::PageUp => "pageup",
-        KeyCode::PageDown => "pagedown",
-        KeyCode::Tab => "tab",
-        KeyCode::BackTab => "backtab",
-        KeyCode::Delete => "delete",
-        KeyCode::Insert => "insert",
-        KeyCode::F(c) => {
-            char = format!("f({c})");
-            &char
-        }
-        KeyCode::Char(' ') => "space",
-        KeyCode::Char(c) => {
-            char = c.to_string();
-            &char
-        }
-        KeyCode::Esc => "esc",
-        KeyCode::Null => "",
-        KeyCode::CapsLock => "",
-        KeyCode::Menu => "",
-        KeyCode::ScrollLock => "",
-        KeyCode::Media(_) => "",
-        KeyCode::NumLock => "",
-        KeyCode::PrintScreen => "",
-        KeyCode::Pause => "",
-        KeyCode::KeypadBegin => "",
-        KeyCode::Modifier(_) => "",
-    };
-
-    let mut modifiers = Vec::with_capacity(3);
-
-    if key_event.modifiers.intersects(KeyModifiers::CONTROL) {
-        modifiers.push("ctrl");
-    }
-
-    if key_event.modifiers.intersects(KeyModifiers::SHIFT) {
-        modifiers.push("shift");
-    }
-
-    if key_event.modifiers.intersects(KeyModifiers::ALT) {
-        modifiers.push("alt");
-    }
-
-    let mut key = modifiers.join("-");
-
-    if !key.is_empty() {
-        key.push('-');
-    }
-    key.push_str(key_code);
-
-    key
-}
-
-pub fn parse_key_sequence(raw: &str) -> color_eyre::Result<Vec<KeyEvent>, String> {
-    if raw.chars().filter(|c| *c == '>').count() != raw.chars().filter(|c| *c == '<').count() {
-        return Err(format!("Unable to parse `{raw}`"));
-    }
-    let raw = if !raw.contains("><") {
-        let raw = raw.strip_prefix('<').unwrap_or(raw);
-        raw.strip_prefix('>').unwrap_or(raw)
-    } else {
-        raw
-    };
-    let sequences = raw
-        .split("><")
-        .map(|seq| {
-            if let Some(s) = seq.strip_prefix('<') {
-                s
-            } else if let Some(s) = seq.strip_suffix('>') {
-                s
-            } else {
-                seq
-            }
-        })
-        .collect::<Vec<_>>();
-
-    sequences.into_iter().map(parse_key_event).collect()
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Styles(pub HashMap<Mode, HashMap<String, Style>>);
-
-impl<'de> Deserialize<'de> for Styles {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed_map = HashMap::<Mode, HashMap<String, String>>::deserialize(deserializer)?;
-
-        let styles = parsed_map
-            .into_iter()
-            .map(|(mode, inner_map)| {
-                let converted_inner_map = inner_map
-                    .into_iter()
-                    .map(|(str, style)| (str, parse_style(&style)))
-                    .collect();
-                (mode, converted_inner_map)
-            })
-            .collect();
-
-        Ok(Styles(styles))
-    }
-}
-
-pub fn parse_style(line: &str) -> Style {
-    let (foreground, background) =
-        line.split_at(line.to_lowercase().find("on ").unwrap_or(line.len()));
-    let foreground = process_color_string(foreground);
-    let background = process_color_string(&background.replace("on ", ""));
-
-    let mut style = Style::default();
-    if let Some(fg) = parse_color(&foreground.0) {
-        style = style.fg(fg);
-    }
-    if let Some(bg) = parse_color(&background.0) {
-        style = style.bg(bg);
-    }
-    style = style.add_modifier(foreground.1 | background.1);
-    style
-}
-
-fn process_color_string(color_str: &str) -> (String, Modifier) {
-    let color = color_str
-        .replace("grey", "gray")
-        .replace("bright ", "")
-        .replace("bold ", "")
-        .replace("underline ", "")
-        .replace("inverse ", "");
-
-    let mut modifiers = Modifier::empty();
-    if color_str.contains("underline") {
-        modifiers |= Modifier::UNDERLINED;
-    }
-    if color_str.contains("bold") {
-        modifiers |= Modifier::BOLD;
-    }
-    if color_str.contains("inverse") {
-        modifiers |= Modifier::REVERSED;
-    }
-
-    (color, modifiers)
-}
-
-fn parse_color(s: &str) -> Option<Color> {
-    let s = s.trim_start();
-    let s = s.trim_end();
-    if s.contains("bright color") {
-        let s = s.trim_start_matches("bright ");
-        let c = s
-            .trim_start_matches("color")
-            .parse::<u8>()
-            .unwrap_or_default();
-        Some(Color::Indexed(c.wrapping_shl(8)))
-    } else if s.contains("color") {
-        let c = s
-            .trim_start_matches("color")
-            .parse::<u8>()
-            .unwrap_or_default();
-        Some(Color::Indexed(c))
-    } else if s.contains("gray") {
-        let c = 232
-            + s.trim_start_matches("gray")
-                .parse::<u8>()
-                .unwrap_or_default();
-        Some(Color::Indexed(c))
-    } else if s.contains("rgb") {
-        let red = (s.as_bytes()[3] as char).to_digit(10).unwrap_or_default() as u8;
-        let green = (s.as_bytes()[4] as char).to_digit(10).unwrap_or_default() as u8;
-        let blue = (s.as_bytes()[5] as char).to_digit(10).unwrap_or_default() as u8;
-        let c = 16 + red * 36 + green * 6 + blue;
-        Some(Color::Indexed(c))
-    } else if s == "bold black" {
-        Some(Color::Indexed(8))
-    } else if s == "bold red" {
-        Some(Color::Indexed(9))
-    } else if s == "bold green" {
-        Some(Color::Indexed(10))
-    } else if s == "bold yellow" {
-        Some(Color::Indexed(11))
-    } else if s == "bold blue" {
-        Some(Color::Indexed(12))
-    } else if s == "bold magenta" {
-        Some(Color::Indexed(13))
-    } else if s == "bold cyan" {
-        Some(Color::Indexed(14))
-    } else if s == "bold white" {
-        Some(Color::Indexed(15))
-    } else if s == "black" {
-        Some(Color::Indexed(0))
-    } else if s == "red" {
-        Some(Color::Indexed(1))
-    } else if s == "green" {
-        Some(Color::Indexed(2))
-    } else if s == "yellow" {
-        Some(Color::Indexed(3))
-    } else if s == "blue" {
-        Some(Color::Indexed(4))
-    } else if s == "magenta" {
-        Some(Color::Indexed(5))
-    } else if s == "cyan" {
-        Some(Color::Indexed(6))
-    } else if s == "white" {
-        Some(Color::Indexed(7))
-    } else {
-        None
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use pretty_assertions::assert_eq;
-
-    use super::*;
-
-    #[test]
-    fn test_parse_style_default() {
-        let style = parse_style("");
-        assert_eq!(style, Style::default());
-    }
-
-    #[test]
-    fn test_parse_style_foreground() {
-        let style = parse_style("red");
-        assert_eq!(style.fg, Some(Color::Indexed(1)));
-    }
-
-    #[test]
-    fn test_parse_style_background() {
-        let style = parse_style("on blue");
-        assert_eq!(style.bg, Some(Color::Indexed(4)));
-    }
-
-    #[test]
-    fn test_parse_style_modifiers() {
-        let style = parse_style("underline red on blue");
-        assert_eq!(style.fg, Some(Color::Indexed(1)));
-        assert_eq!(style.bg, Some(Color::Indexed(4)));
-    }
-
-    #[test]
-    fn test_process_color_string() {
-        let (color, modifiers) = process_color_string("underline bold inverse gray");
-        assert_eq!(color, "gray");
-        assert!(modifiers.contains(Modifier::UNDERLINED));
-        assert!(modifiers.contains(Modifier::BOLD));
-        assert!(modifiers.contains(Modifier::REVERSED));
-    }
-
-    #[test]
-    fn test_parse_color_rgb() {
-        let color = parse_color("rgb123");
-        let expected = 16 + 36 + 2 * 6 + 3;
-        assert_eq!(color, Some(Color::Indexed(expected)));
-    }
-
-    #[test]
-    fn test_parse_color_unknown() {
-        let color = parse_color("unknown");
-        assert_eq!(color, None);
-    }
-
-    #[test]
-    fn test_config() -> color_eyre::Result<()> {
-        let c = Config::new()?;
-        assert_eq!(
-            c.keybindings
-                .0
-                .get(&Mode::Home)
-                .unwrap()
-                .get(&parse_key_sequence("<ctrl-q>").unwrap_or_default())
-                .unwrap(),
-            &Action::Quit
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_malformed_key_sequence_is_err() {
-        let result = json5::from_str::<KeyBindings>(r#"{"Home": {"<ctrl-notakey>": "Quit"}}"#);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_simple_keys() {
-        assert_eq!(
-            parse_key_event("a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::empty())
-        );
-
-        assert_eq!(
-            parse_key_event("enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())
-        );
-
-        assert_eq!(
-            parse_key_event("esc").unwrap(),
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())
-        );
-    }
-
-    #[test]
-    fn test_with_modifiers() {
-        assert_eq!(
-            parse_key_event("ctrl-a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-        );
-
-        assert_eq!(
-            parse_key_event("alt-enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-        );
-
-        assert_eq!(
-            parse_key_event("shift-esc").unwrap(),
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::SHIFT)
-        );
-    }
-
-    #[test]
-    fn test_multiple_modifiers() {
-        assert_eq!(
-            parse_key_event("ctrl-alt-a").unwrap(),
-            KeyEvent::new(
-                KeyCode::Char('a'),
-                KeyModifiers::CONTROL | KeyModifiers::ALT
-            )
-        );
-
-        assert_eq!(
-            parse_key_event("ctrl-shift-enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL | KeyModifiers::SHIFT)
-        );
-    }
-
-    #[test]
-    fn test_reverse_multiple_modifiers() {
-        assert_eq!(
-            key_event_to_string(&KeyEvent::new(
-                KeyCode::Char('a'),
-                KeyModifiers::CONTROL | KeyModifiers::ALT
-            )),
-            "ctrl-alt-a".to_string()
-        );
-    }
-
-    #[test]
-    fn test_invalid_keys() {
-        assert!(parse_key_event("invalid-key").is_err());
-        assert!(parse_key_event("ctrl-invalid-key").is_err());
-    }
-
-    #[test]
-    fn test_case_insensitivity() {
-        assert_eq!(
-            parse_key_event("CTRL-a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-        );
-
-        assert_eq!(
-            parse_key_event("AlT-eNtEr").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-        );
-    }
-}
+#[path = "config_tests.rs"]
+mod config_tests;

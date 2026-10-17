@@ -1,0 +1,5 @@
+---
+source: crates/qry/src/views/toast_tests.rs
+expression: "text(&toast, queued, width)"
+---
+ ✗ Connection failed: could not connect to server: Connection… ×2  ctrl-l  (+1)

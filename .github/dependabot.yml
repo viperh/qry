@@ -1,0 +1,20 @@
+# Weekly dependency updates. Patch-level cargo updates come as one grouped PR;
+# minor and major ones stay separate so they can be reviewed on their own.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      cargo-patch:
+        update-types: [patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

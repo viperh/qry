@@ -1,0 +1,8 @@
+# Commits that only reformat code. Use with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: cargo fmt the workspace (T001)
+a4b18c3b8a509a31de2217be0f3b00bc2c651990
+
+# style: group and merge imports with nightly rustfmt (T001)
+84dd8c2f7ee33f42d529a7edc60ad389829b470d

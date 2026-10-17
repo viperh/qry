@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/*"]
+# cargo-fuzz targets: a workspace of their own, built only with nightly.
+exclude = ["fuzz"]
 
 # Values shared by every crate in the workspace. Each crate opts in with
 # `version.workspace = true` etc. in its own Cargo.toml.
@@ -10,7 +12,26 @@ edition = "2024"
 authors = ["qViperH <qviperh.dev@proton.me>"]
 license = "MIT"
 repository = "https://github.com/viperh/qry"
-rust-version = "1.89"
+rust-version = "1.96"
+
+# Lints every crate inherits with `[lints] workspace = true`.
+[workspace.lints.rust]
+# `deny`, not `forbid`: `forbid` cannot be lifted by an inner `allow`, and the
+# one audited exception (the test-only environment helper in
+# `crates/qry/src/secrets_tests.rs`) needs one.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+dbg_macro = "deny"
+todo = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+# A std mutex must never be held across `.await`.
+await_holding_lock = "deny"
+large_futures = "warn"
 
 # Central dependency versions. Crates reference these with
 # `some-dep = { workspace = true }` so versions stay in lockstep.
@@ -37,9 +58,16 @@ clap = { version = "4.6.1", features = [
     "string",
     "unstable-styles",
 ] }
+# `qry generate completions <shell>` and `qry generate man` (release assets).
+clap_complete = "4.6.11"
+clap_mangen = "0.3.3"
 config = "0.15.25"
 directories = "6.0.0"
 json5 = "1.3.1"
+# Display widths of result cells in qry-core; already in the tree through ratatui.
+unicode-width = "0.2.2"
+# The local time of day for the message history; already in the tree through oracledb.
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 
 # --- errors / diagnostics ---
@@ -55,15 +83,55 @@ tracing-error = "0.2.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "serde"] }
 
 # --- misc ---
+async-trait = "0.1.92"
+hex = "0.4.3"
+keyring = "4.2.0"
 libc = "0.2.186"
+ratatui-textarea = "0.9.2"
+serde_json = "1.0.151"
 strum = { version = "0.28.0", features = ["derive"] }
+zeroize = "1.9.0"
+
+# --- database drivers ---
+mysql_async = "0.37.1"
+# Oracle's own thin driver: pure Rust, no Instant Client. Still a beta, so
+# pinned exactly; read its changelog before raising the pin.
+oracledb = "=26.0.0-beta.4"
+# Already in the tree through oracledb; used to check a host name before TLS.
+rustls-pki-types = "1.15.1"
+tokio-postgres = "0.7.18"
+tokio-rusqlite = { version = "0.8.0", features = ["bundled"] }
+
+# --- export ---
+rust_xlsxwriter = "0.99.1"
 
 # --- build scripts ---
 anyhow = "1.0.103"
 vergen-gix = { version = "10.0.1", features = ["build", "cargo"] }
+# Embeds the icon and version info into the Windows executable.
+winresource = "0.1.31"
 
 # --- dev ---
+# Loads the workspace for the structural tests in crates/qry/tests/.
+cargo_metadata = "0.23.1"
+# Snapshot tests: `cargo insta review` accepts or rejects changed snapshots.
+insta = "1.49.0"
+# Benchmarks (crates/*/benches/, T006). No plotting or rayon: bench.yml
+# runs with --noplot, and the gates read only estimates.json.
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+# A pseudo-terminal for the start-up timing test (crates/qry/tests/startup.rs).
+portable-pty = "0.9.0"
 pretty_assertions = "1.4.1"
+proptest = "1.11.0"
+# A TLS server for the Oracle tests; already in the tree through oracledb.
+rustls = "0.23.45"
+# Scratch directories that clean themselves up.
+tempfile = "3.27.0"
+# Reads exported workbooks and CSV files back in the exporter tests (T307).
+calamine = { version = "0.36.1", default-features = false }
+csv = "1.4.0"
+# Already in the tree through rust_xlsxwriter; opens exported workbooks.
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

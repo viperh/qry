@@ -1,0 +1,23 @@
+---
+source: crates/qry/src/app/dialogs/connexportform_tests.rs
+expression: "crate::testing::buffer_to_string(&buffer)"
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                  ┌ Export Connections ───────────── passwords are not included ─┐                  
+                  │ › File     ~/qry-backup.json                                 │                  
+                  │   Include  [x] local                                         │                  
+                  │            [x] prod                                          │                  
+                  │                                                              │                  
+                  │ Enter export · Space toggle · Tab next · Esc cancel          │                  
+                  └──────────────────────────────────────────────────────────────┘

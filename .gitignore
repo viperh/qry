@@ -1,2 +1,26 @@
 /target
 /.data
+
+# insta snapshots awaiting review
+*.snap.new
+*.pending-snap
+
+# cargo-fuzz
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+/fuzz/coverage
+/fuzz/Cargo.lock
+
+# nix build output
+/result
+
+# JetBrains: only the shared spelling dictionary and inspection profile are
+# tracked; everything else in .idea/ is per-machine.
+/.idea/*
+!/.idea/dictionaries/
+!/.idea/inspectionProfiles/
+/.idea/workspace.xml
+
+# Temporary git worktrees made by Claude Code agents.
+/.claude/worktrees/

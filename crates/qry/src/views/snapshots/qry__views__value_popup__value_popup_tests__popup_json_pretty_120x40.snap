@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/views/value_popup_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 20                                                                     
+▌▸ ● sq  scratch              │▌ 1 │ select * from users                                                                
+                              │                                                                                         
+            ┌ users.v · jsonb · row 1 ─────────────────────────────────────────────────────────────────────┐            
+            │ {                                                                                            │            
+            │   "id": 7,                                                                                   │            
+            │   "tags": [                                                                                  │            
+            │     "a",                                                                                     │            
+            │     "b"                                                                                      │            
+            │   ],                                                                                         │            
+            │   "active": true,                                                                            │            
+            │   "owner": null,                                                                             │            
+            │   "score": -1.5                                                                              │            
+            │ }                                                                                            │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            │                                                                                              │            
+            └─ y copy  w wrap  h/l pan  f format  Esc close ───────────────────────────────────────────────┘            
+                              │                                                                                         
+                              │                                                                                         
+ scratch · sqlite · :memory: · auto                                                                      R 1 / 1  C 1/1 
+ j scroll  Esc close                                                                                             ? help

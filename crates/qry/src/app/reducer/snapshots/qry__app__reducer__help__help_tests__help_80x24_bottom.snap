@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/reducer/help_tests.rs
+expression: "h.render(80, 24)"
+---
+┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────┐
+│ Esc                  cancel / close                                          │
+│ Enter                submit                                                  │
+│ Tab                  next field                                              │
+│ Backspace            delete the character before                             │
+│ Del                  delete the character after                              │
+│                                                                              │
+│ Jobs                                                                         │
+│ ?                    show / hide the help                                    │
+│ :                    command palette                                         │
+│ c                    cancel the query (copy when none runs)                  │
+│ k ↑                  up                                                      │
+│ j ↓                  down                                                    │
+│ h ←                  left                                                    │
+│ l →                  right                                                   │
+│ g g                  to the top                                              │
+│ G                    to the bottom                                           │
+│ Enter                open                                                    │
+│ J Esc                show / hide the jobs                                    │
+│                                                                              │
+│ run:  F5 statement  F8 all  ctrl-e selection                                 │
+│ results:  / search  y copy cell  Y copy row  Enter inspect value             │
+│ tree:  Enter connect  Space expand  e edit  D delete  / filter               │
+└───────────────────────────────────────────────────────────── 191–208 of 208 ─┘

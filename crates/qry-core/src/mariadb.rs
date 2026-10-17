@@ -1,11 +1,17 @@
-use crate::shared::{QueryResult, SslMode};
-use crate::{Database, DatabaseType};
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use mysql_async::prelude::*;
-use mysql_async::{Conn, OptsBuilder, Row, Value};
+use mysql_async::{Conn, OptsBuilder, prelude::*};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
+
+use crate::{
+    Database, DatabaseType,
+    mysql::{KillQuery, TABLES_SQL, cell, column_meta},
+    schema::{self, Column},
+    shared::{CancelHandle, ColumnMeta, QueryResult, RowSender, SslMode, first_column},
+};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MariadbConfig {
@@ -16,6 +22,20 @@ pub struct MariadbConfig {
     pub database: String,
     #[serde(default)]
     pub ssl_mode: SslMode,
+}
+
+/// Written by hand so the password never reaches a log or panic message.
+impl std::fmt::Debug for MariadbConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MariadbConfig")
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("user", &self.user)
+            .field("password", &"[redacted]")
+            .field("database", &self.database)
+            .field("ssl_mode", &self.ssl_mode)
+            .finish()
+    }
 }
 
 impl MariadbConfig {
@@ -31,7 +51,19 @@ impl MariadbConfig {
 
 pub struct MariaDb {
     conn: Mutex<Conn>,
+    /// The server's id for the connection, which `KILL QUERY` names.
+    id: u32,
     config: MariadbConfig,
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for MariaDb {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MariaDb")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl MariaDb {
@@ -39,6 +71,7 @@ impl MariaDb {
         config.ssl_mode.ensure_supported()?;
         let conn = Conn::new(config.opts()).await?;
         Ok(Self {
+            id: conn.id(),
             conn: Mutex::new(conn),
             config,
         })
@@ -47,18 +80,6 @@ impl MariaDb {
     pub async fn disconnect(self) -> Result<()> {
         self.conn.into_inner().disconnect().await?;
         Ok(())
-    }
-}
-
-fn value_to_string(value: Value) -> Option<String> {
-    match value {
-        Value::NULL => None,
-        Value::Bytes(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
-        Value::Int(n) => Some(n.to_string()),
-        Value::UInt(n) => Some(n.to_string()),
-        Value::Float(n) => Some(n.to_string()),
-        Value::Double(n) => Some(n.to_string()),
-        other => Some(other.as_sql(true).trim_matches('\'').to_string()),
     }
 }
 
@@ -75,22 +96,30 @@ impl Database for MariaDb {
         )
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let mut conn = self.conn.lock().await;
         let mut result = conn.query_iter(sql).await?;
 
-        let columns = result
-            .columns_ref()
-            .iter()
-            .map(|c| c.name_str().into_owned())
-            .collect();
+        // `MYSQL_TYPE_LONG` and the like, which `ValueKind` reads.
+        let (columns, shown): (Vec<ColumnMeta>, Vec<_>) =
+            result.columns_ref().iter().map(column_meta).unzip();
 
-        let rows = result
-            .collect::<Row>()
-            .await?
-            .into_iter()
-            .map(|row| row.unwrap().into_iter().map(value_to_string).collect())
-            .collect();
+        let mut rows = Vec::new();
+        let mut truncated = false;
+        while let Some(row) = result.next().await? {
+            // The rest is read off the wire and dropped, never kept.
+            if max_rows > 0 && rows.len() == max_rows {
+                truncated = true;
+                break;
+            }
+            rows.push(
+                row.unwrap()
+                    .into_iter()
+                    .zip(&shown)
+                    .map(|(value, &shown)| cell(value, shown))
+                    .collect(),
+            );
+        }
 
         let affected = result.affected_rows();
         result.drop_result().await?;
@@ -99,12 +128,55 @@ impl Database for MariaDb {
             columns,
             rows,
             affected: Some(affected),
+            elapsed: std::time::Duration::ZERO,
+            truncated,
         })
+    }
+
+    /// The same protocol as MySQL, so the same stream.
+    /// Rows arrive a batch at a time (see `query_stream`), so a kept stream
+    /// can be read on later (`L`).
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let mut conn = self.conn.lock().await;
+        crate::mysql::stream(&mut conn, sql, fetch_size, &out).await
+    }
+
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(KillQuery {
+            opts: self.config.opts(),
+            id: self.id,
+        }))
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
         let mut conn = self.conn.lock().await;
         conn.query_drop(sql).await?;
         Ok(conn.affected_rows())
+    }
+
+    async fn tables(&self) -> Result<Vec<String>> {
+        Ok(first_column(self.query(TABLES_SQL).await?))
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        let mut conn = self.conn.lock().await;
+        crate::mysql::exec_bound(&mut conn, sql, params).await
+    }
+
+    /// MySQL's columns, but MariaDB writes a column without a default as
+    /// the text `NULL` in `COLUMN_DEFAULT` (a string default comes quoted,
+    /// `'NULL'`), so that one means none.
+    async fn columns(&self, catalog: &str, object: &str) -> Result<Vec<Column>> {
+        let mut columns = schema::load_columns(self, catalog, object).await?;
+        for column in &mut columns {
+            if column.default.as_deref() == Some("NULL") {
+                column.default = None;
+            }
+        }
+        Ok(columns)
     }
 }

@@ -1,0 +1,25 @@
+---
+source: crates/qry/src/app/dialogs/conndialog_tests.rs
+expression: buffer_to_string(&buffer)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌ New Connection ───────────────────────────────────────────────── sqlite ─┐            
+            │   Driver  ‹ SQLite ›                                                     │            
+            │ › Name    local                                                          │            
+            │           [ ] use a DSN instead                                          │            
+            │   File    ~/app.db                                                       │            
+            │   Mode    ‹ read-write ›                                                 │            
+            │   Label   ‹ none ›                                                       │            
+            │           [ Test ]                                                       │            
+            │                                                                          │            
+            │ Enter save & connect · ctrl-t test · Tab next · → change · Esc cancel    │            
+            └──────────────────────────────────────────────────────────────────────────┘

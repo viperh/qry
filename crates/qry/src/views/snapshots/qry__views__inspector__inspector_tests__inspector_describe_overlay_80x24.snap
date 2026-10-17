@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/views/inspector_tests.rs
+expression: "app.render(w, h)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  l│ INSPECTOR                             
+▌▾ ● sq  scratch              │  1 │    │ TABLE · main.orders                   
+   ▾ main                     │         │ id          integer  PK               
+     ▾ Tables  2              │         │ user_id     integer  FK → users.id    
+       ▸ orders               │         │ total       numeric(10,2)  NULL       
+       ▸ users                │         │ created_at  timestamp  = CURRENT_TIM… 
+     ▸ Views  1               │         │ note        text  NULL                
+                              │         │                                       
+                              │         │ INDEXES · 2                           
+                              │ RESULTS │ orders_pkey  (id)  UNIQUE             
+                              │         │ orders_user  (user_id, created_at)    
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+                              │         │                                       
+ scratch · sqlite · :memory: · auto                                             
+ j scroll  Esc back  ctrl-q quit                                         ? help

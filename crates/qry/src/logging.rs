@@ -5,9 +5,10 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use crate::config;
 
-pub static LOG_ENV: LazyLock<String> =
+pub(crate) static LOG_ENV: LazyLock<String> =
     LazyLock::new(|| format!("{}_LOG_LEVEL", config::PROJECT_NAME.clone()));
-pub static LOG_FILE: LazyLock<String> = LazyLock::new(|| format!("{}.log", env!("CARGO_PKG_NAME")));
+pub(crate) static LOG_FILE: LazyLock<String> =
+    LazyLock::new(|| format!("{}.log", env!("CARGO_PKG_NAME")));
 
 pub fn init() -> color_eyre::Result<()> {
     let directory = config::get_data_dir();

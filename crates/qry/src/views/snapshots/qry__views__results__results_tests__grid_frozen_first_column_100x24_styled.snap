@@ -1,0 +1,247 @@
+---
+source: crates/qry/src/views/results_tests.rs
+expression: styled(&buffer)
+---
+  │c0  ┃c15  │c16  │c17  │c18  │c19  │c20  │c21  │c22  │c23  │c24  │c25  │c26  │c27  │c28  │c29     
+1 │r0c0┃r0c15│r0c16│r0c17│r0c18│r0c19│r0c20│r0c21│r0c22│r0c23│r0c24│r0c25│r0c26│r0c27│r0c28│r0c29   
+2 │r1c0┃r1c15│r1c16│r1c17│r1c18│r1c19│r1c20│r1c21│r1c22│r1c23│r1c24│r1c25│r1c26│r1c27│r1c28│r1c29   
+3 │r2c0┃r2c15│r2c16│r2c17│r2c18│r2c19│r2c20│r2c21│r2c22│r2c23│r2c24│r2c25│r2c26│r2c27│r2c28│r2c29   
+4 │r3c0┃r3c15│r3c16│r3c17│r3c18│r3c19│r3c20│r3c21│r3c22│r3c23│r3c24│r3c25│r3c26│r3c27│r3c28│r3c29   
+5 │r4c0┃r4c15│r4c16│r4c17│r4c18│r4c19│r4c20│r4c21│r4c22│r4c23│r4c24│r4c25│r4c26│r4c27│r4c28│r4c29   
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+2,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+3,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+7,0 Rgb(58, 68, 82) Rgb(19, 24, 32) BOLD
+8,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+13,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+14,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+19,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+20,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+25,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+26,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+31,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+32,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+37,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+38,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+43,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+44,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+49,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+50,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+55,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+56,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+61,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+62,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+67,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+68,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+73,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+74,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+79,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+80,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+85,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+86,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+91,0 Rgb(35, 42, 52) Rgb(19, 24, 32) BOLD
+92,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+95,0 Rgb(211, 217, 224) Rgb(19, 24, 32) BOLD
+0,1 Rgb(242, 176, 74) Rgb(27, 37, 51) NONE
+2,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+3,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+7,1 Rgb(58, 68, 82) Rgb(27, 37, 51) NONE
+8,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+13,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+14,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+19,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+20,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+25,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+26,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+31,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+32,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+37,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+38,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+43,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+44,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+49,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+50,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+55,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+56,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+61,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+62,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+67,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+68,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+73,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+74,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+79,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+80,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+85,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+86,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+91,1 Rgb(35, 42, 52) Rgb(27, 37, 51) NONE
+92,1 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+97,1 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+0,2 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,2 Rgb(58, 68, 82) Rgb(16, 20, 26) NONE
+8,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+13,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+14,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+19,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+20,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+25,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+26,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+31,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+32,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+37,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+38,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+43,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+44,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+49,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+50,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+55,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+56,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+61,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+62,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+67,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+68,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+73,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+74,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+79,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+80,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+85,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+86,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+91,2 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+92,2 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,3 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
+8,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+13,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+14,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+19,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+20,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+25,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+26,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+31,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+32,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+37,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+38,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+43,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+44,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+49,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+50,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+55,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+56,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+61,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+62,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+67,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+68,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+73,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+74,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+79,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+80,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+85,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+86,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+91,3 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+92,3 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,4 Rgb(138, 148, 163) Rgb(16, 20, 26) NONE
+2,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+3,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+7,4 Rgb(58, 68, 82) Rgb(16, 20, 26) NONE
+8,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+13,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+14,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+19,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+20,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+25,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+26,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+31,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+32,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+37,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+38,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+43,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+44,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+49,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+50,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+55,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+56,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+61,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+62,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+67,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+68,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+73,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+74,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+79,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+80,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+85,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+86,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+91,4 Rgb(35, 42, 52) Rgb(16, 20, 26) NONE
+92,4 Rgb(211, 217, 224) Rgb(16, 20, 26) NONE
+0,5 Rgb(138, 148, 163) Rgb(14, 17, 22) NONE
+2,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+3,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+7,5 Rgb(58, 68, 82) Rgb(14, 17, 22) NONE
+8,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+13,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+14,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+19,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+20,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+25,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+26,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+31,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+32,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+37,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+38,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+43,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+44,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+49,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+50,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+55,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+56,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+61,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+62,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+67,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+68,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+73,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+74,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+79,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+80,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+85,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+86,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+91,5 Rgb(35, 42, 52) Rgb(14, 17, 22) NONE
+92,5 Rgb(211, 217, 224) Rgb(14, 17, 22) NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE
+0,12 Reset Reset NONE
+0,13 Reset Reset NONE
+0,14 Reset Reset NONE
+0,15 Reset Reset NONE
+0,16 Reset Reset NONE
+0,17 Reset Reset NONE
+0,18 Reset Reset NONE
+0,19 Reset Reset NONE
+0,20 Reset Reset NONE
+0,21 Reset Reset NONE
+0,22 Reset Reset NONE
+0,23 Reset Reset NONE

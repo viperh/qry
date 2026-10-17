@@ -1,0 +1,86 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: "styled(&drawn(&h, w, ht))"
+---
+  1 │ begin                                                                     
+  2 │   insert into t values (q'[it's]');                                       
+  3 │   commit;                                                                 
+  4 │ end;                                                                      
+  5 │ /                                                                         
+▌ 6 │ select sysdate from dual;                                                 
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+--- styles (x,y fg bg modifiers) ---
+0,0 Reset Reset NONE
+1,0 Rgb(138, 148, 163) Reset NONE
+4,0 Rgb(35, 42, 52) Reset NONE
+5,0 Reset Reset NONE
+6,0 Rgb(79, 193, 201) Reset NONE
+11,0 Reset Reset NONE
+0,1 Reset Reset NONE
+1,1 Rgb(138, 148, 163) Reset NONE
+4,1 Rgb(35, 42, 52) Reset NONE
+5,1 Reset Reset NONE
+8,1 Rgb(79, 193, 201) Reset NONE
+14,1 Reset Reset NONE
+15,1 Rgb(79, 193, 201) Reset NONE
+19,1 Reset Reset NONE
+20,1 Rgb(211, 217, 224) Reset NONE
+21,1 Reset Reset NONE
+22,1 Rgb(79, 193, 201) Reset NONE
+28,1 Reset Reset NONE
+29,1 Rgb(211, 217, 224) Reset NONE
+30,1 Rgb(159, 211, 138) Reset NONE
+39,1 Rgb(211, 217, 224) Reset NONE
+41,1 Reset Reset NONE
+0,2 Reset Reset NONE
+1,2 Rgb(138, 148, 163) Reset NONE
+4,2 Rgb(35, 42, 52) Reset NONE
+5,2 Reset Reset NONE
+8,2 Rgb(79, 193, 201) Reset NONE
+14,2 Rgb(211, 217, 224) Reset NONE
+15,2 Reset Reset NONE
+0,3 Reset Reset NONE
+1,3 Rgb(138, 148, 163) Reset NONE
+4,3 Rgb(35, 42, 52) Reset NONE
+5,3 Reset Reset NONE
+6,3 Rgb(79, 193, 201) Reset NONE
+9,3 Rgb(211, 217, 224) Reset NONE
+10,3 Reset Reset NONE
+0,4 Reset Reset NONE
+1,4 Rgb(138, 148, 163) Reset NONE
+4,4 Rgb(35, 42, 52) Reset NONE
+5,4 Reset Reset NONE
+6,4 Rgb(79, 193, 201) Reset NONE
+7,4 Reset Reset NONE
+0,5 Rgb(242, 176, 74) Reset NONE
+4,5 Rgb(35, 42, 52) Reset NONE
+5,5 Reset Reset NONE
+6,5 Rgb(79, 193, 201) Reset NONE
+12,5 Reset Reset NONE
+13,5 Rgb(79, 193, 201) Reset NONE
+20,5 Reset Reset NONE
+21,5 Rgb(79, 193, 201) Reset NONE
+25,5 Reset Reset NONE
+26,5 Rgb(79, 193, 201) Reset NONE
+30,5 Rgb(211, 217, 224) Reset NONE
+31,5 Rgb(14, 17, 22) Rgb(242, 176, 74) NONE
+32,5 Reset Reset NONE
+0,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+0,10 Reset Reset NONE
+0,11 Reset Reset NONE
+0,12 Reset Reset NONE
+0,13 Reset Reset NONE
+0,14 Reset Reset NONE
+0,15 Reset Reset NONE

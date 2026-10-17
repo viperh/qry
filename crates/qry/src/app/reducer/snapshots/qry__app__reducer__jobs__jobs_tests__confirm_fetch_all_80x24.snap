@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: "h.render(80, 24)"
+---
+ qry  1 scratch                                     sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 16                             
+▌▸ ● sq  scratch              │▌ 1 │ select * from t                            
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+                              │                                                 
+             ┌ Fetch All Rows ────────────────────────────────────┐             
+             │ Run the statement again and keep every row? A      │y)           
+             │ large result can take a while and a lot of memory. │             
+             │                                                    │             
+             │                            Cancel    [ Fetch all ] │             
+             └────────────────────────────────────────────────────┘             
+                              │   4 │r3c0                                       
+                              │   5 │r4c0                                       
+                              │   6 │r5c0                                       
+                              │   7 │r6c0                                       
+                              │   8 │r7c0                                       
+                              │   9 │r8c0                                       
+                              │ … more rows — showing the first 1 000 · L more ·
+ scratch · sqlite · :memory: · auto                          R 1 / 1 000  C 1/1 
+ Enter submit  Tab next field  Esc cancel                               F1 help

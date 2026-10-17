@@ -1,0 +1,97 @@
+name: Benchmarks
+
+# Benchmarks and performance gates (tasks/T006-benchmarks.md), run by hand
+# (Actions → Benchmarks → Run workflow; there is no schedule),
+# modelled on sverb's bench.yml. Not run on pull requests, where shared
+# runners are too noisy; ci.yml's bench-build job only compiles the benches
+# and self-tests the gate script there.
+#
+# 1. Run every criterion bench, saving the `ci` baseline.
+# 2. Enforce the hard limits in scripts/bench-gates.toml.
+# 3. Compare against the cached `main` baseline (from the last run on
+#    master) and fail on a median regression over 15%.
+# 4. Time start-up to the first frame in release mode.
+# 5. On master only, promote `ci` to `main` and cache it for the next run.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  QRY_KEYRING: "off"
+
+jobs:
+  bench:
+    name: Benchmarks and gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # vergen-gix (crates/qry/build.rs) reads git history
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bench
+
+      # The newest main baseline, if any. The key never matches exactly
+      # (each save is keyed by its run), so restore-keys picks the latest.
+      - name: Restore the main baseline
+        id: baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: target/criterion
+          key: criterion-main-${{ github.run_id }}
+          restore-keys: criterion-main-
+
+      - name: Run benchmarks
+        run: cargo bench --workspace --locked --bench '*' -- --save-baseline ci --noplot
+
+      - name: Enforce the gates
+        run: python3 scripts/bench-gate.py gate --baseline ci
+
+      - name: Compare against main
+        run: |
+          if find target/criterion -path '*/main/estimates.json' -print -quit 2>/dev/null | grep -q .; then
+            python3 scripts/bench-gate.py compare --old main --new ci --threshold 15
+          else
+            echo "No main baseline yet; this run becomes it."
+          fi
+
+      - name: Start-up time
+        env:
+          QRY_STARTUP_GATE_MS: "150"
+        run: cargo test --release --locked -p qry --test startup -- --ignored --nocapture
+
+      # Only master's numbers become the baseline later runs compare with.
+      - name: Promote ci to main
+        if: github.ref == 'refs/heads/master'
+        run: |
+          find target/criterion -type d -name ci | while read -r dir; do
+            rm -rf "$(dirname "$dir")/main"
+            cp -r "$dir" "$(dirname "$dir")/main"
+          done
+      - name: Save the main baseline
+        if: github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: target/criterion
+          key: criterion-main-${{ github.run_id }}
+
+      - name: Upload criterion output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion
+          path: target/criterion
+          if-no-files-found: ignore

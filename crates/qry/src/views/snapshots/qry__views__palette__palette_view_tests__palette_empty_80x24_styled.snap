@@ -1,0 +1,209 @@
+---
+source: crates/qry/src/views/palette_view_tests.rs
+expression: "styled(&h.render_buffer(80, 24))"
+---
+ qry  1 scratch                                    sqlite · :memory:   COMMAND  
+ SCHEMA                       │ QUERY  ln 1, col 1                              
+▌▸ ⠋ sq  scratch              │  1 │                                            
+    ┌──────────────────────────────────────────────────────────────────────┐    
+    │ ›                                                            68 / 68 │    
+    │ Quit                            app                           ctrl-q │    
+    │ Suspend to the shell            app                           ctrl-z │    
+    │ Redraw the screen               view                                 │    
+    │ Help                            app                               F1 │    
+    │ Go to the tree                  view                                 │    
+    │ Go to the editor                view                                 │    
+    │ Go to the results               view                                 │    
+    │ New connection                  connection                    ctrl-n │    
+    │ Edit connection                 connection                         e │    
+    │ Delete connection               connection                         D │    
+    │ Duplicate connection            connection                         c │    
+    │ Import connections              connection                    ctrl-o │    
+    │ Export connections…             connection                           │    
+    │ Next session                    session                    ctrl-PgDn │    
+    │ Previous session                session                    ctrl-PgUp │    
+    │ Close session                   session                       ctrl-w │    
+    │ Run statement                   query                             F5 │    
+ con└──────────────────────────────────────────────────────────────────────┘    
+ Enter run  ↓ move  Esc close                                           F1 help 
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD | DIM
+5,0 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM | UNDERLINED
+16,0 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+70,0 Rgb(138, 148, 163) Rgb(199, 166, 255) BOLD | DIM
+79,0 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,1 Rgb(138, 148, 163) Rgb(19, 24, 32) BOLD | DIM
+7,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+30,1 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+31,1 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD | DIM
+16,2 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,3 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,3 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,4 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,4 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,4 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+8,4 Rgb(14, 17, 22) Rgb(242, 176, 74) BOLD
+9,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+67,4 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+74,4 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,4 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,4 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,5 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+6,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+38,5 Rgb(138, 148, 163) Rgb(42, 35, 64) NONE
+60,5 Rgb(199, 166, 255) Rgb(42, 35, 64) NONE
+68,5 Rgb(242, 176, 74) Rgb(42, 35, 64) BOLD
+74,5 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,5 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,5 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,6 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,6 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,6 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+68,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,6 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,6 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,7 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,7 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,7 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,7 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,7 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,7 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,8 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,8 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,8 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,8 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,8 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+72,8 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,8 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,8 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,8 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,9 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,9 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,9 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,9 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,9 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,9 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,9 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,10 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,10 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,10 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,10 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,10 Rgb(138, 148, 163) Rgb(19, 24, 32) DIM
+0,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,11 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,11 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,11 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,11 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,11 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,12 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,12 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,12 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,12 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,12 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+68,12 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,12 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,12 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,12 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,13 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,13 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,13 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+73,13 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,13 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,13 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,13 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,14 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,14 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,14 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+73,14 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,14 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,14 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,14 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,15 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,15 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,15 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+73,15 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,15 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,15 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,15 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,16 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,16 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,16 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+68,16 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,16 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,16 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,16 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,17 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,17 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,17 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,17 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,17 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,17 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,18 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,18 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,18 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,18 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,18 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+65,18 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,18 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,18 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,18 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,19 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,19 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,19 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,19 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,19 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+65,19 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,19 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,19 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,19 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,20 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,20 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,20 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+68,20 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,20 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,20 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,20 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,21 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+4,21 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+5,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+38,21 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
+60,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+72,21 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
+74,21 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+75,21 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,21 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+0,22 Rgb(138, 148, 163) Rgb(26, 33, 43) DIM
+4,22 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
+76,22 Rgb(138, 148, 163) Rgb(26, 33, 43) DIM
+0,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+1,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+6,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+12,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+13,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+20,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+23,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
+72,23 Rgb(138, 148, 163) Rgb(14, 17, 22) BOLD | DIM
+74,23 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

@@ -1,0 +1,30 @@
+---
+source: crates/qry/src/app/dialogs/conndialog_tests.rs
+expression: buffer_to_string(&buffer)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+            ┌ New Connection ─────────────────────────────────────────────── postgres ─┐            
+            │   Driver       ‹ PostgreSQL ›                                            │            
+            │ › Name                                                                   │            
+            │                a name is required                                        │            
+            │                [ ] use a DSN instead                                     │            
+            │   Host                                                                   │            
+            │                a host is required                                        │            
+            │   Port         0                                                         │            
+            │                must be a number from 1 to 65535                          │            
+            │   User                                                                   │            
+            │                a user is required                                        │            
+            │   Password                                                               │            
+            │   Password in  ‹ keychain ›                                              │            
+            │   Database                                                               │            
+            │                a database is required                                    │            
+            │   Schema                                                                 │            
+            │   SSL          ‹ prefer ›                                                │            
+            │   Label        ‹ none ›                                                  │            
+            │                [ Test ]                                                  │            
+            │                                                                          │            
+            │ Name: a name is required                                                 │            
+            └──────────────────────────────────────────────────────────────────────────┘

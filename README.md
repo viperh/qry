@@ -1,91 +1,117 @@
 # qry
 
-[![CI](https://github.com/viperh/qry/workflows/CI/badge.svg)](https://github.com/viperh/qry/actions)
+[![CI](https://github.com/viperh/qry/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/viperh/qry/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/viperh/qry)](https://github.com/viperh/qry/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MSRV](https://img.shields.io/badge/rust-1.96%2B-orange.svg)](Cargo.toml)
 
-A starting point for terminal user interfaces in Rust, built on
-[ratatui](https://ratatui.rs) with an async [tokio](https://tokio.rs) event
-loop, layered configuration, file logging and cross-platform release builds.
+A fast, keyboard-driven terminal SQL client for PostgreSQL, MySQL, MariaDB,
+SQLite and Oracle.
 
-## Layout
+![qry: the schema browser, the editor and a result grid](docs/assets/qry-main.svg)
 
-The workspace deliberately splits the UI from everything else:
+## Features
 
-```
-Cargo.toml              workspace manifest — all dependency versions live here
-.config/config.json     default keybindings and styles, baked into the binary
-.envrc                  direnv: keep config/data/logs inside the repo
-crates/
-  qry/                  the binary: terminal, rendering, input, config, logging
-    build.rs            vergen — stamps git/build info into the version string
-    src/
-      main.rs           entry point
-      app.rs            event loop, mode handling, component dispatch
-      action.rs         the Action enum every component speaks
-      components.rs     the Component trait
-      components/
-        home.rs         default screen — copy this shape for new components
-      cli.rs            clap argument parsing
-      config.rs         layered config, keybinding and style parsing
-      errors.rs         panic hooks, color-eyre, human-panic
-      logging.rs        tracing subscriber writing to a log file
-      tui.rs            terminal setup/teardown and the crossterm event stream
-  qry-core/             domain logic, no terminal dependencies
-    src/lib.rs
-```
+- **Schema browser**: connections, schemas, tables, views, columns (with
+  primary and foreign keys) and indexes, loaded as you open them, with a
+  filter.
+- **SQL editor** with highlighting per dialect; `ctrl-Enter` runs the
+  statement under the cursor, F8 runs them all, and a failed statement is
+  marked where the server stopped.
+- **Result grid** with typed columns, one tab per statement, sorting on
+  several columns, incremental search, column resizing, a frozen first
+  column and copying as CSV, TSV, JSON, Markdown or SQL `INSERT`s.
+- **Inspector**: the selected record, a column's profile, and a popup for
+  long values (JSON pretty-printed, binaries as hex); `d` describes a
+  table's columns and indexes there.
+- **Jobs**: a spinner and timer while a statement runs, `ctrl-c` to cancel
+  it on the server, a row limit, and a drawer (`J`) listing what ran.
+- **Transactions**: a `TX` pill while one is open, Commit and Rollback in
+  the palette, and a question before quitting with one open.
+- **History and snippets**: every statement per connection (`ctrl-r`),
+  with passwords redacted, and named snippets.
+- **Exports** to CSV, TSV, JSON, JSON Lines, Excel, Markdown, SQL `INSERT`s
+  or aligned text, of the fetched rows or of every row (streamed, as a
+  cancellable job), with an overwrite check.
+- **Several sessions** at once, each with its own connection, editor and
+  results.
+- **Passwords** in the OS keychain, an environment variable or a prompt;
+  never in qry's files.
+- **Import** connections from DBeaver and Oracle SQL Developer.
+- A **command palette** (`ctrl-p`), a **help** overlay (`?`, F1) built from
+  your key bindings, and **NO_COLOR** support.
 
-`qry-core` must never depend on `ratatui`, `crossterm` or `clap`. Keeping the
-domain there means it can be unit tested without a TTY, and it stays reusable
-if you later add a second front end (a CLI, a daemon, a web UI).
+## Install
 
-## Running
+| Channel | Command |
+| --- | --- |
+| Prebuilt binaries | [GitHub releases](https://github.com/viperh/qry/releases): Linux (static, x86_64 and aarch64), macOS (universal), Windows |
+| Cargo | `cargo install qry --locked` |
+| Arch Linux (AUR) | `yay -S qry-bin`, or `qry` to build from source |
+| Homebrew | `brew install viperh/tap/qry` |
+| Scoop | `scoop bucket add viperh https://github.com/viperh/scoop-bucket` then `scoop install qry` |
+| Nix | `nix run github:viperh/qry` |
+
+Release archives include the man page (`qry.1`) and completions for bash,
+zsh, fish and PowerShell; `qry generate man` and
+`qry generate completions <shell>` print them too.
+
+## Quick start
 
 ```sh
-cargo run -p qry
+qry
 ```
 
-`q`, `Ctrl-q quit
-`.config/config.json`.
+qry opens on a scratch in-memory SQLite database, so you can type SQL at
+once:
 
-```sh
-cargo run -p qry -- --tick-rate 4 --frame-rate 60
-cargo run -p qry -- --version    # prints git info and the resolved directories
-```
+- `Tab` moves between the tree, the editor and the results.
+- `ctrl-Enter` (or F5) runs the statement under the cursor.
+- `ctrl-n` adds a connection; Enter on it in the tree connects.
+- `ctrl-p` opens the command palette, `?` the help, `ctrl-q` quits.
+
+Every key is listed in [docs/keybindings.md](docs/keybindings.md).
 
 ## Configuration
 
-Defaults are compiled in from `.config/config.json`. At startup the app also
-looks in the per-user config directory (printed by `--version`) for
-`config.json5`, `config.json`, `config.yaml`, `config.toml` or `config.ini`,
-and layers whatever it finds on top. Set `QRY_CONFIG` to override that
-directory outright.
+qry layers a user config (`config.json5`, `config.json`, `config.yaml`,
+`config.toml` or `config.ini`) over its built-in defaults. It is read from
+`$QRY_CONFIG`, else the platform's config directory; `qry --version` prints
+the directories, and `qry --print-config` the config in effect. A file only
+needs what it changes:
 
-Keybindings are keyed by mode, then by key sequence: `"<Ctrl-a>"` for a single
-chord, `"<g><g>"` for a sequence. Every value must name an `Action` variant.
-
-## Logging
-
-Logs go to `<data dir>/qry.log`. Set `QRY_LOG_LEVEL` (or `RUST_LOG`) to change
-the filter, and `QRY_DATA` to change the directory.
-
-## Checks
-
-The same four gates CI runs:
-
-```sh
-cargo test --locked --all-features --workspace
-cargo fmt --all --check
-cargo clippy --all-targets --all-features --workspace -- -D warnings
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --all-features --workspace
+```json5
+{
+  "theme": "dark",
+  "max_rows": 5000,
+  "keybindings": { "Editor": { "<alt-r>": "RunStatement" } }
+}
 ```
 
-`Cargo.lock` is committed on purpose — CI builds with `--locked`.
+`QRY_DATA` moves the data directory (connections, history, the log) and
+`QRY_LOG_LEVEL` sets the log's level. Every key is in
+[docs/config.md](docs/config.md).
 
-## Releases
+## Security
 
-Pushing a tag matching `v1.2.3` or `1.2.3` builds the binary for macOS
-(x86_64/arm64), Linux (x86_64/arm64/i686) and Windows, then attaches tarballs
-and SHA-256 sums to the GitHub release.
+- Passwords live only in the OS keychain, an environment variable, or are
+  asked for at connect. They are never written to `connections.json`, the
+  history, the log or an export, and never imported from other tools.
+- The history replaces the string after words such as `PASSWORD` and
+  `IDENTIFIED BY` with `'•••'` (config `history.redact`).
+- A connection labelled `prod` asks before the first write of each session.
+
+More in [docs/connections.md](docs/connections.md).
+
+## Documentation
+
+- [Key bindings](docs/keybindings.md) and [configuration](docs/config.md)
+- [Connections and passwords](docs/connections.md)
+- [Theme and terminals](docs/theme.md)
+- [Architecture](docs/architecture.md) and [testing](docs/testing.md)
+- [Contributing](CONTRIBUTING.md), [changelog](CHANGELOG.md) and the
+  [release checklist](docs/release.md)
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT; see [LICENSE](LICENSE).

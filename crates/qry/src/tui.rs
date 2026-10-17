@@ -1,5 +1,3 @@
-#![allow(dead_code)] // Remove this once you start using the code
-
 use std::{
     io::{Stdout, stdout},
     ops::{Deref, DerefMut},
@@ -26,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Event {
+pub(crate) enum Event {
     Init,
     Quit,
     Error,
@@ -41,7 +39,7 @@ pub enum Event {
     Resize(u16, u16),
 }
 
-pub struct Tui {
+pub(crate) struct Tui {
     pub terminal: ratatui::Terminal<Backend<Stdout>>,
     pub task: JoinHandle<()>,
     pub cancellation_token: CancellationToken,
@@ -54,7 +52,7 @@ pub struct Tui {
 }
 
 impl Tui {
-    pub fn new() -> color_eyre::Result<Self> {
+    pub(crate) fn new() -> color_eyre::Result<Self> {
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         Ok(Self {
             terminal: ratatui::Terminal::new(Backend::new(stdout()))?,
@@ -69,27 +67,27 @@ impl Tui {
         })
     }
 
-    pub fn tick_rate(mut self, tick_rate: f64) -> Self {
+    pub(crate) fn tick_rate(mut self, tick_rate: f64) -> Self {
         self.tick_rate = tick_rate;
         self
     }
 
-    pub fn frame_rate(mut self, frame_rate: f64) -> Self {
+    pub(crate) fn frame_rate(mut self, frame_rate: f64) -> Self {
         self.frame_rate = frame_rate;
         self
     }
 
-    pub fn mouse(mut self, mouse: bool) -> Self {
+    pub(crate) fn mouse(mut self, mouse: bool) -> Self {
         self.mouse = mouse;
         self
     }
 
-    pub fn paste(mut self, paste: bool) -> Self {
+    pub(crate) fn paste(mut self, paste: bool) -> Self {
         self.paste = paste;
         self
     }
 
-    pub fn start(&mut self) {
+    pub(crate) fn start(&mut self) {
         self.cancel(); // Cancel any existing task
         self.cancellation_token = CancellationToken::new();
         let event_loop = Self::event_loop(
@@ -113,10 +111,11 @@ impl Tui {
         let mut tick_interval = interval(Duration::from_secs_f64(1.0 / tick_rate));
         let mut render_interval = interval(Duration::from_secs_f64(1.0 / frame_rate));
 
-        // if this fails, then it's likely a bug in the calling code
-        event_tx
-            .send(Event::Init)
-            .expect("failed to send init event");
+        // The receiver is already gone, so nothing would read the events.
+        if event_tx.send(Event::Init).is_err() {
+            cancellation_token.cancel();
+            return;
+        }
         loop {
             let event = tokio::select! {
                 _ = cancellation_token.cancelled() => {
@@ -146,7 +145,7 @@ impl Tui {
         cancellation_token.cancel();
     }
 
-    pub fn stop(&self) -> color_eyre::Result<()> {
+    pub(crate) fn stop(&self) -> color_eyre::Result<()> {
         self.cancel();
         let mut counter = 0;
         while !self.task.is_finished() {
@@ -163,7 +162,7 @@ impl Tui {
         Ok(())
     }
 
-    pub fn enter(&mut self) -> color_eyre::Result<()> {
+    pub(crate) fn enter(&mut self) -> color_eyre::Result<()> {
         crossterm::terminal::enable_raw_mode()?;
         crossterm::execute!(stdout(), EnterAlternateScreen, cursor::Hide)?;
         if self.mouse {
@@ -176,7 +175,7 @@ impl Tui {
         Ok(())
     }
 
-    pub fn exit(&mut self) -> color_eyre::Result<()> {
+    pub(crate) fn exit(&mut self) -> color_eyre::Result<()> {
         self.stop()?;
         if crossterm::terminal::is_raw_mode_enabled()? {
             self.flush()?;
@@ -192,23 +191,24 @@ impl Tui {
         Ok(())
     }
 
-    pub fn cancel(&self) {
+    pub(crate) fn cancel(&self) {
         self.cancellation_token.cancel();
     }
 
-    pub fn suspend(&mut self) -> color_eyre::Result<()> {
+    pub(crate) fn suspend(&mut self) -> color_eyre::Result<()> {
         self.exit()?;
         #[cfg(not(windows))]
         signal_hook::low_level::raise(signal_hook::consts::signal::SIGTSTP)?;
         Ok(())
     }
 
-    pub fn resume(&mut self) -> color_eyre::Result<()> {
+    #[allow(dead_code, reason = "part of the Tui builder API, not used by qry yet")]
+    pub(crate) fn resume(&mut self) -> color_eyre::Result<()> {
         self.enter()?;
         Ok(())
     }
 
-    pub async fn next_event(&mut self) -> Option<Event> {
+    pub(crate) async fn next_event(&mut self) -> Option<Event> {
         self.event_rx.recv().await
     }
 }
@@ -229,6 +229,45 @@ impl DerefMut for Tui {
 
 impl Drop for Tui {
     fn drop(&mut self) {
-        self.exit().unwrap();
+        // A destructor cannot return the error, and panicking here could
+        // abort during an unwind; log it instead.
+        if let Err(err) = self.exit() {
+            error!("Failed to restore the terminal: {err}");
+        }
     }
 }
+
+/// Puts `text` on the system clipboard with the OSC 52 escape, which most
+/// terminals (and tmux with `set-clipboard on`) pass to the clipboard.
+pub(crate) fn copy_to_clipboard(text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut out = stdout();
+    write!(out, "\x1b]52;c;{}\x07", base64(text.as_bytes()))?;
+    out.flush()
+}
+
+/// Standard base64 with padding.
+pub(crate) fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(char::from(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize]));
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+#[path = "tui_tests.rs"]
+mod tui_tests;

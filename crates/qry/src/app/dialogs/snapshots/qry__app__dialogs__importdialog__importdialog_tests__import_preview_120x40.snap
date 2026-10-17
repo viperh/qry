@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/dialogs/importdialog_tests.rs
+expression: buffer_to_string(&buffer)
+---
+ qry  1 scratch                                                                             sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+▌▸ ● sq  scratch              │  1 │                                                                                    
+ ▸ ○ pg  prod                 │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+            ┌ Import Preview ───────────────────────────────────────────── DBeaver · 4 found · 2 selected ─┐            
+            │ › [x] + local-app   postgres · alice@localhost                                               │            
+            │   [x] + analytics   postgres · alice@warehouse                                               │            
+            │       = prod again  postgres · alice@db.prod · already here                                  │            
+            │       ! legacy      unsupported driver: mssql                                                │            
+            │                                                                                              │            
+            │ ! analytics has no schema; edit it before connecting                                         │            
+            │ passwords are never imported; each connection will ask on first connect                      │            
+            │                                                                                              │            
+            │ Enter import selected · Space toggle · a all · A none · Esc cancel                           │            
+            └──────────────────────────────────────────────────────────────────────────────────────────────┘            
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ scratch · sqlite · :memory: · auto                                                                                     
+ Enter submit  Tab next field  Esc cancel                                                                       F1 help

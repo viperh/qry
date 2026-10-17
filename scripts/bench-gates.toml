@@ -1,0 +1,74 @@
+# Hard limits on the criterion benchmarks (T006). `max_ms` is the target on
+# a developer machine; `ci_max_ms` is the limit enforced on shared GitHub
+# runners (about 2x). A gate fails when the criterion median exceeds the CI
+# limit. Throughput gates use `min_mb_s` / `ci_min_mb_s` instead, from the
+# bytes the bench declares.
+#
+# `python3 scripts/bench-gate.py gate --baseline ci` enforces these; a gate
+# whose bench has no estimates fails too, so renaming a bench means renaming
+# its gate. Measurements behind these numbers: tasks/T006-benchmarks.md,
+# "Implementation notes". Where a target cannot be met today, the gate holds
+# the measured value plus headroom and a TODO with the number to reach.
+
+# One frame of the whole screen with a 100k x 12 result, at 300x100 and the
+# selection in the middle. It must fit well inside 16 ms at 60 fps.
+# Measured 4.3 ms.
+[[gate]]
+bench = "results_render_300x100/100k_rows"
+max_ms = 6
+ci_max_ms = 12         # TODO(T303): tighten to 2 / 4
+
+# T303: 120x40 of a 1M x 20 result. Measured 0.60 ms.
+[[gate]]
+bench = "results_render_1m"
+max_ms = 2
+ci_max_ms = 4
+
+# Measured 1.06 ms (idle: 0.76 ms).
+[[gate]]
+bench = "full_frame_160x48/100k_result"
+max_ms = 4
+ci_max_ms = 8
+
+# The sampled sizing in qry_core::grid (the first 1000 rows). Happens once
+# per result, not per frame. Measured 0.58 ms, the same as for 1k rows,
+# which is the point of sampling; T006 proposed 30 / 60 for the full scan.
+[[gate]]
+bench = "column_widths/100k_rows"
+max_ms = 1
+ci_max_ms = 2
+
+# T302: a frame of the editor with a 10 000-line buffer. The reducer keeps
+# the buffer's tokens and statements (`qry_core::sql::Outline`), so a draw
+# lexes nothing. Measured 0.83 ms (59 ms when it lexed the whole buffer);
+# a keystroke and its frame, ungated, 5.8 ms.
+[[gate]]
+bench = "editor_render_10k_lines"
+max_ms = 2
+ci_max_ms = 4
+
+# A keystroke in a typical editor buffer. Measured 0.12 ms.
+[[gate]]
+bench = "sql_lex/10KiB"
+max_ms = 0.25
+ci_max_ms = 0.5
+
+# Measured 77 MB/s.
+[[gate]]
+bench = "sql_lex/1MiB"
+min_mb_s = 50
+ci_min_mb_s = 25
+
+# Measured 4.6 ms.
+[[gate]]
+bench = "import_dbeaver/1k"
+max_ms = 50
+ci_max_ms = 100
+
+# T305: until the row stream exists this is `SELECT ... LIMIT 1000` over a
+# 1M-row in-memory SQLite table (see crates/qry-core/benches/query.rs).
+# Measured 1.27 ms.
+[[gate]]
+bench = "stream_first_1000_of_1m_sqlite"
+max_ms = 50
+ci_max_ms = 100

@@ -1,399 +1,378 @@
-//! Keys that act inside a single pane.
+//! The keymap: which chord runs which [`Action`] in which [`KeyContext`].
 //!
-//! Global keys (quit, help, switching panes, …) are `Config::keybindings`:
-//! `App` turns them into [`Action`](crate::action::Action)s whatever has focus.
-//! The maps here come from the `panes` section of the config and are looked
-//! up by the pane that has focus. Typing a character is not a binding: the
-//! editor and the form's text fields insert unbound characters themselves.
+//! There is one map, filled from the `keybindings` section of the config
+//! (see [`crate::config`]). The reducer looks a key up with a context stack,
+//! innermost first: the open overlay's context alone (`Help`, `Palette` or
+//! `Dialog`), or the focused pane's and then `Global`. A pane's chord
+//! therefore shadows the same chord in `Global`.
+//!
+//! A binding may be a sequence of chords, such as `g g`. The keys typed so
+//! far wait in `State::pending_keys` until they complete a binding, stop
+//! being the start of one, or the reducer's one-second timer runs out.
+//!
+//! Chords are compared after [`normalise`]: terminals disagree on whether
+//! `G`, `$` or `?` carry Shift, so it is dropped for characters typed
+//! without Ctrl (the character already says it). Typing a character is not a
+//! binding: the editor and the dialogs' text fields insert unbound
+//! characters themselves.
 
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use serde::{Deserialize, Deserializer, de};
-use strum::{EnumIter, IntoEnumIterator};
+use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter};
 
-use crate::config::parse_key_sequence;
+pub use crate::action::Action;
+use crate::theme::Pill;
 
-/// Something a pane can do. The help lists commands in declaration order.
-pub trait Command: Copy + Eq + Hash + IntoEnumIterator {
-    fn description(self) -> &'static str;
+/// Where a binding applies. See the module docs for the order they are
+/// looked up in.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter, Display)]
+pub enum KeyContext {
+    Global,
+    Tree,
+    Editor,
+    Results,
+    Inspector,
+    Dialog,
+    Help,
+    Palette,
+    Jobs,
 }
 
-/// Which key runs which command. Pane keys are single keys, not sequences.
-#[derive(Clone, Debug)]
-pub struct Keymap<C>(HashMap<KeyEvent, C>);
-
-impl<C> Default for Keymap<C> {
-    fn default() -> Self {
-        Self(HashMap::new())
-    }
-}
-
-impl<C: Command> Keymap<C> {
-    pub fn get(&self, key: KeyEvent) -> Option<C> {
-        // Compare code and modifiers only; kind and state vary by terminal.
-        // BackTab *is* Shift-Tab, but not every terminal reports the Shift.
-        let mut modifiers = key.modifiers;
-        if key.code == KeyCode::BackTab {
-            modifiers |= KeyModifiers::SHIFT;
-        }
-        self.0.get(&KeyEvent::new(key.code, modifiers)).copied()
-    }
-
-    /// One `(keys, description)` line per bound command, in declaration
-    /// order. Several keys for the same command share a line.
-    pub fn describe(&self) -> Vec<(String, &'static str)> {
-        C::iter()
-            .filter_map(|command| {
-                let mut keys: Vec<String> = self
-                    .0
-                    .iter()
-                    .filter(|&(_, c)| *c == command)
-                    .map(|(key, _)| display_key(key))
-                    .collect();
-                // Named keys (arrows, Home, …) before letters: "↑ / i".
-                keys.sort_by_key(|k| (k.len() == 1, k.clone()));
-                (!keys.is_empty()).then(|| (keys.join(" / "), command.description()))
-            })
-            .collect()
-    }
-
-    /// Adds every default binding whose key the user's config left unbound.
-    pub fn merge_defaults(&mut self, defaults: &Self) {
-        for (key, command) in &defaults.0 {
-            self.0.entry(*key).or_insert(*command);
+impl KeyContext {
+    /// The mode pill this context shows, or `None` for one that keeps the
+    /// pill of whatever is underneath (the help, the dialogs and `Global`).
+    pub fn pill(self) -> Option<Pill> {
+        match self {
+            Self::Tree | Self::Results | Self::Inspector | Self::Jobs => Some(Pill::Normal),
+            Self::Editor => Some(Pill::Edit),
+            Self::Palette => Some(Pill::Command),
+            Self::Global | Self::Dialog | Self::Help => None,
         }
     }
 }
 
-impl<'de, C: Deserialize<'de>> Deserialize<'de> for Keymap<C> {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        HashMap::<String, C>::deserialize(deserializer)?
-            .into_iter()
-            .map(|(raw, command)| {
-                let keys = parse_key_sequence(&raw)
-                    .map_err(|e| de::Error::custom(format!("invalid key `{raw}`: {e}")))?;
-                match keys.as_slice() {
-                    [key] => Ok((*key, command)),
-                    _ => Err(de::Error::custom(format!(
-                        "`{raw}`: a pane key must be a single key, not a sequence"
-                    ))),
+/// What the keys typed so far mean.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Lookup {
+    /// They complete this binding.
+    Match(Action),
+    /// They start a longer binding: wait for more, or for the timeout.
+    Prefix,
+    /// Nothing is bound to them.
+    None,
+}
+
+/// Every binding, by context. A context's bindings are a plain map from the
+/// chord sequence to its action: there are a few dozen, so a prefix is found
+/// by looking at each.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Keymap {
+    by_context: HashMap<KeyContext, HashMap<Vec<KeyEvent>, Action>>,
+}
+
+impl Keymap {
+    /// Binds `chord` (normalised here) in `context`, replacing what it ran.
+    pub(crate) fn bind(&mut self, context: KeyContext, chord: &[KeyEvent], action: Action) {
+        let chord = chord.iter().copied().map(normalise).collect();
+        self.by_context
+            .entry(context)
+            .or_default()
+            .insert(chord, action);
+    }
+
+    /// Removes `chord` from `context`, if it was bound.
+    pub(crate) fn unbind(&mut self, context: KeyContext, chord: &[KeyEvent]) {
+        let chord: Vec<_> = chord.iter().copied().map(normalise).collect();
+        if let Some(bindings) = self.by_context.get_mut(&context) {
+            bindings.remove(&chord);
+        }
+    }
+
+    /// What `pending` means in the first context of `contexts` that knows
+    /// it. A sequence that is both bound itself and the start of a longer
+    /// one is a [`Lookup::Prefix`]: it only runs once the timeout passes
+    /// (see [`exact`](Self::exact)).
+    pub fn resolve(&self, contexts: &[KeyContext], pending: &[KeyEvent]) -> Lookup {
+        let pending: Vec<_> = pending.iter().copied().map(normalise).collect();
+        for context in contexts {
+            let Some(bindings) = self.by_context.get(context) else {
+                continue;
+            };
+            let longer = bindings
+                .keys()
+                .any(|chord| chord.len() > pending.len() && chord.starts_with(&pending));
+            if longer {
+                return Lookup::Prefix;
+            }
+            if let Some(action) = bindings.get(&pending) {
+                return Lookup::Match(*action);
+            }
+        }
+        Lookup::None
+    }
+
+    /// The action bound to exactly `pending`, ignoring longer bindings: what
+    /// a waiting sequence runs once the timeout passes.
+    pub fn exact(&self, contexts: &[KeyContext], pending: &[KeyEvent]) -> Option<Action> {
+        let pending: Vec<_> = pending.iter().copied().map(normalise).collect();
+        contexts
+            .iter()
+            .find_map(|context| self.by_context.get(context)?.get(&pending).copied())
+    }
+
+    /// Every chord bound to `action` in `context`, in [`display_chord`]'s
+    /// order: plain ones first, then the shortest.
+    pub fn chords_for(&self, context: KeyContext, action: &Action) -> Vec<Vec<KeyEvent>> {
+        let mut chords: Vec<_> = self
+            .bindings(context)
+            .filter(|(_, a)| *a == action)
+            .map(|(chord, _)| chord.clone())
+            .collect();
+        chords.sort_by_cached_key(|chord| display_order(chord));
+        chords
+    }
+
+    /// The bindings of `context`, in no particular order.
+    pub fn bindings(
+        &self,
+        context: KeyContext,
+    ) -> impl Iterator<Item = (&Vec<KeyEvent>, &Action)> + '_ {
+        self.by_context.get(&context).into_iter().flatten()
+    }
+
+    /// Every pair of bindings in one context where one is the start of the
+    /// other, sorted. The shorter one only runs after the timeout.
+    pub(crate) fn prefix_conflicts(&self) -> Vec<(KeyContext, Vec<KeyEvent>, Vec<KeyEvent>)> {
+        let mut conflicts = Vec::new();
+        for (context, bindings) in &self.by_context {
+            for short in bindings.keys() {
+                for long in bindings.keys() {
+                    if long.len() > short.len() && long.starts_with(short) {
+                        conflicts.push((*context, short.clone(), long.clone()));
+                    }
                 }
-            })
-            .collect::<Result<_, _>>()
-            .map(Keymap)
+            }
+        }
+        conflicts.sort_by_cached_key(|(context, short, long)| {
+            (
+                *context as u8,
+                chord_to_string(short),
+                chord_to_string(long),
+            )
+        });
+        conflicts
     }
 }
 
-/// The `panes` section of the config.
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct PaneKeys {
-    #[serde(default)]
-    pub editor: Keymap<EditorCommand>,
-    #[serde(default)]
-    pub results: Keymap<ResultsCommand>,
-    #[serde(default)]
-    pub tree: Keymap<TreeCommand>,
-    /// Shared by every modal form.
-    #[serde(default)]
-    pub form: Keymap<FormCommand>,
-    #[serde(default)]
-    pub help: Keymap<HelpCommand>,
-}
-
-impl PaneKeys {
-    pub fn merge_defaults(&mut self, defaults: &Self) {
-        self.editor.merge_defaults(&defaults.editor);
-        self.results.merge_defaults(&defaults.results);
-        self.tree.merge_defaults(&defaults.tree);
-        self.form.merge_defaults(&defaults.form);
-        self.help.merge_defaults(&defaults.help);
-    }
-}
-
-/// How a key is written in the help, e.g. `Ctrl-u`, `Shift-Tab`, `↑`, `G`.
-pub fn display_key(key: &KeyEvent) -> String {
+/// A key as the keymap compares it: only Ctrl, Alt and Shift, and no event
+/// kind or state.
+/// - A character typed without Ctrl drops Shift: `G` is `G`, whether or not
+///   the terminal says Shift.
+/// - With Ctrl it is lower-cased and keeps Shift, so `ctrl-shift-z` differs
+///   from `ctrl-z` on terminals that can tell them apart.
+/// - An AltGr character (Ctrl+Alt on anything but a letter or digit, as
+///   Windows reports AltGr) is the plain character.
+/// - `BackTab` always has Shift, and Shift+Tab is `BackTab`.
+pub fn normalise(key: KeyEvent) -> KeyEvent {
+    let mut mods =
+        key.modifiers & (KeyModifiers::CONTROL | KeyModifiers::ALT | KeyModifiers::SHIFT);
     let code = match key.code {
-        KeyCode::Up => "↑".to_string(),
-        KeyCode::Down => "↓".to_string(),
-        KeyCode::Left => "←".to_string(),
-        KeyCode::Right => "→".to_string(),
-        KeyCode::BackTab => "Shift-Tab".to_string(),
-        KeyCode::Char(' ') => "Space".to_string(),
-        KeyCode::Char(c) => c.to_string(),
-        KeyCode::F(n) => format!("F{n}"),
-        other => format!("{other:?}"),
+        KeyCode::Char(c) => {
+            if mods.contains(KeyModifiers::CONTROL | KeyModifiers::ALT)
+                && !c.is_ascii_alphanumeric()
+            {
+                mods.remove(KeyModifiers::CONTROL | KeyModifiers::ALT);
+            }
+            if mods.contains(KeyModifiers::CONTROL) {
+                KeyCode::Char(c.to_ascii_lowercase())
+            } else {
+                mods.remove(KeyModifiers::SHIFT);
+                KeyCode::Char(c)
+            }
+        }
+        KeyCode::BackTab => {
+            mods.insert(KeyModifiers::SHIFT);
+            KeyCode::BackTab
+        }
+        KeyCode::Tab if mods.contains(KeyModifiers::SHIFT) => KeyCode::BackTab,
+        other => other,
     };
-    let mut parts = Vec::new();
-    if key.modifiers.contains(KeyModifiers::CONTROL) {
-        parts.push("Ctrl".to_string());
-    }
-    if key.modifiers.contains(KeyModifiers::ALT) {
-        parts.push("Alt".to_string());
-    }
-    // A letter's case already shows Shift, and BackTab spells it out.
-    if key.modifiers.contains(KeyModifiers::SHIFT)
-        && !matches!(key.code, KeyCode::Char(_) | KeyCode::BackTab)
-    {
-        parts.push("Shift".to_string());
-    }
-    parts.push(code);
-    parts.join("-")
+    KeyEvent::new(code, mods)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum EditorCommand {
-    RunQuery,
-    NewLine,
-    Left,
-    Right,
-    Up,
-    Down,
-    WordLeft,
-    WordRight,
-    LineStart,
-    LineEnd,
-    Top,
-    Bottom,
-    PageUp,
-    PageDown,
-    SelectLeft,
-    SelectRight,
-    SelectUp,
-    SelectDown,
-    SelectWordLeft,
-    SelectWordRight,
-    SelectLineStart,
-    SelectLineEnd,
-    SelectAll,
-    DeleteBack,
-    DeleteForward,
-    DeleteWordBack,
-    DeleteWordForward,
-    DeleteToLineEnd,
-    Copy,
-    Cut,
-    Paste,
-    Undo,
-    Redo,
+/// How a chord is written for people, and in `qry --print-config`:
+/// `ctrl-p`, `Enter`, `shift-Tab`, `←`, `G`, `F5`, `g g`, `alt-Del`.
+/// [`parse_key_sequence`] reads it back.
+pub fn chord_to_string(chord: &[KeyEvent]) -> String {
+    let keys: Vec<String> = chord
+        .iter()
+        .map(|key| {
+            let key = normalise(*key);
+            let mut out = String::new();
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                out.push_str("ctrl-");
+            }
+            if key.modifiers.contains(KeyModifiers::ALT) {
+                out.push_str("alt-");
+            }
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                out.push_str("shift-");
+            }
+            match key.code {
+                KeyCode::Char(' ') => out.push_str("Space"),
+                KeyCode::Char(c) => out.push(c),
+                KeyCode::Enter => out.push_str("Enter"),
+                KeyCode::Esc => out.push_str("Esc"),
+                KeyCode::Tab | KeyCode::BackTab => out.push_str("Tab"),
+                KeyCode::Backspace => out.push_str("Backspace"),
+                KeyCode::Delete => out.push_str("Del"),
+                KeyCode::Insert => out.push_str("Ins"),
+                KeyCode::Left => out.push('←'),
+                KeyCode::Right => out.push('→'),
+                KeyCode::Up => out.push('↑'),
+                KeyCode::Down => out.push('↓'),
+                KeyCode::Home => out.push_str("Home"),
+                KeyCode::End => out.push_str("End"),
+                KeyCode::PageUp => out.push_str("PgUp"),
+                KeyCode::PageDown => out.push_str("PgDn"),
+                KeyCode::F(n) => out.push_str(&format!("F{n}")),
+                other => out.push_str(&format!("{other:?}")),
+            }
+            out
+        })
+        .collect();
+    keys.join(" ")
 }
 
-impl Command for EditorCommand {
-    fn description(self) -> &'static str {
-        match self {
-            Self::RunQuery => "Run query",
-            Self::NewLine => "New line",
-            Self::Left => "Cursor left",
-            Self::Right => "Cursor right",
-            Self::Up => "Cursor up",
-            Self::Down => "Cursor down",
-            Self::WordLeft => "Previous word",
-            Self::WordRight => "Next word",
-            Self::LineStart => "Start of line",
-            Self::LineEnd => "End of line",
-            Self::Top => "Start of query",
-            Self::Bottom => "End of query",
-            Self::PageUp => "Page up",
-            Self::PageDown => "Page down",
-            Self::SelectLeft => "Select left",
-            Self::SelectRight => "Select right",
-            Self::SelectUp => "Select up",
-            Self::SelectDown => "Select down",
-            Self::SelectWordLeft => "Select previous word",
-            Self::SelectWordRight => "Select next word",
-            Self::SelectLineStart => "Select to start of line",
-            Self::SelectLineEnd => "Select to end of line",
-            Self::SelectAll => "Select all",
-            Self::DeleteBack => "Delete character before cursor",
-            Self::DeleteForward => "Delete character after cursor",
-            Self::DeleteWordBack => "Delete word before cursor",
-            Self::DeleteWordForward => "Delete word after cursor",
-            Self::DeleteToLineEnd => "Delete to end of line",
-            Self::Copy => "Copy selection",
-            Self::Cut => "Cut selection",
-            Self::Paste => "Paste",
-            Self::Undo => "Undo",
-            Self::Redo => "Redo",
+/// The one chord of several to show where there is room for one, such as
+/// the hint bar: one without modifiers if there is one (a terminal can
+/// always send it), then the shortest. `[ctrl-Enter, F5]` gives `F5`.
+/// Empty when there are none.
+pub fn display_chord(chords: &[Vec<KeyEvent>]) -> String {
+    chords
+        .iter()
+        .min_by_key(|chord| display_order(chord))
+        .map(|chord| chord_to_string(chord))
+        .unwrap_or_default()
+}
+
+/// Plain before modified, then shorter, then by text, so the order does not
+/// depend on a map's.
+pub(crate) fn display_order(chord: &[KeyEvent]) -> (bool, usize, String) {
+    let text = chord_to_string(chord);
+    let modified = chord
+        .iter()
+        .any(|key| !normalise(*key).modifiers.is_empty());
+    (modified, text.chars().count(), text)
+}
+
+/// Reads a chord sequence, normalised. Two spellings:
+/// - the config's, `<ctrl-q>` or `<g><g>`;
+/// - [`chord_to_string`]'s, chords separated by spaces: `ctrl-q`, `g g`.
+///
+/// Modifiers (`ctrl-`, `alt-`, `shift-`) and named keys (`enter`, `Esc`,
+/// `PgDn`, `pagedown`, `←`, `left`, …) are case-insensitive. A single
+/// character keeps its case (`G` is not `g`), and `shift-g` is `G`. Write
+/// `<` and `>` as `lt` and `gt` inside `<…>`.
+pub fn parse_key_sequence(raw: &str) -> Result<Vec<KeyEvent>, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("empty key".to_string());
+    }
+    let bracketed = trimmed.len() > 2
+        && trimmed.starts_with('<')
+        && trimmed.ends_with('>')
+        && !trimmed.contains(char::is_whitespace);
+    let keys: Vec<&str> = if bracketed {
+        trimmed[1..trimmed.len() - 1].split("><").collect()
+    } else {
+        trimmed.split_whitespace().collect()
+    };
+    keys.into_iter()
+        .map(|key| parse_key_event(key).map_err(|e| format!("`{raw}`: {e}")))
+        .collect()
+}
+
+/// Reads one chord of a [`parse_key_sequence`], with or without its `<…>`.
+pub(crate) fn parse_key_event(raw: &str) -> Result<KeyEvent, String> {
+    let raw = if raw.chars().count() > 2 && raw.starts_with('<') && raw.ends_with('>') {
+        &raw[1..raw.len() - 1]
+    } else {
+        raw
+    };
+    let (rest, mods) = split_modifiers(raw);
+    let code = parse_code(rest, mods).ok_or_else(|| format!("unknown key `{raw}`"))?;
+    Ok(normalise(KeyEvent::new(code, mods)))
+}
+
+/// Strips `ctrl-` / `alt-` / `shift-` prefixes, in any case. A prefix with
+/// nothing after it is the key itself, so `alt--` is Alt and `-`.
+fn split_modifiers(raw: &str) -> (&str, KeyModifiers) {
+    let mut mods = KeyModifiers::empty();
+    let mut rest = raw;
+    loop {
+        let lower = rest.to_ascii_lowercase();
+        let (len, m) = if lower.starts_with("ctrl-") && rest.len() > 5 {
+            (5, KeyModifiers::CONTROL)
+        } else if lower.starts_with("alt-") && rest.len() > 4 {
+            (4, KeyModifiers::ALT)
+        } else if lower.starts_with("shift-") && rest.len() > 6 {
+            (6, KeyModifiers::SHIFT)
+        } else {
+            return (rest, mods);
+        };
+        mods.insert(m);
+        rest = &rest[len..];
+    }
+}
+
+fn parse_code(raw: &str, mods: KeyModifiers) -> Option<KeyCode> {
+    let named = match raw.to_ascii_lowercase().as_str() {
+        "esc" | "escape" => KeyCode::Esc,
+        "enter" | "return" => KeyCode::Enter,
+        "left" | "←" => KeyCode::Left,
+        "right" | "→" => KeyCode::Right,
+        "up" | "↑" => KeyCode::Up,
+        "down" | "↓" => KeyCode::Down,
+        "home" => KeyCode::Home,
+        "end" => KeyCode::End,
+        "pageup" | "pgup" => KeyCode::PageUp,
+        "pagedown" | "pgdn" => KeyCode::PageDown,
+        "backtab" => KeyCode::BackTab,
+        "tab" if mods.contains(KeyModifiers::SHIFT) => KeyCode::BackTab,
+        "tab" => KeyCode::Tab,
+        "backspace" => KeyCode::Backspace,
+        "delete" | "del" => KeyCode::Delete,
+        "insert" | "ins" => KeyCode::Insert,
+        "space" => KeyCode::Char(' '),
+        "hyphen" | "minus" => KeyCode::Char('-'),
+        "lt" => KeyCode::Char('<'),
+        "gt" => KeyCode::Char('>'),
+        f if f.len() > 1 && f.starts_with('f') => {
+            let n: u8 = f[1..].parse().ok()?;
+            if !(1..=12).contains(&n) {
+                return None;
+            }
+            KeyCode::F(n)
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum ResultsCommand {
-    Up,
-    Down,
-    Left,
-    Right,
-    PageUp,
-    PageDown,
-    FirstColumn,
-    LastColumn,
-    FirstRow,
-    LastRow,
-}
-
-impl Command for ResultsCommand {
-    fn description(self) -> &'static str {
-        match self {
-            Self::Up => "Up a row",
-            Self::Down => "Down a row",
-            Self::Left => "Left a column",
-            Self::Right => "Right a column",
-            Self::PageUp => "Up a page",
-            Self::PageDown => "Down a page",
-            Self::FirstColumn => "First column",
-            Self::LastColumn => "Last column",
-            Self::FirstRow => "First row",
-            Self::LastRow => "Last row",
+        _ => {
+            let mut chars = raw.chars();
+            let (Some(c), None) = (chars.next(), chars.next()) else {
+                return None;
+            };
+            // A single character keeps its case; `shift-` upper-cases it.
+            if mods.contains(KeyModifiers::SHIFT) {
+                KeyCode::Char(c.to_ascii_uppercase())
+            } else {
+                KeyCode::Char(c)
+            }
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum TreeCommand {
-    Up,
-    Down,
-    /// Opens or closes the selected connection, loading its tables the first
-    /// time it opens.
-    Toggle,
-    /// Connects to the selected connection.
-    Connect,
-    /// Opens the selected connection in the form, to change it.
-    Edit,
-    /// Removes the selected connection, and its stored password with it.
-    Delete,
-    First,
-    Last,
-}
-
-impl Command for TreeCommand {
-    fn description(self) -> &'static str {
-        match self {
-            Self::Up => "Up a row",
-            Self::Down => "Down a row",
-            Self::Toggle => "Expand or collapse",
-            Self::Connect => "Connect",
-            Self::Edit => "Edit this connection",
-            Self::Delete => "Forget this connection",
-            Self::First => "First row",
-            Self::Last => "Last row",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum FormCommand {
-    NextField,
-    PrevField,
-    Submit,
-    /// Moves the cursor in a text field, or picks the previous choice.
-    Left,
-    /// Moves the cursor in a text field, or picks the next choice.
-    Right,
-    /// Only acts on choice fields; text fields type the key instead.
-    NextChoice,
-    LineStart,
-    LineEnd,
-    DeleteBack,
-    DeleteForward,
-}
-
-impl Command for FormCommand {
-    fn description(self) -> &'static str {
-        match self {
-            Self::NextField => "Next field",
-            Self::PrevField => "Previous field",
-            Self::Submit => "Submit the form",
-            Self::Left => "Cursor left, or previous choice",
-            Self::Right => "Cursor right, or next choice",
-            Self::NextChoice => "Next choice",
-            Self::LineStart => "Start of field",
-            Self::LineEnd => "End of field",
-            Self::DeleteBack => "Delete character before cursor",
-            Self::DeleteForward => "Delete character after cursor",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, EnumIter)]
-pub enum HelpCommand {
-    ScrollUp,
-    ScrollDown,
-    PageUp,
-    PageDown,
-    Close,
-}
-
-impl Command for HelpCommand {
-    fn description(self) -> &'static str {
-        match self {
-            Self::ScrollUp => "Scroll up",
-            Self::ScrollDown => "Scroll down",
-            Self::PageUp => "Page up",
-            Self::PageDown => "Page down",
-            Self::Close => "Close help",
-        }
-    }
+    };
+    Some(named)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn keymap(json: &str) -> Result<Keymap<ResultsCommand>, json5::Error> {
-        json5::from_str(json)
-    }
-
-    #[test]
-    fn looks_up_keys_by_code_and_modifiers() {
-        let map = keymap(r#"{ "<up>": "Up", "<i>": "Up", "<shift-g>": "LastRow" }"#).unwrap();
-        assert_eq!(map.get(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)), Some(ResultsCommand::Up));
-        assert_eq!(map.get(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE)), Some(ResultsCommand::Up));
-        assert_eq!(
-            map.get(KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT)),
-            Some(ResultsCommand::LastRow)
-        );
-        assert_eq!(map.get(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE)), None);
-    }
-
-    #[test]
-    fn rejects_sequences_and_unknown_commands() {
-        assert!(keymap(r#"{ "<g><g>": "FirstRow" }"#).is_err());
-        assert!(keymap(r#"{ "<g>": "Teleport" }"#).is_err());
-        assert!(keymap(r#"{ "<ctrl-notakey>": "Up" }"#).is_err());
-    }
-
-    #[test]
-    fn describe_groups_keys_in_command_order() {
-        let map = keymap(r#"{ "<i>": "Up", "<up>": "Up", "<shift-g>": "LastRow", "<home>": "FirstColumn" }"#)
-            .unwrap();
-        assert_eq!(
-            map.describe(),
-            [
-                ("↑ / i".to_string(), "Up a row"),
-                ("Home".to_string(), "First column"),
-                ("G".to_string(), "Last row"),
-            ]
-        );
-    }
-
-    #[test]
-    fn user_keys_win_over_defaults() {
-        let mut user = keymap(r#"{ "<g>": "LastRow" }"#).unwrap();
-        user.merge_defaults(&keymap(r#"{ "<g>": "FirstRow", "<up>": "Up" }"#).unwrap());
-        assert_eq!(user.get(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE)), Some(ResultsCommand::LastRow));
-        assert_eq!(user.get(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)), Some(ResultsCommand::Up));
-    }
-
-    #[test]
-    fn keys_display_readably() {
-        let show = |code, mods| display_key(&KeyEvent::new(code, mods));
-        assert_eq!(show(KeyCode::Char('u'), KeyModifiers::CONTROL), "Ctrl-u");
-        assert_eq!(show(KeyCode::BackTab, KeyModifiers::SHIFT), "Shift-Tab");
-        assert_eq!(show(KeyCode::Left, KeyModifiers::CONTROL | KeyModifiers::SHIFT), "Ctrl-Shift-←");
-        assert_eq!(show(KeyCode::F(8), KeyModifiers::NONE), "F8");
-        assert_eq!(show(KeyCode::Char(' '), KeyModifiers::NONE), "Space");
-        assert_eq!(show(KeyCode::PageDown, KeyModifiers::NONE), "PageDown");
-    }
-}
+#[path = "keymap_tests.rs"]
+mod keymap_tests;

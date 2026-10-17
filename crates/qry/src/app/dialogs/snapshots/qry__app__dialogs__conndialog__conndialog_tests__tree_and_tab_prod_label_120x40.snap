@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/dialogs/conndialog_tests.rs
+expression: text
+---
+ qry  1 scratch  2 prod-db [prod]                                                         sqlite · prod-db.db   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+ ▸ ● sq  scratch              │  1 │                                                                                    
+▌▸ ● sq  prod-db [prod]       │                                                                                         
+ ▸ ○ sq  staging-db [staging] │                                                                                         
+ ▸ ○ sq  dev-db [dev]         │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS                                                                                 
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ ✓ Connected to scratch (fake)                                                      (+1) 
+ prod-db · sqlite · prod-db.db · auto                                                                                   
+ Enter open  Space expand  n new conn  Tab next pane  : commands  ctrl-q quit                                    ? help

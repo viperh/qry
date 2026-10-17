@@ -1,6 +1,6 @@
 [package]
 name = "qry"
-description = "A terminal user interface built with ratatui"
+description = "A terminal SQL client for PostgreSQL, MySQL, MariaDB, SQLite and Oracle"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -8,15 +8,38 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 build = "build.rs"
+# The benches are listed below; `benches/app.rs` and `benches/common.rs` are
+# modules they share, not benches.
+autobenches = false
 
 # `errors.rs` reads CARGO_PKG_REPOSITORY at compile time for the panic message,
 # so `repository` above must stay set.
+
+# `cargo bench` builds only the criterion benches below, not the unit tests
+# in bench mode.
+[lib]
+bench = false
+
+[[bin]]
+name = "qry"
+path = "src/main.rs"
+bench = false
+
+[lints]
+workspace = true
+
+[features]
+# Compiles `qry::testing` (the app harness) for other crates' tests. Never
+# enabled in a release build.
+test-util = ["qry-core/test-util"]
 
 [dependencies]
 qry-core = { workspace = true }
 
 better-panic = { workspace = true }
 clap = { workspace = true }
+clap_complete = { workspace = true }
+clap_mangen = { workspace = true }
 color-eyre = { workspace = true }
 config = { workspace = true }
 crossterm = { workspace = true }
@@ -24,21 +47,24 @@ directories = { workspace = true }
 futures = { workspace = true }
 human-panic = { workspace = true }
 json5 = { workspace = true }
+chrono = { workspace = true }
 libc = { workspace = true }
 ratatui = { workspace = true }
 serde = { workspace = true }
 strip-ansi-escapes = { workspace = true }
-strum = { workspace = true, features=["derive"] }
+strum = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true }
-ratatui-textarea = "0.9.2"
-serde_json = "1.0.151"
-zeroize = "1.9.0"
-keyring = "4.2.0"
-winresource = "0.1.31"
+ratatui-textarea = { workspace = true }
+serde_json = { workspace = true }
+zeroize = { workspace = true }
+keyring = { workspace = true }
+winresource = { workspace = true }
+# The drivers' errors, as the worker holds them.
+anyhow = { workspace = true }
 
 # `Tui::suspend` raises SIGTSTP, which only exists on unix.
 [target.'cfg(not(windows))'.dependencies]
@@ -47,7 +73,37 @@ signal-hook = { workspace = true }
 [build-dependencies]
 anyhow = { workspace = true }
 vergen-gix = { workspace = true }
-winresource = "0.1.31"
+winresource = { workspace = true }
 
 [dev-dependencies]
+# A self dev-dependency, so integration tests see `qry::testing` and
+# `qry_core::testing` without anyone passing `--features test-util`.
+qry = { path = ".", features = ["test-util"] }
+
+cargo_metadata = { workspace = true }
+criterion = { workspace = true }
+insta = { workspace = true }
+portable-pty = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+# `start_paused` and `time::advance` for tests on a virtual clock.
+tokio = { workspace = true, features = ["test-util"] }
+
+# Benchmarks (T006): criterion, `harness = false`. `cargo bench` runs them;
+# scripts/bench-gates.toml holds their limits.
+[[bench]]
+name = "results"
+harness = false
+
+[[bench]]
+name = "frame"
+harness = false
+
+[[bench]]
+name = "editor"
+harness = false
+
+[[bench]]
+name = "import"
+harness = false

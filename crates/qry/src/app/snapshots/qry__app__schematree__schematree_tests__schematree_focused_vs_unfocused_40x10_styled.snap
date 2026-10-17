@@ -1,0 +1,85 @@
+---
+source: crates/qry/src/app/schematree_tests.rs
+expression: "format!(\"{}\\n---\\n{}\", styled(&focused), styled(&unfocused))"
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+     ▾ Tables  2                        
+       ▸ orders                         
+       ▸ users                          
+     ▸ Views  1                         
+                                        
+                                        
+                                        
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
+7,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+0,1 Rgb(242, 176, 74) Reset BOLD
+1,1 Rgb(138, 148, 163) Reset BOLD
+3,1 Rgb(159, 211, 138) Reset BOLD
+5,1 Rgb(79, 193, 201) Reset BOLD
+9,1 Rgb(211, 217, 224) Reset BOLD
+16,1 Reset Reset NONE
+0,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
+3,2 Rgb(138, 148, 163) Rgb(27, 37, 51) BOLD
+5,2 Rgb(242, 176, 74) Rgb(27, 37, 51) BOLD
+9,2 Reset Reset NONE
+0,3 Reset Reset NONE
+5,3 Rgb(138, 148, 163) Reset NONE
+16,3 Reset Reset NONE
+0,4 Reset Reset NONE
+7,4 Rgb(138, 148, 163) Reset NONE
+9,4 Rgb(169, 180, 194) Reset NONE
+15,4 Reset Reset NONE
+0,5 Reset Reset NONE
+7,5 Rgb(138, 148, 163) Reset NONE
+9,5 Rgb(169, 180, 194) Reset NONE
+14,5 Reset Reset NONE
+0,6 Reset Reset NONE
+5,6 Rgb(138, 148, 163) Reset NONE
+15,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE
+
+---
+ SCHEMA                                 
+▌▾ ● sq  scratch                        
+   ▾ main                               
+     ▾ Tables  2                        
+       ▸ orders                         
+       ▸ users                          
+     ▸ Views  1                         
+                                        
+                                        
+                                        
+--- styles (x,y fg bg modifiers) ---
+0,0 Rgb(138, 148, 163) Rgb(19, 24, 32) NONE
+0,1 Rgb(242, 176, 74) Reset BOLD
+1,1 Rgb(138, 148, 163) Reset BOLD
+3,1 Rgb(159, 211, 138) Reset BOLD
+5,1 Rgb(79, 193, 201) Reset BOLD
+9,1 Rgb(211, 217, 224) Reset BOLD
+16,1 Reset Reset NONE
+0,2 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+3,2 Rgb(138, 148, 163) Rgb(27, 37, 51) NONE
+5,2 Rgb(211, 217, 224) Rgb(27, 37, 51) NONE
+9,2 Reset Reset NONE
+0,3 Reset Reset NONE
+5,3 Rgb(138, 148, 163) Reset NONE
+16,3 Reset Reset NONE
+0,4 Reset Reset NONE
+7,4 Rgb(138, 148, 163) Reset NONE
+9,4 Rgb(169, 180, 194) Reset NONE
+15,4 Reset Reset NONE
+0,5 Reset Reset NONE
+7,5 Rgb(138, 148, 163) Reset NONE
+9,5 Rgb(169, 180, 194) Reset NONE
+14,5 Reset Reset NONE
+0,6 Reset Reset NONE
+5,6 Rgb(138, 148, 163) Reset NONE
+15,6 Reset Reset NONE
+0,7 Reset Reset NONE
+0,8 Reset Reset NONE
+0,9 Reset Reset NONE

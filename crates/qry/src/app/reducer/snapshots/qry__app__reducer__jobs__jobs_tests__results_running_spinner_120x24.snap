@@ -1,0 +1,28 @@
+---
+source: crates/qry/src/app/reducer/jobs_tests.rs
+expression: text
+---
+ qry  1 scratch ◐                                                                             sqlite · :memory:   EDIT  
+ SCHEMA                       │ QUERY  ln 1, col 21                                                                     
+▌▸ ● sq  scratch              │▌ 1 │ select * from events                                                               
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS  ⠋ running · 2.2 s · 12 000 rows                                                
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ scratch · ⠋ running · 2.2 s · 12 000 rows · sqlite · :memory: · auto                                                   
+ ctrl-c cancel  F5 run  F8 run all  F6 next pane  ctrl-p commands  ctrl-n new conn  ctrl-q quit                 F1 help

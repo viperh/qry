@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/views/editor_tests.rs
+expression: "styled(&drawn(&h, w, ht))"
+---
+  1 │ select '日 本 語  🦀 ' as name;                           
+▌ 2 │ select 1;                                             
+                                                            
+                                                            
+                                                            
+                                                            
+--- styles (x,y fg bg modifiers) ---
+0,0 Reset Reset NONE
+1,0 Rgb(138, 148, 163) Reset NONE
+4,0 Rgb(35, 42, 52) Reset NONE
+5,0 Reset Reset NONE
+6,0 Rgb(79, 193, 201) Reset NONE
+12,0 Reset Reset NONE
+13,0 Rgb(159, 211, 138) Reset NONE
+15,0 Reset Reset NONE
+16,0 Rgb(159, 211, 138) Reset NONE
+17,0 Reset Reset NONE
+18,0 Rgb(159, 211, 138) Reset NONE
+19,0 Reset Reset NONE
+20,0 Rgb(159, 211, 138) Reset NONE
+22,0 Reset Reset NONE
+23,0 Rgb(159, 211, 138) Reset NONE
+24,0 Reset Reset NONE
+25,0 Rgb(79, 193, 201) Reset NONE
+27,0 Reset Reset NONE
+28,0 Rgb(211, 217, 224) Reset NONE
+33,0 Reset Reset NONE
+0,1 Rgb(242, 176, 74) Reset NONE
+4,1 Rgb(35, 42, 52) Reset NONE
+5,1 Reset Reset NONE
+6,1 Rgb(79, 193, 201) Reset NONE
+12,1 Reset Reset NONE
+13,1 Rgb(199, 166, 255) Reset NONE
+14,1 Rgb(211, 217, 224) Reset NONE
+15,1 Rgb(14, 17, 22) Rgb(242, 176, 74) NONE
+16,1 Reset Reset NONE
+0,2 Reset Reset NONE
+0,3 Reset Reset NONE
+0,4 Reset Reset NONE
+0,5 Reset Reset NONE

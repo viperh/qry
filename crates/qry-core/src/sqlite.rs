@@ -1,18 +1,21 @@
-use std::path::PathBuf;
-use tokio_rusqlite::{Connection, OpenFlags};
-use tokio_rusqlite::types::ValueRef;
-use serde::{Serialize, Deserialize};
+use std::{path::PathBuf, sync::Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use hex::encode;
-use shared::{QueryResult};
-use crate::{shared, DatabaseType};
-use crate::shared::Database;
+use serde::{Deserialize, Serialize};
+use shared::QueryResult;
+use tokio_rusqlite::{Connection, OpenFlags, rusqlite, types::ValueRef};
+
+use crate::{
+    DatabaseType, shared,
+    shared::{CancelHandle, Database, RowSender, StreamItem, first_column},
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct SqliteConfig {
     pub path: PathBuf,
-    pub read_only: bool
+    pub read_only: bool,
 }
 
 impl SqliteConfig {
@@ -27,6 +30,28 @@ impl SqliteConfig {
 pub struct Sqlite {
     conn: Connection,
     config: SqliteConfig,
+    interrupt: Arc<rusqlite::InterruptHandle>,
+}
+
+/// Interrupts the statement SQLite is stepping through.
+struct Interrupt(Arc<rusqlite::InterruptHandle>);
+
+#[async_trait]
+impl CancelHandle for Interrupt {
+    async fn cancel(&self) -> Result<()> {
+        self.0.interrupt();
+        Ok(())
+    }
+}
+
+/// Shows only the (redacted) config: the driver's connection handle has no
+/// `Debug` of its own.
+impl std::fmt::Debug for Sqlite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Sqlite")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Sqlite {
@@ -38,16 +63,83 @@ impl Sqlite {
         };
 
         let conn = Connection::open_with_flags(&config.path, flags).await?;
+        let interrupt = conn
+            .call(|conn| Ok::<_, tokio_rusqlite::Error>(conn.get_interrupt_handle()))
+            .await?;
         Ok(Self {
             conn,
-            config
-        }
-        )
+            config,
+            interrupt: Arc::new(interrupt),
+        })
+    }
+}
+
+impl Sqlite {
+    /// Runs `sql` with `params` bound to its placeholders, in order,
+    /// keeping at most `max_rows` rows (0 keeps all).
+    async fn run(&self, sql: &str, params: Vec<String>, max_rows: usize) -> Result<QueryResult> {
+        let sql = sql.to_string();
+
+        let result = self
+            .conn
+            .call(move |conn| {
+                let mut stmt = conn.prepare(&sql)?;
+                let names: Vec<String> =
+                    stmt.column_names().iter().map(|s| s.to_string()).collect();
+                // SQLite types values, not columns: a column's type is that
+                // of its first value that is not NULL.
+                let mut types: Vec<&'static str> = vec![""; names.len()];
+
+                let mut rows = Vec::new();
+                let mut truncated = false;
+                let mut cursor = stmt.query(rusqlite::params_from_iter(params.iter()))?;
+
+                while let Some(row) = cursor.next()? {
+                    // Stepping stops here; the rest is never read.
+                    if max_rows > 0 && rows.len() == max_rows {
+                        truncated = true;
+                        break;
+                    }
+                    let mut cells = Vec::with_capacity(names.len());
+                    for (i, type_name) in types.iter_mut().enumerate() {
+                        let value = row.get_ref(i)?;
+                        if type_name.is_empty() {
+                            *type_name = type_of(value);
+                        }
+                        cells.push(render(value));
+                    }
+                    rows.push(cells);
+                }
+
+                drop(cursor);
+                // A statement without columns (INSERT, UPDATE, DDL) reports
+                // the rows it changed; a query, the rows it returned.
+                let affected = if names.is_empty() {
+                    conn.changes()
+                } else {
+                    rows.len() as u64
+                };
+                let columns = names
+                    .into_iter()
+                    .zip(types)
+                    .map(|(name, type_name)| shared::ColumnMeta::new(name, type_name))
+                    .collect();
+                Ok::<_, tokio_rusqlite::Error>(QueryResult {
+                    columns,
+                    rows,
+                    affected: Some(affected),
+                    elapsed: std::time::Duration::ZERO,
+                    truncated,
+                })
+            })
+            .await
+            .map_err(positioned)?;
+        Ok(result)
     }
 }
 
 #[async_trait]
-impl Database for Sqlite{
+impl Database for Sqlite {
     fn kind(&self) -> DatabaseType {
         DatabaseType::Sqlite
     }
@@ -56,36 +148,95 @@ impl Database for Sqlite{
         self.config.path.display().to_string()
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult> {
-        let sql = sql.to_string();
+    fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {
+        Some(Arc::new(Interrupt(self.interrupt.clone())))
+    }
 
-        let result = self
+    async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
+        self.run(sql, Vec::new(), max_rows).await
+    }
+
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
+    /// BEGIN to turn it off, COMMIT to turn it on, each only when the
+    /// connection is not already that way: SQLite refuses a BEGIN inside a
+    /// transaction and a COMMIT outside one.
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        self.conn
+            .call(move |conn| {
+                match (on, conn.is_autocommit()) {
+                    (true, false) => conn.execute_batch("COMMIT")?,
+                    (false, true) => conn.execute_batch("BEGIN")?,
+                    _ => {}
+                }
+                Ok::<_, tokio_rusqlite::Error>(())
+            })
+            .await?;
+        Ok(())
+    }
+
+    async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
+        self.run(sql, params.to_vec(), 0).await
+    }
+
+    /// Steps through the statement on the connection's thread, handing on
+    /// `fetch_size` rows at a time. The columns go first, typed by the
+    /// first batch; a reader that falls behind holds the stepping back.
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let sql = sql.to_string();
+        let fetch_size = fetch_size.max(1);
+        let sent = self
             .conn
             .call(move |conn| {
                 let mut stmt = conn.prepare(&sql)?;
-                let columns: Vec<String> =
+                let names: Vec<String> =
                     stmt.column_names().iter().map(|s| s.to_string()).collect();
-
-                let mut rows = Vec::new();
+                let mut types: Vec<&'static str> = vec![""; names.len()];
+                let mut columns = Some(names);
+                let mut batch = Vec::with_capacity(fetch_size);
+                let mut sent = 0u64;
                 let mut cursor = stmt.query([])?;
-
-                while let Some(row) = cursor.next()? {
-                    let mut cells = Vec::with_capacity(columns.len());
-                    for i in 0..columns.len() {
-                        cells.push(render(row.get_ref(i)?));
+                // `None` once the reader has gone: stepping stops there.
+                let mut deliver = |batch: Vec<Vec<Option<String>>>, types: &[&str]| {
+                    if let Some(names) = columns.take() {
+                        let metas = names
+                            .into_iter()
+                            .zip(types)
+                            .map(|(name, t)| shared::ColumnMeta::new(name, *t))
+                            .collect();
+                        out.blocking_send(StreamItem::Columns(metas)).ok()?;
                     }
-                    rows.push(cells);
+                    if !batch.is_empty() {
+                        out.blocking_send(StreamItem::Rows(batch)).ok()?;
+                    }
+                    Some(())
+                };
+                while let Some(row) = cursor.next()? {
+                    let mut cells = Vec::with_capacity(types.len());
+                    for (i, type_name) in types.iter_mut().enumerate() {
+                        let value = row.get_ref(i)?;
+                        if type_name.is_empty() {
+                            *type_name = type_of(value);
+                        }
+                        cells.push(render(value));
+                    }
+                    batch.push(cells);
+                    if batch.len() == fetch_size {
+                        sent += batch.len() as u64;
+                        let full = std::mem::replace(&mut batch, Vec::with_capacity(fetch_size));
+                        if deliver(full, &types).is_none() {
+                            return Ok::<_, tokio_rusqlite::Error>(None);
+                        }
+                    }
                 }
-
-                let affected = rows.len() as u64;
-                Ok::<_, tokio_rusqlite::Error>(QueryResult {
-                    columns,
-                    rows,
-                    affected: Some(affected),
-                })
+                sent += batch.len() as u64;
+                Ok(deliver(batch, &types).map(|()| sent))
             })
-            .await?;
-        Ok(result)
+            .await
+            .map_err(positioned)?;
+        sent.ok_or_else(|| anyhow::anyhow!("the rows' reader stopped"))
     }
 
     async fn execute(&self, sql: &str) -> Result<u64> {
@@ -96,15 +247,32 @@ impl Database for Sqlite{
             .call(move |conn| {
                 let mut stmt = conn.prepare(&sql)?;
                 let affected = stmt.execute([])?;
-                Ok::<_, tokio_rusqlite::Error>(QueryResult {
-                    columns: Vec::new(),
-                    rows: Vec::new(),
-                    affected: Some(affected as u64),
-                })
+                Ok::<_, tokio_rusqlite::Error>(affected as u64)
             })
             .await?;
 
-        Ok(affected.affected.unwrap())
+        Ok(affected)
+    }
+
+    async fn tables(&self) -> Result<Vec<String>> {
+        let result = self
+            .query(
+                "SELECT name FROM sqlite_master WHERE type IN ('table', 'view') \
+                 AND name NOT LIKE 'sqlite_%' ORDER BY name",
+            )
+            .await?;
+        Ok(first_column(result))
+    }
+}
+
+/// The type a value says its column has: SQLite types values, not columns.
+fn type_of(value: ValueRef<'_>) -> &'static str {
+    match value {
+        ValueRef::Null => "",
+        ValueRef::Integer(_) => "integer",
+        ValueRef::Real(_) => "real",
+        ValueRef::Text(_) => "text",
+        ValueRef::Blob(_) => "blob",
     }
 }
 
@@ -114,6 +282,22 @@ fn render(value: ValueRef<'_>) -> Option<String> {
         ValueRef::Integer(i) => Some(i.to_string()),
         ValueRef::Real(f) => Some(f.to_string()),
         ValueRef::Text(t) => Some(String::from_utf8_lossy(t).into_owned()),
-        ValueRef::Blob(b) => Some(format!("x'{}'", encode(b))),
+        // `\x` and lowercase hex, as Postgres writes a `bytea`: every
+        // backend shows binary the same way.
+        ValueRef::Blob(b) => Some(format!("\\x{}", encode(b))),
+    }
+}
+
+/// SQLite says which token of the statement it could not take; that offset
+/// rides along in a [`QueryError`](shared::QueryError).
+fn positioned(e: tokio_rusqlite::Error<tokio_rusqlite::Error>) -> anyhow::Error {
+    match e {
+        tokio_rusqlite::Error::Error(tokio_rusqlite::Error::Error(
+            rusqlite::Error::SqlInputError { msg, offset, .. },
+        )) => anyhow::Error::new(shared::QueryError {
+            message: msg,
+            position: usize::try_from(offset).ok(),
+        }),
+        e => anyhow::Error::new(e),
     }
 }

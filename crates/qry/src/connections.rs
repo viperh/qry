@@ -4,23 +4,23 @@
 //! environment variable, or nowhere at all. Nothing in this module writes a
 //! password, and [`StoredConnection`] has no field to hold one.
 
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{self, File},
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 use color_eyre::eyre::{Context, bail};
 use qry_core::{
-    ConnectionConfig, SslMode, mariadb::MariadbConfig, mysql::MySqlConfig,
-    oracle::OracleConfig, postgres::PostgresConfig, sqlite::SqliteConfig,
+    ConnectionConfig, SslMode, mariadb::MariadbConfig, mysql::MySqlConfig, oracle::OracleConfig,
+    postgres::PostgresConfig, sqlite::SqliteConfig,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::config::get_data_dir;
-
 /// The format this build writes. A file numbered higher is refused rather
 /// than parsed hopefully.
-pub const VERSION: u64 = 1;
+pub(crate) const VERSION: u64 = 1;
 
 const FILE: &str = "connections.json";
 const TEMP: &str = "connections.json.tmp";
@@ -36,7 +36,18 @@ pub enum Driver {
 }
 
 impl Driver {
-    pub fn default_port(self) -> u16 {
+    /// The lower-case name the config and the status line use.
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Driver::Postgres => "postgres",
+            Driver::Mariadb => "mariadb",
+            Driver::Mysql => "mysql",
+            Driver::Oracle => "oracle",
+            Driver::Sqlite => "sqlite",
+        }
+    }
+
+    pub(crate) fn default_port(self) -> u16 {
         match self {
             Driver::Postgres => 5432,
             Driver::Mariadb | Driver::Mysql => 3306,
@@ -46,8 +57,58 @@ impl Driver {
     }
 
     /// Whether a connection of this kind needs a password at all.
-    pub fn needs_password(self) -> bool {
+    pub(crate) fn needs_password(self) -> bool {
         !matches!(self, Driver::Sqlite)
+    }
+}
+
+impl From<Driver> for qry_core::connspec::Engine {
+    fn from(driver: Driver) -> Self {
+        use qry_core::connspec::Engine;
+        match driver {
+            Driver::Postgres => Engine::Postgres,
+            Driver::Mariadb => Engine::Mariadb,
+            Driver::Mysql => Engine::Mysql,
+            Driver::Oracle => Engine::Oracle,
+            Driver::Sqlite => Engine::Sqlite,
+        }
+    }
+}
+
+impl From<qry_core::connspec::Engine> for Driver {
+    fn from(engine: qry_core::connspec::Engine) -> Self {
+        use qry_core::connspec::Engine;
+        match engine {
+            Engine::Postgres => Driver::Postgres,
+            Engine::Mariadb => Driver::Mariadb,
+            Engine::Mysql => Driver::Mysql,
+            Engine::Oracle => Driver::Oracle,
+            Engine::Sqlite => Driver::Sqlite,
+        }
+    }
+}
+
+/// What kind of database a connection points at, so a production one
+/// cannot be mistaken for a scratch one: shown in the tree and the top bar,
+/// and `prod` asks before the first write of a session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConnLabel {
+    Dev,
+    Staging,
+    Prod,
+}
+
+impl ConnLabel {
+    /// In the order the dialog offers them, after `none`.
+    pub(crate) const ALL: [ConnLabel; 3] = [ConnLabel::Dev, ConnLabel::Staging, ConnLabel::Prod];
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            ConnLabel::Dev => "dev",
+            ConnLabel::Staging => "staging",
+            ConnLabel::Prod => "prod",
+        }
     }
 }
 
@@ -104,6 +165,10 @@ pub struct StoredConnection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dsn: Option<String>,
     pub secret: Secret,
+    /// `dev`, `staging` or `prod`. Older files have none, and an older qry
+    /// keeps it among the keys it does not know.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<ConnLabel>,
     /// Anything a newer qry wrote, kept so saving does not strip it.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
@@ -115,9 +180,16 @@ pub struct StoredConnection {
 
 impl StoredConnection {
     /// A new record with a fresh id and nothing filled in.
-    pub fn new(name: impl Into<String>, driver: Driver) -> Self {
+    pub(crate) fn new(name: impl Into<String>, driver: Driver) -> Self {
+        Self::with_id(mint_id(), name, driver)
+    }
+
+    /// A new record with this id and nothing filled in. The reducer mints
+    /// its ids itself (see [`IdGen`](crate::app::state::IdGen)), since it
+    /// cannot read the clock.
+    pub(crate) fn with_id(id: impl Into<String>, name: impl Into<String>, driver: Driver) -> Self {
         Self {
-            id: mint_id(),
+            id: id.into(),
             name: name.into(),
             driver,
             host: None,
@@ -131,7 +203,12 @@ impl StoredConnection {
             wallet: None,
             mode: None,
             dsn: None,
-            secret: if driver.needs_password() { Secret::Prompt } else { Secret::None },
+            secret: if driver.needs_password() {
+                Secret::Prompt
+            } else {
+                Secret::None
+            },
+            label: None,
             extra: Map::new(),
             ephemeral: false,
         }
@@ -139,7 +216,7 @@ impl StoredConnection {
 
     /// Whether both open the same database as the same user, whatever they
     /// are called. How an import tells a connection it already has.
-    pub fn same_target(&self, other: &Self) -> bool {
+    pub(crate) fn same_target(&self, other: &Self) -> bool {
         let port = |c: &Self| c.port.unwrap_or(c.driver.default_port());
         self.driver == other.driver
             && self.host == other.host
@@ -151,13 +228,17 @@ impl StoredConnection {
     }
 
     /// What the tree shows.
-    pub fn title(&self) -> &str {
-        if self.name.is_empty() { &self.id } else { &self.name }
+    pub(crate) fn title(&self) -> &str {
+        if self.name.is_empty() {
+            &self.id
+        } else {
+            &self.name
+        }
     }
 
     /// Builds what the driver needs, given the password from wherever this
     /// record says it lives. The password is never kept here.
-    pub fn to_config(&self, password: &str) -> color_eyre::Result<ConnectionConfig> {
+    pub(crate) fn to_config(&self, password: &str) -> color_eyre::Result<ConnectionConfig> {
         if self.dsn.is_some() {
             bail!("DSN connections are not supported yet");
         }
@@ -170,6 +251,8 @@ impl StoredConnection {
 
         if self.driver == Driver::Sqlite {
             let path = required("path", &self.path)?;
+            // `~/app.db` is the user's, as a shell would read it.
+            let path = crate::import::expand_home(&path);
             return Ok(ConnectionConfig::Sqlite(SqliteConfig::new(
                 path,
                 self.mode.as_deref() == Some("ro"),
@@ -229,7 +312,7 @@ impl StoredConnection {
     /// Oracle's SSL mode and wallet. Before qry spoke TLS to Oracle, `tls`
     /// held a wallet directory rather than a mode; such a record still means
     /// "TCPS with this wallet", and saving it again writes the new shape.
-    pub fn oracle_tls(&self) -> color_eyre::Result<(SslMode, Option<String>)> {
+    pub(crate) fn oracle_tls(&self) -> color_eyre::Result<(SslMode, Option<String>)> {
         match &self.tls {
             Some(tls) if !SslMode::ALL.iter().any(|mode| mode.to_string() == *tls) => {
                 Ok((SslMode::VerifyFull, Some(tls.clone())))
@@ -260,12 +343,9 @@ struct ConnectionFile {
     extra: Map<String, Value>,
 }
 
-/// Reads the connections. A missing file is not an error: it means a first
-/// run. A malformed one is, and the bad file is left untouched.
-pub fn load() -> color_eyre::Result<Vec<StoredConnection>> {
-    load_from(&get_data_dir())
-}
-
+/// Reads the connections in `dir` (the data directory, in the app). A
+/// missing file is not an error: it means a first run. A malformed one is,
+/// and the bad file is left untouched.
 pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
     let file = dir.join(FILE);
     let text = match fs::read_to_string(&file) {
@@ -279,8 +359,12 @@ pub fn load_from(dir: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
 /// The connections in the text of a connection file, which `file` names in
 /// errors. Also how a copy of the file is imported as a backup.
 pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection>> {
-    let parsed: ConnectionFile = serde_json::from_str(text)
-        .wrap_err_with(|| format!("{} is not a connection file qry understands", file.display()))?;
+    let parsed: ConnectionFile = serde_json::from_str(text).wrap_err_with(|| {
+        format!(
+            "{} is not a connection file qry understands",
+            file.display()
+        )
+    })?;
     if parsed.version > VERSION {
         bail!(
             "{} was written by a newer qry (version {}, this build understands {VERSION})",
@@ -291,12 +375,8 @@ pub fn parse(text: &str, file: &Path) -> color_eyre::Result<Vec<StoredConnection
     Ok(parsed.connections)
 }
 
-/// Writes the connections whole, and atomically: a crash mid-save leaves the
-/// previous file intact.
-pub fn save(connections: &[StoredConnection]) -> color_eyre::Result<()> {
-    save_to(&get_data_dir(), connections)
-}
-
+/// Writes the connections whole into `dir`, and atomically: a crash
+/// mid-save leaves the previous file intact.
 pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Result<()> {
     fs::create_dir_all(dir).wrap_err_with(|| format!("cannot create {}", dir.display()))?;
     restrict(dir, 0o700)?;
@@ -315,17 +395,17 @@ pub fn save_to(dir: &Path, connections: &[StoredConnection]) -> color_eyre::Resu
 /// already a connection file, so a mistyped path cannot clobber anything
 /// else. Holds no password, since a record has nowhere to keep one.
 pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Result<PathBuf> {
-    let path = match path.extension() {
-        Some(_) => path.to_path_buf(),
-        None => path.with_extension("json"),
-    };
+    let path = export_path(path);
     if path.is_dir() {
         bail!("{} is a directory", path.display());
     }
     if let Ok(existing) = fs::read_to_string(&path)
         && parse(&existing, &path).is_err()
     {
-        bail!("{} already exists and is not a qry backup, so it was left alone", path.display());
+        bail!(
+            "{} already exists and is not a qry backup, so it was left alone",
+            path.display()
+        );
     }
 
     let file = ConnectionFile {
@@ -337,6 +417,15 @@ pub fn export(path: &Path, connections: &[StoredConnection]) -> color_eyre::Resu
     temp.push(".tmp");
     write_atomically(&file, Path::new(&temp), &path)?;
     Ok(path)
+}
+
+/// Where [`export`] writes for `path`: `.json` is added to a path with no
+/// extension.
+pub(crate) fn export_path(path: &Path) -> PathBuf {
+    match path.extension() {
+        Some(_) => path.to_path_buf(),
+        None => path.with_extension("json"),
+    }
 }
 
 /// Writes `file` to `temp`, then renames it over `target`: a crash midway
@@ -379,263 +468,30 @@ fn restrict(_path: &Path, _mode: u32) -> color_eyre::Result<()> {
 /// Eight hex characters, unique within a run and unlikely to repeat between
 /// runs. Enough for a keyring account name.
 fn mint_id() -> String {
-    use std::hash::{DefaultHasher, Hash, Hasher};
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    format!("{:08x}", id_seed() as u32)
+}
+
+/// A number that differs between runs and between calls, from the clock,
+/// the process id and a counter. The runtime hands one to the reducer at
+/// startup, for the ids it mints.
+pub(crate) fn id_seed() -> u64 {
+    use std::{
+        hash::{DefaultHasher, Hash, Hasher},
+        sync::atomic::{AtomicU64, Ordering},
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut hasher = DefaultHasher::new();
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().hash(&mut hasher);
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .hash(&mut hasher);
     std::process::id().hash(&mut hasher);
     COUNTER.fetch_add(1, Ordering::Relaxed).hash(&mut hasher);
-    format!("{:08x}", hasher.finish() as u32)
+    hasher.finish()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    /// A directory of its own per test, removed when the guard is dropped.
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new() -> Self {
-            static COUNTER: AtomicUsize = AtomicUsize::new(0);
-            let dir = std::env::temp_dir().join(format!(
-                "qry-connections-{}-{}",
-                std::process::id(),
-                COUNTER.fetch_add(1, Ordering::Relaxed)
-            ));
-            fs::create_dir_all(&dir).unwrap();
-            Self(dir)
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    fn postgres() -> StoredConnection {
-        StoredConnection {
-            host: Some("db.local".into()),
-            user: Some("alice".into()),
-            database: Some("app".into()),
-            secret: Secret::Keyring,
-            ..StoredConnection::new("prod", Driver::Postgres)
-        }
-    }
-
-    #[test]
-    fn ids_are_unique() {
-        let ids: Vec<String> = (0..100).map(|_| mint_id()).collect();
-        assert!(ids.iter().all(|id| id.len() == 8));
-        let mut unique = ids.clone();
-        unique.sort();
-        unique.dedup();
-        assert_eq!(unique.len(), ids.len());
-    }
-
-    #[test]
-    fn a_missing_file_is_an_empty_tree() {
-        let dir = TempDir::new();
-        assert!(load_from(&dir.0).unwrap().is_empty());
-    }
-
-    #[test]
-    fn what_is_saved_comes_back() {
-        let dir = TempDir::new();
-        let connections = vec![postgres(), StoredConnection::new("scratch", Driver::Sqlite)];
-        save_to(&dir.0, &connections).unwrap();
-
-        assert_eq!(load_from(&dir.0).unwrap(), connections);
-        // The temporary file does not outlive the save.
-        assert!(!dir.0.join(TEMP).exists());
-    }
-
-    #[test]
-    fn the_file_holds_no_password_and_omits_fields_that_do_not_apply() {
-        let dir = TempDir::new();
-        let mut connection = postgres();
-        connection.port = Some(5432);
-        save_to(&dir.0, &[connection]).unwrap();
-
-        let text = fs::read_to_string(dir.0.join(FILE)).unwrap();
-        assert!(!text.contains("password"), "{text}");
-        assert!(text.contains("\"driver\": \"postgres\""), "{text}");
-        assert!(text.contains("\"mode\": \"keyring\""), "{text}");
-        // SQLite fields have no place on a Postgres record.
-        assert!(!text.contains("\"path\""), "{text}");
-        assert!(!text.contains("\"service\""), "{text}");
-    }
-
-    #[test]
-    fn fields_from_a_newer_qry_survive_a_save() {
-        let dir = TempDir::new();
-        fs::write(
-            dir.0.join(FILE),
-            r#"{
-              "version": 1,
-              "future_setting": true,
-              "connections": [
-                {"id": "c7f3a1e2", "name": "prod", "driver": "postgres", "host": "h",
-                 "user": "u", "database": "d", "secret": {"mode": "prompt"},
-                 "colour": "red"}
-              ]
-            }"#,
-        )
-        .unwrap();
-
-        let mut loaded = load_from(&dir.0).unwrap();
-        assert_eq!(loaded[0].extra.get("colour").and_then(Value::as_str), Some("red"));
-        loaded[0].name = "renamed".into();
-        save_to(&dir.0, &loaded).unwrap();
-
-        let text = fs::read_to_string(dir.0.join(FILE)).unwrap();
-        assert!(text.contains("future_setting"), "{text}");
-        assert!(text.contains("\"colour\": \"red\""), "{text}");
-        assert!(text.contains("renamed"), "{text}");
-    }
-
-    #[test]
-    fn a_newer_version_is_refused_and_the_file_left_alone() {
-        let dir = TempDir::new();
-        let original = r#"{"version": 99, "connections": []}"#;
-        fs::write(dir.0.join(FILE), original).unwrap();
-
-        let err = load_from(&dir.0).unwrap_err().to_string();
-        assert!(err.contains("newer qry"), "{err}");
-        assert_eq!(fs::read_to_string(dir.0.join(FILE)).unwrap(), original);
-    }
-
-    #[test]
-    fn a_malformed_file_is_an_error_and_is_left_alone() {
-        let dir = TempDir::new();
-        fs::write(dir.0.join(FILE), "{ not json").unwrap();
-
-        let err = load_from(&dir.0).unwrap_err().to_string();
-        assert!(err.contains("connection file"), "{err}");
-        assert_eq!(fs::read_to_string(dir.0.join(FILE)).unwrap(), "{ not json");
-    }
-
-    #[test]
-    fn a_record_builds_what_the_driver_needs() {
-        let ConnectionConfig::Postgres(config) = postgres().to_config("hunter2").unwrap() else {
-            panic!("expected Postgres");
-        };
-        assert_eq!((config.port, config.password.as_str()), (5432, "hunter2"));
-        assert_eq!(config.ssl_mode, SslMode::Prefer);
-
-        let mut sqlite = StoredConnection::new("scratch", Driver::Sqlite);
-        sqlite.path = Some("app.db".into());
-        sqlite.mode = Some("ro".into());
-        let ConnectionConfig::Sqlite(config) = sqlite.to_config("").unwrap() else {
-            panic!("expected Sqlite");
-        };
-        assert!(config.read_only);
-    }
-
-    fn oracle() -> StoredConnection {
-        let mut connection = StoredConnection::new("erp", Driver::Oracle);
-        connection.host = Some("db.local".into());
-        connection.user = Some("alice".into());
-        connection.service = Some("ORCLPDB1".into());
-        connection
-    }
-
-    fn oracle_config(connection: &StoredConnection) -> OracleConfig {
-        let ConnectionConfig::Oracle(config) = connection.to_config("x").unwrap() else {
-            panic!("expected Oracle");
-        };
-        config
-    }
-
-    #[test]
-    fn an_oracle_record_carries_its_ssl_mode_and_wallet() {
-        let config = oracle_config(&oracle());
-        assert_eq!((config.port, config.ssl_mode, config.wallet), (1521, SslMode::Prefer, None));
-
-        let mut connection = oracle();
-        connection.tls = Some("verify-full".into());
-        connection.wallet = Some("/etc/oracle/wallet".into());
-        let config = oracle_config(&connection);
-        assert_eq!(config.ssl_mode, SslMode::VerifyFull);
-        assert_eq!(config.wallet.as_deref(), Some("/etc/oracle/wallet"));
-    }
-
-    #[test]
-    fn an_old_oracle_record_with_a_wallet_in_tls_means_tcps() {
-        let text = r#"{"id":"c1","name":"erp","driver":"oracle","host":"db.local",
-            "user":"alice","service":"ORCLPDB1","tls":"/etc/oracle/wallet",
-            "secret":{"mode":"prompt"}}"#;
-        let connection: StoredConnection = serde_json::from_str(text).unwrap();
-        let config = oracle_config(&connection);
-        assert_eq!(config.ssl_mode, SslMode::VerifyFull);
-        assert_eq!(config.wallet.as_deref(), Some("/etc/oracle/wallet"));
-    }
-
-    #[test]
-    fn an_export_is_a_backup_the_importer_reads_back() {
-        let dir = TempDir::new();
-        let mut kept = postgres();
-        kept.secret = Secret::Keyring;
-        let list = vec![kept, oracle()];
-
-        // No extension: `.json` is added.
-        let written = export(&dir.0.join("backup"), &list).unwrap();
-        assert_eq!(written, dir.0.join("backup.json"));
-        let text = fs::read_to_string(&written).unwrap();
-        assert!(!text.contains("hunter2"), "a record has nowhere to keep a password");
-        assert!(!dir.0.join("backup.json.tmp").exists(), "the temp file was renamed away");
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(&written).unwrap().permissions().mode();
-            assert_eq!(mode & 0o777, 0o600);
-        }
-
-        let imported = crate::import::from_file(
-            written.to_str().unwrap(),
-            crate::import::Format::Auto,
-        )
-        .unwrap();
-        assert_eq!(imported.format, crate::import::Format::Qry);
-        assert_eq!(imported.connections, list, "it comes back exactly as written");
-
-        // Writing it again replaces the old backup.
-        export(&written, &list[..1]).unwrap();
-        assert_eq!(parse(&fs::read_to_string(&written).unwrap(), &written).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn an_export_never_overwrites_a_file_that_is_not_a_backup() {
-        let dir = TempDir::new();
-        let other = dir.0.join("notes.txt");
-        fs::write(&other, "my notes").unwrap();
-        let err = export(&other, &[postgres()]).unwrap_err().to_string();
-        assert!(err.contains("not a qry backup"), "{err}");
-        assert_eq!(fs::read_to_string(&other).unwrap(), "my notes");
-
-        let err = export(&dir.0.join("no/such/dir/b.json"), &[postgres()]).unwrap_err();
-        assert!(err.to_string().contains("cannot write"), "{err}");
-    }
-
-    #[test]
-    fn a_record_missing_a_field_says_which() {
-        let mut connection = postgres();
-        connection.host = None;
-        let err = connection.to_config("x").unwrap_err().to_string();
-        assert!(err.contains("needs a host"), "{err}");
-
-        connection = postgres();
-        connection.tls = Some("nonsense".into());
-        assert!(connection.to_config("x").unwrap_err().to_string().contains("not an SSL mode"));
-
-        connection = postgres();
-        connection.dsn = Some("postgres://db/app".into());
-        assert!(connection.to_config("x").unwrap_err().to_string().contains("DSN"));
-    }
-}
+#[path = "connections_tests.rs"]
+mod connections_tests;
