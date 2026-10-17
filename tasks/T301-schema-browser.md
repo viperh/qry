@@ -239,3 +239,9 @@ run queue like any other, so it keeps at most `max_rows` rows; the box is
 ticked on that. The `Database::tables()` default from here and T004's
 per-backend `tables()` queries both stay: the backends override it.
 
+Server verification (later): the catalog queries ran against PostgreSQL 16.15 (`initdb`, scram-sha-256), MariaDB 10.11.14 (`mariadb-install-db`) and MySQL 8.0.46 (Ubuntu's `mysql-server-core-8.0` package unpacked with `dpkg -x`, `--initialize-insecure`, `caching_sha2_password` over TCP), all started by hand under `/tmp/qry-verify-*` and removed afterwards. No Oracle: there is no Docker daemon, and Oracle Free has no package that runs without one here.
+- `crates/qry-core/tests/db_schema.rs` runs catalogs, objects, columns, indexes, quoting and defaults on the T004 seed for every backend. `db_postgres.rs::expression_indexes_and_materialized_views_load` covers the expression slot from `unnest(ix.indkey::int2[])` (`(expression)`) and `pg_matviews`.
+- Everything passed on Postgres, MySQL and MariaDB. The Postgres `LATERAL` FK lookup and MySQL's binary-protocol values through `exec_iter` both work.
+- One bug was found and fixed: MariaDB's `COLUMN_DEFAULT` is the text `NULL` when a column has no default, and it is now read as none.
+- A terminal run against the local Postgres showed `public → Tables → widgets → Columns/Indexes` with types, `PK` and nullability, and `s` inserted `SELECT * FROM public.widgets;`.
+- Boxes 1 and 3 stay unticked until the Oracle cases run. The coordinator reports CI runs them against Oracle 23, but that was not seen here.

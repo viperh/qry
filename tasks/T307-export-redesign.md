@@ -264,3 +264,12 @@ Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, sch
 - **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`,
   `QRY_KEYRING=off QRY_DB_TESTS=skip CI=true cargo test --workspace
   --all-features --locked` and the CI docs command.
+
+Verification (later):
+- **Servers:** `tests/db_export.rs` (all rows streamed, SQL INSERT re-imported, cancel) passed against PostgreSQL 16.15 (`initdb`, scram-sha-256), MariaDB 10.11.14 (`mariadb-install-db`) and MySQL 8.0.46 (Ubuntu's `mysql-server-core-8.0` package unpacked with `dpkg -x`, `--initialize-insecure`, `caching_sha2_password` over TCP), all started by hand under `/tmp/qry-verify-*` and removed afterwards. No Oracle: there is no Docker daemon, and Oracle Free has no package that runs without one here.
+- **Terminal run:** the real binary was driven under tmux, 120×40, with `QRY_CONFIG`/`QRY_DATA` in temp dirs and `QRY_KEYRING=off`. In the scratch SQLite:
+  - `ctrl-e` on a 3-row result opened the dialog, and exporting to `/tmp/…/out.csv` wrote `a,b` and the three rows, with NULL as empty.
+  - The second open prefilled the folder.
+  - Excel with `all rows (re-run)` wrote `all.xlsx` through a job and toasted `exported 3 rows to …`.
+  - Nothing was broken. One behaviour to note: with a `.xlsx` path and the JSON lines format, the preview reads `all.xlsx.jsonl`, because the extension is appended rather than replaced.
+- The fourth box is unchanged: MySQL, MariaDB and Oracle still use the materialising default `query_stream`, which another task is replacing.
