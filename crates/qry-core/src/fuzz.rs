@@ -160,8 +160,10 @@ pub fn fuzz_grid(data: &[u8]) {
     // Any widths and any room, read straight from the bytes: the first two
     // are the room, the rest the widths.
     let words: Vec<u16> = data
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_le_bytes(*pair))
         .collect();
     if let Some((&available, widths)) = words.split_first() {
         let visible = grid::visible_columns(widths, usize::from(keys), keys % 2 == 0, available);

@@ -17,7 +17,17 @@ unmaintained = "workspace"
 yanked = "deny"
 # Vulnerabilities are always denied (implicit in version 2); list accepted
 # advisories here with a reason.
-ignore = []
+ignore = [
+    # zip's extraction API (`ZipArchive::extract`, `ZipStreamReader::extract`)
+    # keeps SUID bits and follows symlinks out of the target. qry never
+    # extracts an archive: rust_xlsxwriter only writes .xlsx files, and the
+    # tests read entries by name in memory (calamine, `ZipArchive::by_name`).
+    # zip 9.0 has the fix, but neither rust_xlsxwriter (^8.3) nor calamine
+    # (^8.6) accepts it yet; drop these when they do.
+    { id = "RUSTSEC-2026-0367", reason = "qry never extracts zip archives; no zip 9 release of rust_xlsxwriter/calamine yet" },
+    { id = "RUSTSEC-2026-0368", reason = "qry never extracts zip archives; no zip 9 release of rust_xlsxwriter/calamine yet" },
+    { id = "RUSTSEC-2026-0369", reason = "qry never extracts zip archives; no zip 9 release of rust_xlsxwriter/calamine yet" },
+]
 
 # ---------------------------------------------------------------------------
 [licenses]
@@ -79,7 +89,9 @@ deny = [
     # wrappers, which keeps the UI and CLI out of qry-core.
     { crate = "ratatui", wrappers = ["qry", "ratatui-textarea"], reason = "UI belongs to the qry crate only" },
     { crate = "crossterm", wrappers = ["qry", "ratatui", "ratatui-crossterm", "ratatui-textarea"], reason = "UI belongs to the qry crate only" },
-    { crate = "clap", wrappers = ["qry", "clap_complete", "clap_mangen"], reason = "CLI parsing belongs to the qry crate only" },
+    # criterion is the benchmarks' dev-dependency (T006); it never reaches a
+    # build of qry-core itself.
+    { crate = "clap", wrappers = ["qry", "clap_complete", "clap_mangen", "criterion"], reason = "CLI parsing belongs to the qry crate only" },
 ]
 
 # ---------------------------------------------------------------------------

@@ -235,7 +235,12 @@ fn too_many_rows(rows: usize, limit: usize) -> String {
 pub fn resolve_path(input: &str, etype: ExportType, home: &Path) -> PathBuf {
     let path = etype.with_extension(input.trim());
     if let Some(rest) = path.strip_prefix("~/") {
-        return home.join(rest);
+        // One component at a time, so `~/a/b` takes the platform's
+        // separator throughout.
+        return rest
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .fold(home.to_path_buf(), |path, part| path.join(part));
     }
     PathBuf::from(path)
 }

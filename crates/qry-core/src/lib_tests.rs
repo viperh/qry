@@ -169,6 +169,12 @@ fn value_kinds_come_from_every_backends_type_names() {
     for (name, kind) in [
         ("int8", K::Integer),
         ("MYSQL_TYPE_LONGLONG", K::Integer),
+        ("MYSQL_TYPE_LONG", K::Integer),
+        // Oracle's LONG is text and LONG RAW binary; the driver reports an
+        // inline CLOB and BLOB that way too.
+        ("LONG", K::Text),
+        ("LONG NVARCHAR", K::Text),
+        ("LONG RAW", K::Binary),
         ("NUMBER(10,2)", K::Decimal),
         ("numeric", K::Decimal),
         ("MYSQL_TYPE_NEWDECIMAL", K::Decimal),

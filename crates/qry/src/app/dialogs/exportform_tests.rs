@@ -589,7 +589,7 @@ fn existing_file_opens_overwrite_confirm() {
     let mut h = harness();
     h.with_existing_file(format!("{TEST_HOME}/orders.csv"));
     h.keys("ctrl-e").type_str("~/orders");
-    let text = h.render(100, 30);
+    let text = screen(&mut h, 100, 30);
     assert!(
         text.contains("→ /home/test/orders.csv · exists, will ask before overwriting"),
         "{text}"
@@ -683,8 +683,20 @@ fn dialog_after(result: QueryResult, keys: &str) -> AppHarness {
     h
 }
 
+/// The screen, with Windows' `\` path separators shown as `/`: the
+/// harness's home is `/home/test` on every platform, and joining under it
+/// on Windows mixes the two.
+fn screen(h: &mut AppHarness, w: u16, height: u16) -> String {
+    let text = h.render(w, height);
+    if cfg!(windows) {
+        text.replace('\\', "/")
+    } else {
+        text
+    }
+}
+
 fn snapshot(h: &mut AppHarness, name: &str, w: u16, height: u16) {
-    insta::assert_snapshot!(name, h.render(w, height));
+    insta::assert_snapshot!(name, screen(h, w, height));
     insta::assert_snapshot!(
         format!("{name}_styled"),
         styled(&h.render_buffer(w, height))

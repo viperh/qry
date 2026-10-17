@@ -238,11 +238,22 @@ impl ValueKind {
     /// backends. A name it does not know is `Other`.
     pub fn from_type_name(name: &str) -> Self {
         let lower = name.to_ascii_lowercase();
+        let mysql = lower.starts_with("mysql_type_");
         let name = lower
             .trim_start_matches("mysql_type_")
             .split(['(', ' '])
             .next()
             .unwrap_or("");
+        // MySQL's `LONG` is a 32-bit integer; Oracle's is text, and its
+        // `LONG RAW` binary. The Oracle driver also reports a CLOB it reads
+        // inline as `LONG`, and a BLOB as `LONG RAW`.
+        if name == "long" && !mysql {
+            return if lower.starts_with("long raw") {
+                Self::Binary
+            } else {
+                Self::Text
+            };
+        }
         match name {
             "int" | "integer" | "int2" | "int4" | "int8" | "bigint" | "smallint" | "tinyint"
             | "mediumint" | "serial" | "bigserial" | "smallserial" | "long" | "longlong"
@@ -258,7 +269,7 @@ impl ValueKind {
             }
             "json" | "jsonb" => Self::Json,
             "bytea" | "blob" | "tiny_blob" | "medium_blob" | "long_blob" | "binary"
-            | "varbinary" | "raw" | "long raw" | "bfile" => Self::Binary,
+            | "varbinary" | "raw" | "bfile" => Self::Binary,
             "text" | "varchar" | "char" | "bpchar" | "character" | "string" | "var_string"
             | "varchar2" | "nvarchar2" | "nchar" | "clob" | "nclob" | "name" | "uuid" | "enum"
             | "set" | "citext" => Self::Text,

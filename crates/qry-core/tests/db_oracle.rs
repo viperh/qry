@@ -17,7 +17,13 @@ async fn clob_is_read_as_text() {
         "SELECT note FROM people WHERE id IN (1, 4) ORDER BY id",
     )
     .await;
-    assert_eq!(result.columns[0].type_name, "CLOB");
+    // The driver reads LOBs inline and reports the column as LONG; what
+    // matters is that it is text, not the number `long` means for MySQL.
+    assert!(
+        ["CLOB", "LONG"].contains(&result.columns[0].type_name.as_str()),
+        "{}",
+        result.columns[0].type_name
+    );
     assert_eq!(result.columns[0].kind, ValueKind::Text);
     assert_eq!(column(&result, 0), [Some("first"), Some("likes 'quotes'")]);
     drop(driver);
