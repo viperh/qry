@@ -499,3 +499,28 @@ fn job_snapshots() {
     assert!(status.contains(" TX "), "{status}");
     insta::assert_snapshot!("status_tx_pill_120x2", status);
 }
+
+#[test]
+fn ctrl_c_on_oracle_says_it_cannot_cancel_and_leaves_the_job() {
+    let mut h = editor("select slow; select 2;", vec![Reply::Hang]);
+    h.state_mut().sessions.active_mut().driver = crate::connections::Driver::Oracle;
+    h.keys("f8");
+    h.take_effects();
+    h.keys("ctrl-c");
+    let effects = h.take_effects();
+    assert!(
+        !effects.iter().any(|e| matches!(e, Effect::CancelQuery(_))),
+        "{effects:?}"
+    );
+    // The statement runs on, and the rest of the run still waits.
+    assert_eq!(
+        states(&h),
+        [JobState::Running { rows: 0 }, JobState::Queued]
+    );
+    let text = h.render(160, 30);
+    assert!(
+        text.contains("cancelling is not supported for Oracle yet"),
+        "{text}"
+    );
+    assert!(!text.contains("query cancelled"), "{text}");
+}

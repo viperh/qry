@@ -19,7 +19,7 @@ use crate::{
         event::MoreRows,
         state::{EditorState, Failed, Queued, SessionId, State, TabError},
     },
-    connections::ConnLabel,
+    connections::{ConnLabel, Driver},
     db::DbCommand,
     notice::Notice,
 };
@@ -156,6 +156,10 @@ pub(super) fn cancel(state: &mut State, fx: &mut Vec<Effect>) -> bool {
     cancel_session(state, id, fx)
 }
 
+/// What `ctrl-c` on an Oracle session says.
+pub(crate) const ORACLE_CANNOT_CANCEL: &str = "cancelling is not supported for Oracle yet: the \
+     oracledb crate has no way to stop a running statement, so it keeps running";
+
 /// Stops session `id`'s running statement and drops what waits behind it.
 pub(super) fn cancel_session(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) -> bool {
     let now = state.now;
@@ -165,6 +169,13 @@ pub(super) fn cancel_session(state: &mut State, id: SessionId, fx: &mut Vec<Effe
     let Some(job) = session.in_flight.as_ref().and_then(|q| q.job) else {
         return false;
     };
+    // The oracledb crate has no way to stop a running call, so the
+    // statement is left to run and the user told why.
+    if session.driver == Driver::Oracle {
+        let warning = Notice::warning(ORACLE_CANNOT_CANCEL);
+        notify(state, warning, fx);
+        return true;
+    }
     let exporting = session
         .in_flight
         .as_ref()

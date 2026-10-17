@@ -327,3 +327,10 @@ Not done, and why:
   are 120x24, as 120x20 is under the 80x24 minimum, and so is
   `results_failed_mid_stream`.
 
+Oracle cancel: the oracledb crate (26.0.0-beta.4) has no public way to
+break a running call (its interrupt marker is only sent internally on a
+call timeout), and the driver is not patched. So `ctrl-c` (or `c` in the
+drawer) on an Oracle session does not cancel: the job keeps running and a
+warning toast says cancelling is not supported for Oracle yet because of
+the crate. Revisit when the crate exposes a cancel/break call.
+
