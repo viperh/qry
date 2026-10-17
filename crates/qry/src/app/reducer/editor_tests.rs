@@ -3,6 +3,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use proptest::prelude::*;
 
 use super::*;
 use crate::{
@@ -336,4 +337,46 @@ fn crlf_paste_normalised() {
     let mut editor = editor();
     editor.handle(UiEvent::Paste("select 1\r\nfrom t\r".into()));
     assert_eq!(query(&editor), "select 1\nfrom t\n");
+}
+
+/// Edits that open and close strings, comments and statements.
+fn edit() -> impl Strategy<Value = UiEvent> {
+    let key = |code| UiEvent::Key(KeyEvent::new(code, KeyModifiers::NONE));
+    let ctrl = |c| UiEvent::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL));
+    prop_oneof![
+        proptest::sample::select(vec![
+            's', 'x', ' ', ';', '\'', '"', '(', ')', '-', '/', '*', '1'
+        ])
+        .prop_map(move |c| key(KeyCode::Char(c))),
+        proptest::sample::select(vec![
+            KeyCode::Enter,
+            KeyCode::Backspace,
+            KeyCode::Delete,
+            KeyCode::Up,
+            KeyCode::Down,
+            KeyCode::Left,
+            KeyCode::Right,
+            KeyCode::Home,
+            KeyCode::End,
+        ])
+        .prop_map(key),
+        proptest::sample::select(vec!['z', 'y', 'x', 'v', 'a']).prop_map(ctrl),
+        "(select 1;|/\\*|'|\\n|--){0,6}".prop_map(UiEvent::Paste),
+    ]
+}
+
+proptest! {
+    /// However the text changes, the outline kept for the view is the one
+    /// a whole lex and split of it gives.
+    #[test]
+    fn prop_the_outline_follows_every_edit(events in prop::collection::vec(edit(), 0..40)) {
+        let mut editor = editor();
+        for event in events {
+            editor.handle(event);
+            let state = editor.state();
+            let dialect = state.sessions.active().dialect();
+            let whole = qry_core::sql::Outline::new(dialect, query(&editor));
+            prop_assert_eq!(&state.editor().outline, &whole);
+        }
+    }
 }

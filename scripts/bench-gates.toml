@@ -38,24 +38,26 @@ bench = "column_widths/100k_rows"
 max_ms = 1
 ci_max_ms = 2
 
-# T302: a frame of the editor with a 10 000-line buffer, which lexes the
-# whole buffer on every draw. Measured 59 ms: over a 60 fps frame.
+# T302: a frame of the editor with a 10 000-line buffer. The reducer keeps
+# the buffer's tokens and statements (`qry_core::sql::Outline`), so a draw
+# lexes nothing. Measured 0.83 ms (59 ms when it lexed the whole buffer);
+# a keystroke and its frame, ungated, 5.8 ms.
 [[gate]]
 bench = "editor_render_10k_lines"
-max_ms = 80
-ci_max_ms = 160        # TODO(T302): lex the visible range only; tighten to 8 / 16
+max_ms = 2
+ci_max_ms = 4
 
-# A keystroke in a typical editor buffer. Measured 0.31 ms.
+# A keystroke in a typical editor buffer. Measured 0.12 ms.
 [[gate]]
 bench = "sql_lex/10KiB"
-max_ms = 0.5
-ci_max_ms = 1
+max_ms = 0.25
+ci_max_ms = 0.5
 
-# Measured 31 MB/s.
+# Measured 77 MB/s.
 [[gate]]
 bench = "sql_lex/1MiB"
-min_mb_s = 24
-ci_min_mb_s = 12       # TODO(T302): raise to 50 / 25
+min_mb_s = 50
+ci_min_mb_s = 25
 
 # Measured 4.6 ms.
 [[gate]]

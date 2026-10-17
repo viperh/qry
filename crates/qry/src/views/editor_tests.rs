@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use proptest::prelude::*;
 use ratatui::buffer::Buffer;
 
 use super::*;
@@ -201,4 +202,40 @@ fn run_all_two_tabs() {
         "{text}"
     );
     insta::assert_snapshot!("run_all_two_tabs_120x40", text);
+}
+
+/// SQL-shaped text, with the strings, comments and brackets that span
+/// lines.
+const SQL: &str = "(select |from t|\\(|\\)|;|'|\"|/\\*|\\*/|-- c|\\$\\$|DELIMITER |/|[a-z]{1,4}|[0-9]{1,2}| |\\n){0,80}";
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Drawing from the outline the reducer kept through the edits gives
+    /// what a whole lex and split of the text do, wherever the view is.
+    #[test]
+    fn prop_the_kept_outline_draws_as_a_whole_lex(
+        driver in prop::sample::select(vec![
+            Driver::Postgres,
+            Driver::Mysql,
+            Driver::Sqlite,
+            Driver::Oracle,
+        ]),
+        text in SQL,
+        edits in prop::collection::vec((0usize..30, SQL), 0..4),
+        row in 0usize..40,
+    ) {
+        let mut h = editor(driver, &text);
+        for (up, with) in &edits {
+            h.keys(&"up ".repeat(*up));
+            h.send(UiEvent::Paste(with.clone()));
+            h.keys("backspace");
+        }
+        h.keys("ctrl-home").keys(&"down ".repeat(row));
+        let kept = drawn(&h, 40, 8);
+        let kept_title = position(h.state());
+        h.state_mut().editor_mut().outline = Outline::default();
+        prop_assert_eq!(styled(&kept), styled(&drawn(&h, 40, 8)));
+        prop_assert_eq!(kept_title, position(h.state()));
+    }
 }

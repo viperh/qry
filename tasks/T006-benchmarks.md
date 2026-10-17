@@ -179,11 +179,11 @@ CI:
   | `column_widths/100k_rows` | 0.58 ms | 1 / 2 ms |
   | `column_widths/1k_rows` | 0.56 ms | — |
   | `results_arrive/100k_rows` | 176 ms | — |
-  | `editor_render_10k_lines` | 59.4 ms | 80 / 160 ms, `TODO(T302): lex the visible range only; tighten to 8 / 16` |
-  | `editor_keystroke_10k_lines` | 149 ms | — |
-  | `sql_lex/10KiB` | 0.31 ms | 0.5 / 1 ms |
-  | `sql_lex/1MiB` | 32.2 ms (31 MB/s) | 24 / 12 MB/s, `TODO(T302): raise to 50 / 25` |
-  | `sql_split/1MiB` | 50.2 ms | — |
+  | `editor_render_10k_lines` | 59.4 ms (0.83 ms after T302's follow-up) | 2 / 4 ms (was 80 / 160 with `TODO(T302)`) |
+  | `editor_keystroke_10k_lines` | 149 ms (11.6 ms after) | — |
+  | `sql_lex/10KiB` | 0.31 ms (0.12 ms after) | 0.25 / 0.5 ms (was 0.5 / 1) |
+  | `sql_lex/1MiB` | 32.2 ms (31 MB/s; 77 MB/s after) | 50 / 25 MB/s (was 24 / 12 with `TODO(T302)`) |
+  | `sql_split/1MiB` | 50.2 ms (20.6 ms after) | — |
   | `import_dbeaver/1k` | 4.57 ms | 50 / 100 ms |
   | `import_sqldeveloper/1k` | 4.94 ms | — |
   | `import_qry/1k` | 3.26 ms | — |
@@ -193,6 +193,7 @@ CI:
 
   `python3 scripts/bench-gate.py gate --baseline local` passes on these.
   - **Gates that miss their targets today**, committed at the measured value plus headroom with a TODO, as the task says: `results_render_300x100` (4.3 ms against a 2 ms target), `editor_render_10k_lines` (59 ms: the editor lexes and splits the whole buffer on every draw, so typing in a 10k-line buffer costs about 75 ms a keystroke, over a 60 fps frame) and `sql_lex/1MiB` (31 MB/s against 50).
+  - **T302's follow-up closed two of them.** The editor now keeps its tokens and statements in state (`qry_core::sql::Outline`, updated by the reducer around each edit), so a frame lexes nothing, and the lexer and splitter are faster; see T302's notes. Measured on one machine before and after (LTO off): `editor_render_10k_lines` 51.1 → 0.83 ms, `editor_keystroke_10k_lines` 110 → 11.6 ms, `sql_lex/10KiB` 0.23 → 0.12 ms, `sql_lex/1MiB` 43 → 77 MB/s, `sql_split/1MiB` 39.8 → 20.6 ms. The gates went to 2 / 4 ms, 0.25 / 0.5 ms and 50 / 25 MB/s, past the TODOs' 8 / 16 ms for the editor since a frame no longer grows with the buffer; the TODOs are gone. Only `results_render_300x100` (T303) still misses its target.
   - **Gates beyond the table**: `results_render_1m`, `editor_render_10k_lines` and `stream_first_1000_of_1m_sqlite`, which T303, T302 and T305 asked for.
   - `column_widths/100k_rows` is gated at 1 / 2 ms, not the proposed 30 / 60: the sampled sizing costs the same for 1k and 100k rows, and a looser gate would not notice a return to the full scan.
 - **`scripts/bench-gate.py`** (stdlib only, Python 3.11+ for `tomllib`): `gate`, `compare` and `self-test` as specified, plus `--criterion DIR` (default `target/criterion`, or `$CARGO_TARGET_DIR/criterion`). An ungrouped id such as `results_render_1m` has one directory level fewer. Throughput gates divide the bytes in `benchmark.json` by the median, in MB/s (10^6 bytes; criterion prints MiB/s). `self-test` runs eleven cases: gate pass, gate breach (naming the bench), throughput breach and pass, missing bench (`no estimates for <bench>`), an ungrouped bench, compare within and over the threshold, compare with no common benches, and that every gate in the real `bench-gates.toml` has both limits.

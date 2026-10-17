@@ -1,6 +1,7 @@
 //! The SQL editor (T302) with a 10 000-line buffer: one whole-screen draw
-//! at 120x40, which lexes the buffer for highlighting and splits it into
-//! statements, and one keystroke followed by that draw, as typing costs.
+//! at 120x40, which highlights the rows in view from the tokens the
+//! reducer keeps, and one keystroke followed by that draw, as typing
+//! costs: the reducer lexes and splits again only around the change.
 //!
 //! Drawn through `AppHarness::render_buffer` (`qry::views::draw`), since
 //! `views::editor` is private to the crate.
