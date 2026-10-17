@@ -1,7 +1,7 @@
 //! The jobs drawer, after tachy's: a purple title with how many run, then
 //! the newest jobs, each with its session, statement, state and time.
 
-use qry_core::jobs::{JobState, format_elapsed, format_rows};
+use qry_core::jobs::{JobKind, JobState, format_elapsed, format_rows};
 use ratatui::{prelude::*, widgets::Paragraph};
 
 use crate::{
@@ -50,6 +50,9 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
             .map_or("closed", |s| s.title.as_str());
         let (word, detail) = match &job.state {
             JobState::Queued => ("queued", String::new()),
+            JobState::Running { rows } if job.kind == JobKind::Export => {
+                ("exporting", rows_text(*rows))
+            }
             JobState::Running { rows } => ("running", rows_text(*rows)),
             JobState::Done { rows } => ("done", rows_text(*rows)),
             JobState::Failed(message) => ("failed", message.clone()),

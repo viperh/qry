@@ -6,6 +6,7 @@ mod connections;
 mod db;
 mod dialogs;
 mod editor;
+mod export;
 mod files;
 pub(crate) mod help;
 mod history;
@@ -80,6 +81,8 @@ pub(super) fn handle(state: &mut State, event: UiEvent) -> Vec<Effect> {
     if tree_may_change {
         tree::after(state, &mut fx);
     }
+    // The Export dialog's preview follows its path.
+    export::probe(state, &mut fx);
     // The inspector counts its column a batch per event, ticks included.
     if inspector::step_profile(state) {
         state.dirty = true;
@@ -124,10 +127,10 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::FocusTree => state.focus = Focus::Tree,
         Action::FocusEditor => state.focus = Focus::Editor,
         Action::FocusResults => state.focus = Focus::Results,
-        Action::NewConnection
-        | Action::ImportConnections
-        | Action::ExportConnections
-        | Action::ExportResults => dialogs::open(state, action),
+        Action::NewConnection | Action::ImportConnections | Action::ExportConnections => {
+            dialogs::open(state, action)
+        }
+        Action::ExportResults => export::open(state, fx),
         Action::SwitchSession(_)
         | Action::NextSession
         | Action::PrevSession

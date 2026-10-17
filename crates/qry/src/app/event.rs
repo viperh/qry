@@ -8,6 +8,7 @@ use std::{sync::Arc, time::Instant};
 use crossterm::event::{KeyEvent, MouseEvent};
 use qry_core::{
     QueryResult,
+    jobs::JobId,
     schema::{Children, SchemaPath},
     snippets::Snippet,
 };
@@ -120,6 +121,22 @@ pub enum FileAnswer {
     HistoryWriteFailed(String),
     /// The saved snippets, as read at startup.
     SnippetsLoaded(Vec<Snippet>),
+    /// What is at the path the Export dialog names.
+    ExportProbed(ExportProbe),
+}
+
+/// What the runtime found at the path typed into the Export dialog, for its
+/// preview: the file it names in full, and whether it is there already.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExportProbe {
+    /// The path as typed and the format, so a late answer about an older
+    /// path is told apart.
+    pub input: String,
+    pub etype: qry_core::ExportType,
+    /// `~` expanded and the extension added.
+    pub resolved: String,
+    pub exists: bool,
+    pub is_dir: bool,
 }
 
 /// The database worker's answer to a [`DbCommand`](crate::db::DbCommand).
@@ -148,10 +165,33 @@ pub enum DbAnswer {
         /// Where in the statement, as a byte offset, when the server says.
         position: Option<usize>,
     },
-    /// The answer to an `Export`, the same way round: the path it wrote, or
-    /// why it could not.
-    Exported(String),
-    ExportFailed(String),
+    /// The answer to an `Export`: how many rows went to the file (its path
+    /// as shown, `~/…`), with anything worth knowing about it, or why it
+    /// could not be written and how far it got. `job` is the export's job,
+    /// for an export of every row.
+    Exported {
+        job: Option<JobId>,
+        rows: u64,
+        path: String,
+        warning: Option<String>,
+    },
+    ExportFailed {
+        job: Option<JobId>,
+        rows: u64,
+        path: String,
+        message: String,
+    },
+    /// The file is already there and was left alone, until the user says
+    /// to replace it.
+    ExportExists {
+        job: Option<JobId>,
+        path: String,
+    },
+    /// An export of every row has written this many so far.
+    ExportProgress {
+        job: JobId,
+        rows: u64,
+    },
     /// The answer to a `LoadSchema`: what the node holds, or why it could
     /// not be read.
     Schema {
@@ -189,8 +229,40 @@ impl std::fmt::Debug for DbAnswer {
                 .field("message", message)
                 .field("position", position)
                 .finish(),
-            Self::Exported(path) => f.debug_tuple("Exported").field(path).finish(),
-            Self::ExportFailed(message) => f.debug_tuple("ExportFailed").field(message).finish(),
+            Self::Exported {
+                job,
+                rows,
+                path,
+                warning,
+            } => f
+                .debug_struct("Exported")
+                .field("job", job)
+                .field("rows", rows)
+                .field("path", path)
+                .field("warning", warning)
+                .finish(),
+            Self::ExportFailed {
+                job,
+                rows,
+                path,
+                message,
+            } => f
+                .debug_struct("ExportFailed")
+                .field("job", job)
+                .field("rows", rows)
+                .field("path", path)
+                .field("message", message)
+                .finish(),
+            Self::ExportExists { job, path } => f
+                .debug_struct("ExportExists")
+                .field("job", job)
+                .field("path", path)
+                .finish(),
+            Self::ExportProgress { job, rows } => f
+                .debug_struct("ExportProgress")
+                .field("job", job)
+                .field("rows", rows)
+                .finish(),
             // A catalog can hold thousands of tables: only the count.
             Self::Schema {
                 path,

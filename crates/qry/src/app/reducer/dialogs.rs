@@ -9,13 +9,13 @@
 
 use std::time::Duration;
 
-use super::{connect, connections, run, sessions};
+use super::{connect, connections, export, run, sessions};
 use crate::{
     action::Action,
     app::{
         dialogs::{
-            DialogState, Submission, confirm::OnConfirm, exportform::ExportForm,
-            importform::ImportForm, passwordform::PasswordForm,
+            DialogState, Submission, confirm::OnConfirm, importform::ImportForm,
+            passwordform::PasswordForm,
         },
         effects::Effect,
         event::Timer,
@@ -30,7 +30,6 @@ pub(super) fn open(state: &mut State, action: Action) {
     let dialog = match action {
         Action::NewConnection => return connections::new_connection(state),
         Action::ExportConnections => return connections::open_export(state),
-        Action::ExportResults => DialogState::Export(ExportForm::default()),
         Action::ImportConnections => DialogState::Import(ImportForm::default()),
         _ => return,
     };
@@ -39,12 +38,20 @@ pub(super) fn open(state: &mut State, action: Action) {
 }
 
 /// Closes the modal, and stops waiting for its answer. A password prompt
-/// that was waiting its turn comes up next.
+/// that was waiting its turn comes up next; a cancelled export confirm
+/// goes back to its dialog.
 fn close(state: &mut State) {
     // A run held for the prod confirm goes with it.
     run::drop_held(state);
+    let back = match state.dialog() {
+        Some(DialogState::Confirm(confirm)) => confirm.export_form().cloned(),
+        _ => None,
+    };
     state.close_dialog();
     state.awaiting = None;
+    if let Some(form) = back {
+        return state.open_dialog(DialogState::Export(form));
+    }
     if !state.password_queue.is_empty() {
         let next = state.password_queue.remove(0);
         prompt(state, next);
@@ -118,9 +125,11 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
         // A typed password is the rest of a connection attempt, so the
         // prompt waits for the same answer.
         Submission::Connect { .. } | Submission::PasswordEntered { .. } => Some("Connecting…"),
-        Submission::Export(_) | Submission::ExportConnections { .. } => Some("Exporting…"),
+        Submission::ExportConnections { .. } => Some("Exporting…"),
         Submission::Import { .. } => Some("Importing…"),
-        Submission::ImportSelected(_)
+        // It says itself whether it waits.
+        Submission::Export(_)
+        | Submission::ImportSelected(_)
         | Submission::Confirmed(_)
         | Submission::Dismissed
         | Submission::Copy { .. }
@@ -155,11 +164,7 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             fx.push(Effect::Db(session, DbCommand::PasswordEntered));
             Awaiting::Connect(session)
         }
-        Submission::Export(config) => {
-            let session = state.sessions.active;
-            fx.push(Effect::Db(session, DbCommand::Export(config)));
-            Awaiting::Export(session)
-        }
+        Submission::Export(choice) => return export::submit(state, *choice, fx),
         Submission::Import { path, format } => {
             fx.push(Effect::Import { path, format });
             Awaiting::Import
@@ -204,6 +209,12 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             run::release(state, session, fx);
             close(state);
             return;
+        }
+        Submission::Confirmed(OnConfirm::OverwriteExport(form)) => {
+            return export::confirmed(state, *form, true, fx);
+        }
+        Submission::Confirmed(OnConfirm::RerunExport(form)) => {
+            return export::confirmed(state, *form, false, fx);
         }
         Submission::Confirmed(OnConfirm::OverwriteConnections { path, ids }) => {
             close(state);
@@ -263,7 +274,7 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
 pub(crate) const SPINNER_EVERY: Duration = Duration::from_millis(100);
 
 /// Starts the pending footer's spinner from its first frame.
-fn start_spinner(state: &mut State, fx: &mut Vec<Effect>) {
+pub(super) fn start_spinner(state: &mut State, fx: &mut Vec<Effect>) {
     state.spinner = 0;
     state.spinner_timer += 1;
     fx.push(Effect::ScheduleTimer {

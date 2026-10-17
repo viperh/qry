@@ -41,7 +41,7 @@ expression: "styled(&app.render_buffer(w, h))"
                                         │                                                                              │                                        
                                         │                                                                              │                                        
  scratch · sqlite · :memory: · auto                                                                                                              R 3 / 6  C 3/5 
- Enter inspect  y copy  ctrl-s export  Tab next pane  : commands  ctrl-q quit                                                                            ? help 
+ Enter inspect  y copy  ctrl-e export  Tab next pane  : commands  ctrl-q quit                                                                            ? help 
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(242, 176, 74) Rgb(19, 24, 32) BOLD
 5,0 Rgb(211, 217, 224) Rgb(14, 17, 22) UNDERLINED

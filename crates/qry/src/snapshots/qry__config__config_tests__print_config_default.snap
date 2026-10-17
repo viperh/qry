@@ -127,7 +127,7 @@ expression: "Config::embedded().effective_json()"
       "?": "Help",
       ":": "Palette",
       "ctrl-c": "CancelQuery",
-      "ctrl-s": "ExportResults",
+      "ctrl-e": "ExportResults",
       "k": "Up",
       "↑": "Up",
       "j": "Down",

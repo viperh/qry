@@ -109,6 +109,14 @@ pub(super) fn close(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
     let Some(session) = state.sessions.remove(id) else {
         return;
     };
+    // An export would write on to its end; stopped, it leaves no file.
+    if session
+        .in_flight
+        .as_ref()
+        .is_some_and(|q| q.export.is_some())
+    {
+        fx.push(Effect::CancelQuery(id));
+    }
     fx.push(Effect::CloseSession(id));
     state.jobs.close_session(id, state.now);
     if session.busy() {

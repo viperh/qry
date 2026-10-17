@@ -6,7 +6,7 @@ expression: "styled(&h.render_buffer(120, 40))"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › snippet                                                                             4 / 68 │            
+            │ › snippet                                                                             4 / 67 │            
             │ snippet: big orders                           snippets                                       │            
             │ snippet: active users                         snippets                                       │            
             │ Save snippet                                  query                                   ctrl-s │            

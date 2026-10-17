@@ -3,13 +3,20 @@
 
 use super::{
     Submission,
+    exportform::ExportForm,
     form::{Field, Form},
 };
 use crate::{action::Action, app::state::SessionId, theme::Accent};
 
 /// What confirming does.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum OnConfirm {
+    /// Export as this dialog says, over the file that is there. Cancelling
+    /// goes back to the dialog.
+    OverwriteExport(Box<ExportForm>),
+    /// Export every row as this dialog says, running again a statement
+    /// that may change data. Cancelling goes back to the dialog.
+    RerunExport(Box<ExportForm>),
     /// Close this session, though a query is running there.
     CloseSession(SessionId),
     /// Forget the stored connection with this id, and, as its checkboxes
@@ -107,6 +114,37 @@ impl Confirm {
             false,
             OnConfirm::RunOnProd(session),
         )
+    }
+
+    /// Asks before an export replaces the file `name`.
+    pub(crate) fn overwrite_export(name: &str, form: ExportForm) -> Self {
+        Self::new(
+            "File Exists",
+            format!("{name} exists — overwrite?"),
+            "Overwrite",
+            true,
+            OnConfirm::OverwriteExport(Box::new(form)),
+        )
+    }
+
+    /// Asks before an export of every row runs a statement that is not a
+    /// plain read again.
+    pub(crate) fn rerun_export(form: ExportForm) -> Self {
+        Self::new(
+            "Run Again",
+            "re-running may change data: the statement is not a SELECT. Run it again to export every row?",
+            "Run again",
+            true,
+            OnConfirm::RerunExport(Box::new(form)),
+        )
+    }
+
+    /// The Export dialog a cancelled export confirm goes back to.
+    pub(crate) fn export_form(&self) -> Option<&ExportForm> {
+        match &self.on_confirm {
+            OnConfirm::OverwriteExport(form) | OnConfirm::RerunExport(form) => Some(form),
+            _ => None,
+        }
     }
 
     /// Asks before replacing an existing backup file.

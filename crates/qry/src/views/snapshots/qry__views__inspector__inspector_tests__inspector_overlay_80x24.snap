@@ -25,4 +25,4 @@ expression: "app.render(w, h)"
                               │         │                                       
                               │         │                                       
  scratch · sqlite · :memory: · auto                              R 3 / 6  C 3/5 
- Enter inspect  y copy  ctrl-s export  Tab next pane  : commands         ? help
+ Enter inspect  y copy  ctrl-e export  Tab next pane  : commands         ? help

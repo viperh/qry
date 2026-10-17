@@ -50,5 +50,6 @@ pub(super) fn answer(state: &mut State, answer: FileAnswer, fx: &mut Vec<Effect>
             super::history::write_failed(state, message, fx);
         }
         FileAnswer::SnippetsLoaded(list) => super::snippets::loaded(state, list),
+        FileAnswer::ExportProbed(probe) => super::export::probed(state, probe),
     }
 }

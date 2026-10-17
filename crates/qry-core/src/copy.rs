@@ -82,7 +82,7 @@ fn cell(result: &QueryResult, row: usize, col: usize) -> Option<&str> {
     result.rows.get(row)?.get(col)?.as_deref()
 }
 
-fn csv_field(text: &str, separator: char) -> String {
+pub(crate) fn csv_field(text: &str, separator: char) -> String {
     if text.contains([separator, '"', '\n', '\r']) {
         format!("\"{}\"", text.replace('"', "\"\""))
     } else {
@@ -90,14 +90,14 @@ fn csv_field(text: &str, separator: char) -> String {
     }
 }
 
-fn tsv_field(text: &str) -> String {
+pub(crate) fn tsv_field(text: &str) -> String {
     text.replace('\\', "\\\\")
         .replace('\t', "\\t")
         .replace('\n', "\\n")
         .replace('\r', "\\r")
 }
 
-fn json_string(text: &str) -> String {
+pub(crate) fn json_string(text: &str) -> String {
     let mut out = String::from('"');
     for c in text.chars() {
         match c {
@@ -114,7 +114,7 @@ fn json_string(text: &str) -> String {
     out
 }
 
-fn markdown_field(text: &str) -> String {
+pub(crate) fn markdown_field(text: &str) -> String {
     text.replace('|', "\\|").replace('\n', "<br>")
 }
 
@@ -140,7 +140,7 @@ pub fn quote_ident(dialect: Dialect, name: &str) -> String {
 }
 
 /// A value as a literal: `NULL`, a number as written, else a quoted string.
-fn literal(dialect: Dialect, value: Option<&str>, numeric: bool) -> String {
+pub(crate) fn literal(dialect: Dialect, value: Option<&str>, numeric: bool) -> String {
     match value {
         None => "NULL".into(),
         Some(v) if numeric && v.trim().parse::<f64>().is_ok() => v.trim().to_string(),

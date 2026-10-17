@@ -4,7 +4,7 @@ expression: "h.render(w, ht)"
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Global                                                     Results · Copy & search                                   │
-│ ctrl-q               quit                                  ctrl-s      export the results to a file                  │
+│ ctrl-q               quit                                  ctrl-e      export the result to a file                   │
 │ ctrl-z               suspend to the shell                  /           search the results                            │
 │ F1                   show / hide the help                  y           copy the cell                                 │
 │ ctrl-p               command palette                       Y           copy the row                                  │

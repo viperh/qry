@@ -4,12 +4,16 @@
 //! outcome comes back later as [`DbAnswer`]s, tagged with the session's id.
 
 use std::{
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        Arc, Mutex, MutexGuard,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 
 use qry_core::{
-    Driver, ExportConfig, Exporter, QueryResult,
+    Driver, ExportOptions, ExportType, QueryResult, exporter,
+    jobs::JobId,
     schema::{Children, SchemaPath},
     shared::CancelHandle,
 };
@@ -34,19 +38,75 @@ pub enum DbCommand {
     Query(String),
     /// Runs a statement and keeps every row.
     QueryAll(String),
-    /// Writes the last result to a file; no second trip to the database.
-    Export(ExportConfig),
+    /// Writes rows to a file: the rows in hand, or every row of a
+    /// statement run again.
+    Export(Box<ExportJob>),
     /// One node of the schema browser: the catalogs, a catalog's objects, or
     /// an object's columns and indexes. The answer carries `generation`
     /// back, so the tree can tell it from a later load of the same node.
     LoadSchema { path: SchemaPath, generation: u64 },
 }
 
-/// The connection and the last result it produced.
+/// Rows an export of every row reads at a time; no more than a few such
+/// batches are held at once.
+pub(crate) const EXPORT_FETCH_SIZE: usize = 1000;
+
+/// What an export writes, and where.
+#[derive(Clone, PartialEq, Eq)]
+pub struct ExportJob {
+    /// The job an export of every row runs as. An export of the rows in
+    /// hand has none: its dialog waits for the answer instead.
+    pub job: Option<JobId>,
+    pub source: ExportSource,
+    /// As typed: the worker expands `~` and adds the extension.
+    pub path: String,
+    pub etype: ExportType,
+    pub options: ExportOptions,
+    /// Replace a file already there; without it the answer is
+    /// `ExportExists`.
+    pub overwrite: bool,
+}
+
+/// The rows an export writes.
+#[derive(Clone, PartialEq, Eq)]
+pub enum ExportSource {
+    /// A result already fetched.
+    Fetched(Arc<QueryResult>),
+    /// Every row of this statement, run again and streamed to the file.
+    Rerun(String),
+}
+
+/// Like the derived `Debug`, but a result shows only its size, so no rows
+/// reach the log.
+impl std::fmt::Debug for ExportSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fetched(result) => write!(f, "Fetched({} rows)", result.rows.len()),
+            Self::Rerun(sql) => f.debug_tuple("Rerun").field(sql).finish(),
+        }
+    }
+}
+
+impl std::fmt::Debug for ExportJob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExportJob")
+            .field("job", &self.job)
+            .field("source", &self.source)
+            .field("path", &self.path)
+            .field("etype", &self.etype)
+            .field("options", &self.options)
+            .field("overwrite", &self.overwrite)
+            .finish()
+    }
+}
+
+/// The connection, and where to say how far an export has got.
 #[derive(Default)]
 struct Worker {
     driver: Driver,
-    last: Option<Arc<QueryResult>>,
+    /// The session's id and its answers, for progress sent while a
+    /// command still runs.
+    progress: Option<(SessionId, Answers)>,
     /// The connection waiting for a password to be typed.
     asked: Option<StoredConnection>,
     /// The most rows a query keeps; 0 keeps all.
@@ -90,6 +150,7 @@ pub(crate) fn lock(slot: &CancelSlot) -> MutexGuard<'_, Option<Arc<dyn CancelHan
 /// Runs `worker` on its own task; tests hand in one whose driver is a fake.
 fn spawn_worker(mut worker: Worker, id: SessionId, answers: Answers) -> UnboundedSender<DbCommand> {
     let (tx, mut rx) = mpsc::unbounded_channel();
+    worker.progress = Some((id, answers.clone()));
     tokio::spawn(async move {
         while let Some(command) = rx.recv().await {
             for answer in worker.run(command).await {
@@ -115,7 +176,7 @@ impl Worker {
             },
             DbCommand::Query(sql) => self.query(&sql, self.max_rows).await,
             DbCommand::QueryAll(sql) => self.query(&sql, 0).await,
-            DbCommand::Export(config) => self.export(config).await,
+            DbCommand::Export(job) => self.export(*job).await,
             DbCommand::LoadSchema { path, generation } => {
                 let outcome = self.driver.load_schema(&path).await;
                 vec![schema_answer(path, generation, outcome)]
@@ -123,8 +184,7 @@ impl Worker {
         }
     }
 
-    /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all), and
-    /// remembers the result for an export.
+    /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all).
     async fn query(&mut self, sql: &str, max_rows: usize) -> Vec<DbAnswer> {
         let started = Instant::now();
         let outcome = self.driver.query_limited(sql, max_rows).await;
@@ -134,11 +194,7 @@ impl Worker {
             .err()
             .and_then(|e| e.downcast_ref::<qry_core::shared::QueryError>())
             .and_then(|e| e.position);
-        let answers = query_answer(outcome, started.elapsed(), position);
-        if let Some(DbAnswer::QueryDone(result)) = answers.first() {
-            self.last = Some(result.clone());
-        }
-        answers
+        query_answer(outcome, started.elapsed(), position)
     }
 
     /// Finds the password this record says it uses, and opens the
@@ -212,35 +268,71 @@ impl Worker {
         answers
     }
 
-    async fn export(&self, config: ExportConfig) -> Vec<DbAnswer> {
-        let Some(result) = &self.last else {
-            let message = "Nothing to export yet: run a query first";
-            return vec![
-                DbAnswer::ExportFailed(message.into()),
-                error(message.into()),
-            ];
+    /// Writes `job`'s rows, unless the file is there and may not be
+    /// replaced. The rows in hand are written on a thread that may block;
+    /// every row of a statement is streamed from the connection.
+    async fn export(&self, job: ExportJob) -> Vec<DbAnswer> {
+        let home = crate::import::home_dir();
+        let target = exporter::resolve_path(&job.path, job.etype, &home);
+        let path = exporter::display_path(&target, &home);
+        let tag = job.job;
+        if !job.overwrite && target.exists() {
+            return vec![DbAnswer::ExportExists { job: tag, path }];
+        }
+        let (etype, options) = (job.etype, job.options);
+        let (outcome, rows) = match job.source {
+            ExportSource::Fetched(result) => {
+                let rows = result.rows.len() as u64;
+                let written = tokio::task::spawn_blocking(move || {
+                    exporter::write_result(&result, etype, &target, &options)
+                })
+                .await;
+                let outcome = match written {
+                    Ok(written) => written.map_err(|e| format!("{e:#}")),
+                    Err(e) => Err(e.to_string()),
+                };
+                (outcome, rows)
+            }
+            ExportSource::Rerun(sql) => {
+                let seen = Arc::new(AtomicU64::new(0));
+                let progress = self.progress.clone();
+                let heard = seen.clone();
+                let report = move |rows: u64| {
+                    heard.store(rows, Ordering::Relaxed);
+                    if let (Some((id, answers)), Some(job)) = (&progress, tag) {
+                        let _ = answers.send((*id, DbAnswer::ExportProgress { job, rows }));
+                    }
+                };
+                let outcome = exporter::export_query(
+                    &self.driver,
+                    &sql,
+                    EXPORT_FETCH_SIZE,
+                    etype,
+                    &target,
+                    &options,
+                    report,
+                )
+                .await
+                .map_err(|e| format!("{e:#}"));
+                (outcome, seen.load(Ordering::Relaxed))
+            }
         };
-        let exporter = Exporter::from_result(result, &config);
-        let etype = config.etype;
-
-        // Writing a big file would block this task, and with it every later
-        // query, so it goes to a thread that is allowed to block.
-        let written = tokio::task::spawn_blocking(move || exporter.write(etype)).await;
-        match written {
-            Ok(Ok(rows)) => vec![
-                DbAnswer::Exported(config.path.clone()),
-                success(format!("Exported {rows} rows to {}", config.path)),
-            ],
-            // As with a connection, the modal gets the short message and the
-            // status bar the whole chain.
-            Ok(Err(e)) => vec![
-                DbAnswer::ExportFailed(e.to_string()),
-                error(format!("Export failed: {e:#}")),
-            ],
-            Err(e) => vec![
-                DbAnswer::ExportFailed(e.to_string()),
-                error(format!("Export failed: {e}")),
-            ],
+        match outcome {
+            Ok(written) => vec![DbAnswer::Exported {
+                job: tag,
+                rows: written.rows,
+                path,
+                warning: written.warning,
+            }],
+            Err(e) => {
+                let message = secrets::redact(&e);
+                vec![DbAnswer::ExportFailed {
+                    job: tag,
+                    rows,
+                    path,
+                    message: message.lines().next().unwrap_or_default().to_string(),
+                }]
+            }
         }
     }
 }

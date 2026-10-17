@@ -9,7 +9,7 @@ use tokio_rusqlite::{Connection, OpenFlags, rusqlite, types::ValueRef};
 
 use crate::{
     DatabaseType, shared,
-    shared::{CancelHandle, Database, first_column},
+    shared::{CancelHandle, Database, RowSender, StreamItem, first_column},
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -104,13 +104,7 @@ impl Sqlite {
                     for (i, type_name) in types.iter_mut().enumerate() {
                         let value = row.get_ref(i)?;
                         if type_name.is_empty() {
-                            *type_name = match value {
-                                ValueRef::Null => "",
-                                ValueRef::Integer(_) => "integer",
-                                ValueRef::Real(_) => "real",
-                                ValueRef::Text(_) => "text",
-                                ValueRef::Blob(_) => "blob",
-                            };
+                            *type_name = type_of(value);
                         }
                         cells.push(render(value));
                     }
@@ -166,6 +160,64 @@ impl Database for Sqlite {
         self.run(sql, params.to_vec(), 0).await
     }
 
+    /// Steps through the statement on the connection's thread, handing on
+    /// `fetch_size` rows at a time. The columns go first, typed by the
+    /// first batch; a reader that falls behind holds the stepping back.
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let sql = sql.to_string();
+        let fetch_size = fetch_size.max(1);
+        let sent = self
+            .conn
+            .call(move |conn| {
+                let mut stmt = conn.prepare(&sql)?;
+                let names: Vec<String> =
+                    stmt.column_names().iter().map(|s| s.to_string()).collect();
+                let mut types: Vec<&'static str> = vec![""; names.len()];
+                let mut columns = Some(names);
+                let mut batch = Vec::with_capacity(fetch_size);
+                let mut sent = 0u64;
+                let mut cursor = stmt.query([])?;
+                // `None` once the reader has gone: stepping stops there.
+                let mut deliver = |batch: Vec<Vec<Option<String>>>, types: &[&str]| {
+                    if let Some(names) = columns.take() {
+                        let metas = names
+                            .into_iter()
+                            .zip(types)
+                            .map(|(name, t)| shared::ColumnMeta::new(name, *t))
+                            .collect();
+                        out.blocking_send(StreamItem::Columns(metas)).ok()?;
+                    }
+                    if !batch.is_empty() {
+                        out.blocking_send(StreamItem::Rows(batch)).ok()?;
+                    }
+                    Some(())
+                };
+                while let Some(row) = cursor.next()? {
+                    let mut cells = Vec::with_capacity(types.len());
+                    for (i, type_name) in types.iter_mut().enumerate() {
+                        let value = row.get_ref(i)?;
+                        if type_name.is_empty() {
+                            *type_name = type_of(value);
+                        }
+                        cells.push(render(value));
+                    }
+                    batch.push(cells);
+                    if batch.len() == fetch_size {
+                        sent += batch.len() as u64;
+                        let full = std::mem::replace(&mut batch, Vec::with_capacity(fetch_size));
+                        if deliver(full, &types).is_none() {
+                            return Ok::<_, tokio_rusqlite::Error>(None);
+                        }
+                    }
+                }
+                sent += batch.len() as u64;
+                Ok(deliver(batch, &types).map(|()| sent))
+            })
+            .await
+            .map_err(positioned)?;
+        sent.ok_or_else(|| anyhow::anyhow!("the rows' reader stopped"))
+    }
+
     async fn execute(&self, sql: &str) -> Result<u64> {
         let sql = sql.to_string();
 
@@ -189,6 +241,17 @@ impl Database for Sqlite {
             )
             .await?;
         Ok(first_column(result))
+    }
+}
+
+/// The type a value says its column has: SQLite types values, not columns.
+fn type_of(value: ValueRef<'_>) -> &'static str {
+    match value {
+        ValueRef::Null => "",
+        ValueRef::Integer(_) => "integer",
+        ValueRef::Real(_) => "real",
+        ValueRef::Text(_) => "text",
+        ValueRef::Blob(_) => "blob",
     }
 }
 

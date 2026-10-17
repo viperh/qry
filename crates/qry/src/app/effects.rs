@@ -90,6 +90,12 @@ pub enum Effect {
     /// Write the snippets file; a failure is answered with
     /// `FileAnswer::SaveFailed`.
     SaveSnippets(Vec<Snippet>),
+    /// Look at the file the Export dialog's path names, answered with
+    /// `FileAnswer::ExportProbed`.
+    ProbeExportPath {
+        input: String,
+        etype: qry_core::ExportType,
+    },
     /// Put this text on the system clipboard, through the terminal (OSC 52).
     CopyToClipboard(String),
     /// Redraw the whole terminal.

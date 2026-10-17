@@ -6,14 +6,14 @@ expression: "styled(&h.render_buffer(120, 40))"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › exp                                                                                 6 / 66 │            
+            │ › exp                                                                                 5 / 65 │            
             │ Export connections…                           connection                                     │            
-            │ Export results                                results                                 ctrl-s │            
             │ export csv <path>                             results                                        │            
             │ export tsv <path>                             results                                        │            
             │ export json <path>                            results                                        │            
             │ export xlsx <path>                            results                                        │            
             └──────────────────────────────────────────────────────────────────────────────────────────────┘            
+                              │                                                                                         
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
@@ -85,8 +85,6 @@ expression: "styled(&h.render_buffer(120, 40))"
 17,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 60,6 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
 92,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-100,6 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-106,6 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 107,6 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
 108,6 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,7 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
@@ -118,16 +116,8 @@ expression: "styled(&h.render_buffer(120, 40))"
 108,9 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,10 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 12,10 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
-13,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-14,10 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-17,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-60,10 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-92,10 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
-107,10 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
 108,10 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
-12,11 Rgb(199, 166, 255) Rgb(22, 28, 37) NONE
-108,11 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,12 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,13 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM
 0,14 Rgb(138, 148, 163) Rgb(14, 17, 22) DIM

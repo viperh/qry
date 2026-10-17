@@ -85,15 +85,19 @@ fn io_actions_become_effects_not_dispatches() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("rows.csv").display().to_string();
     let mut h = AppHarness::new(Config::embedded());
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        qry_core::testing::grid(2, 2),
+    )));
+    h.take_effects();
 
-    // ctrl-s in the results opens the Export modal.
-    h.keys("shift-tab ctrl-s").type_str(&path).keys("enter");
+    // ctrl-e in the results opens the Export modal.
+    h.keys("shift-tab ctrl-e").type_str(&path).keys("enter");
 
     let effects = h.take_effects();
-    let [Effect::Db(_, DbCommand::Export(config))] = effects.as_slice() else {
+    let [Effect::Db(_, DbCommand::Export(job))] = effects.as_slice() else {
         panic!("expected one export, got {effects:?}");
     };
-    assert_eq!(config.path, path);
+    assert_eq!(job.path, path);
     // Nothing carried it out: the modal still waits and the disk is untouched.
     assert!(h.render(80, 24).contains("Exporting"));
     assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
@@ -183,7 +187,12 @@ fn every_view_renders_at_every_size() {
     let views: [(&str, Open); 7] = [
         ("home", |_| {}),
         ("new connection", |h| _ = h.keys("ctrl-n")),
-        ("export", |h| _ = h.keys("shift-tab ctrl-s")),
+        ("export", |h| {
+            h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+                qry_core::testing::grid(2, 2),
+            )));
+            h.keys("shift-tab ctrl-e");
+        }),
         ("password", |h| {
             h.db(DbAnswer::NeedPassword {
                 id: "c7f3a1e2".into(),

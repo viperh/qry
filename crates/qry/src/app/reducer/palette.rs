@@ -8,7 +8,6 @@ use crate::{
         effects::Effect,
         state::{Overlay, State},
     },
-    db::DbCommand,
     keymap::{KeyContext, display_chord},
     notice::Notice,
     palette::{ArgKind, PaletteItem, PaletteState, PaletteTarget, remember},
@@ -22,7 +21,7 @@ pub(crate) fn items(state: &State) -> Vec<PaletteItem> {
     use strum::IntoEnumIterator;
     let keymap = &state.config.keymap;
     // Its own pane's key, else a global one, else the first pane's that
-    // has one: Export results is ctrl-s in the results.
+    // has one: Export result… is ctrl-e in the results.
     let key_for = |action: &Action| {
         [
             action.home_context(),
@@ -37,6 +36,8 @@ pub(crate) fn items(state: &State) -> Vec<PaletteItem> {
         .map(|chords| display_chord(&chords))
     };
     let mut items: Vec<PaletteItem> = Action::iter()
+        // With no result there is nothing to export.
+        .filter(|action| *action != Action::ExportResults || super::export::available(state))
         .filter_map(|action| {
             Some(PaletteItem {
                 label: action.palette_label()?.to_string(),
@@ -283,9 +284,7 @@ fn submit(state: &mut State, run_snippet: bool, fx: &mut Vec<Effect>) {
             super::tree::select_object(state, session, &catalog, &object, true, fx);
         }
         Run::Snippet(i) => super::snippets::insert(state, i, run_snippet, fx),
-        Run::Export(config) => {
-            fx.push(Effect::Db(state.sessions.active, DbCommand::Export(config)));
-        }
+        Run::Export(config) => super::export::quick(state, config, fx),
         Run::Goto(row) => {
             let results = state.results_mut();
             match results.result.as_ref().map(|r| r.rows.len()) {

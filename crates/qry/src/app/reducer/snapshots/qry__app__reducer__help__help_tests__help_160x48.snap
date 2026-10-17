@@ -31,7 +31,7 @@ expression: "h.render(w, ht)"
 │ h ←                  left                            ]              next result                           ctrl-d      delete the entry                       │
 │ l →                  right                                                                                ↑ ctrl-k    up                                     │
 │ PgUp                 up a page                       Results · Copy & search                              ↓ ctrl-j    down                                   │
-│ PgDn                 down a page                     ctrl-s         export the results to a file          ←           left                                   │
+│ PgDn                 down a page                     ctrl-e         export the result to a file           ←           left                                   │
 │ g g Home             to the top                      /              search the results                    →           right                                  │
 │ G End                to the bottom                   y              copy the cell                         PgUp        up a page                              │
 │ Space                expand / collapse               Y              copy the row                          PgDn        down a page                            │

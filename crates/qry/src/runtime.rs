@@ -358,6 +358,9 @@ impl Executor {
             Effect::History(write) => Executed::Spawned(self.write_history(write)),
             Effect::LoadSnippets => Executed::Spawned(self.load_snippets()),
             Effect::SaveSnippets(list) => Executed::Spawned(self.save_snippets(list)),
+            Effect::ProbeExportPath { input, etype } => {
+                Executed::Spawned(self.probe_export_path(input, etype))
+            }
             effect @ (Effect::ClearScreen
             | Effect::Suspend
             | Effect::Quit
@@ -458,6 +461,15 @@ impl Executor {
         })
     }
 
+    /// Looks at the file an export would write, off the event loop.
+    fn probe_export_path(&self, input: String, etype: qry_core::ExportType) -> JoinHandle<()> {
+        let events = self.events.clone();
+        tokio::task::spawn_blocking(move || {
+            let probe = probe_export_path(input, etype, &crate::import::home_dir());
+            let _ = events.send(UiEvent::File(FileAnswer::ExportProbed(probe)));
+        })
+    }
+
     /// Reads a file of connections off the event loop. The answer goes to the
     /// modal that asked and to the tree, which adds what is new.
     fn import(&self, path: String, format: Format) -> JoinHandle<()> {
@@ -500,6 +512,23 @@ impl Executor {
             };
             let _ = events.send(UiEvent::File(answer));
         })
+    }
+}
+
+/// What is at the file `input` names for an export as `etype`, `~` taken
+/// as `home`.
+pub(crate) fn probe_export_path(
+    input: String,
+    etype: qry_core::ExportType,
+    home: &std::path::Path,
+) -> crate::app::event::ExportProbe {
+    let path = qry_core::exporter::resolve_path(&input, etype, home);
+    crate::app::event::ExportProbe {
+        resolved: path.display().to_string(),
+        exists: path.exists(),
+        is_dir: path.is_dir(),
+        input,
+        etype,
     }
 }
 

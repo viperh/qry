@@ -196,7 +196,7 @@
       "</>": "Search",
       "<i>": "ToggleInspector",
       "<enter>": "Inspect",
-      "<ctrl-s>": "ExportResults"
+      "<ctrl-e>": "ExportResults"
     },
     // The RECORD fields go up and down, and the records left and right.
     // Tab and Esc go back to the grid.

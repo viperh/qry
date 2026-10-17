@@ -70,6 +70,40 @@ pub fn truncate(mut result: QueryResult, max_rows: usize) -> QueryResult {
     result
 }
 
+/// A piece of a streamed result: its columns once, first, then its rows in
+/// batches.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamItem {
+    Columns(Vec<ColumnMeta>),
+    Rows(Vec<Vec<Option<String>>>),
+}
+
+/// Where a streamed result goes. Bounded, so a reader that falls behind
+/// holds the query back rather than letting rows pile up.
+pub type RowSender = tokio::sync::mpsc::Sender<StreamItem>;
+
+/// Sends `result` down `out` as [`Database::query_stream`] would: the
+/// columns, then the rows `fetch_size` at a time. Returns the rows sent.
+pub async fn send_result(result: QueryResult, fetch_size: usize, out: &RowSender) -> Result<u64> {
+    let fetch_size = fetch_size.max(1);
+    let total = result.rows.len() as u64;
+    send(out, StreamItem::Columns(result.columns)).await?;
+    let mut rows = result.rows.into_iter().peekable();
+    while rows.peek().is_some() {
+        let batch: Vec<_> = rows.by_ref().take(fetch_size).collect();
+        send(out, StreamItem::Rows(batch)).await?;
+    }
+    Ok(total)
+}
+
+/// Sends one item, or says the reader has gone.
+pub(crate) async fn send(out: &RowSender, item: StreamItem) -> Result<()> {
+    if out.send(item).await.is_err() {
+        bail!("the rows' reader stopped");
+    }
+    Ok(())
+}
+
 #[async_trait]
 pub trait Database: Send + Sync {
     fn kind(&self) -> DatabaseType;
@@ -82,6 +116,16 @@ pub trait Database: Send + Sync {
     /// that streams stops reading there.
     async fn query_limited(&self, query: &str, max_rows: usize) -> Result<QueryResult>;
     async fn execute(&self, query: &str) -> Result<u64>;
+
+    /// Runs `query` with no row limit and sends its columns, then its rows
+    /// in batches of at most `fetch_size`, to `out`; returns how many rows
+    /// it sent. A backend that streams (SQLite, Postgres) holds no more
+    /// than a batch at a time. This default reads the whole result first,
+    /// for the backends that cannot.
+    async fn query_stream(&self, query: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let result = self.query_limited(query, 0).await?;
+        send_result(result, fetch_size, &out).await
+    }
 
     /// What stops a running statement on this connection, if the backend
     /// can.

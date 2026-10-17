@@ -156,6 +156,8 @@ fn ranking_is_deterministic_and_prefers_word_starts() {
 #[test]
 fn tab_fills_parametrised_command() {
     let mut h = harness();
+    h.db(DbAnswer::QueryDone(Arc::new(grid(3, 2))));
+    h.take_effects();
     h.keys("ctrl-p").type_str("exp csv");
     assert_eq!(
         palette(&h).selected_item().unwrap().label,
@@ -166,10 +168,11 @@ fn tab_fills_parametrised_command() {
     assert_eq!(labels(&h), ["export csv <path>"]);
     h.type_str("/tmp/out.csv").keys("enter");
     let effects = h.take_effects();
-    let [Effect::Db(_, crate::db::DbCommand::Export(config))] = effects.as_slice() else {
+    let [Effect::Db(_, crate::db::DbCommand::Export(job))] = effects.as_slice() else {
         panic!("expected an export, got {effects:?}");
     };
-    assert_eq!(config.path, "/tmp/out.csv");
+    assert_eq!(job.path, "/tmp/out.csv");
+    assert_eq!(job.etype, qry_core::ExportType::Csv);
     assert!(h.state().overlays.is_empty());
 }
 
@@ -226,9 +229,10 @@ fn palette_run_equals_keybound_effects() {
         matches!(by_key.0.as_slice(), [Effect::Db(_, crate::db::DbCommand::Query(q))] if q == "select 1")
     );
 
-    // Export results opens the same dialog either way.
+    // Export result… opens the same dialog either way.
     let mut h = harness();
-    h.keys("ctrl-p").type_str("export results").keys("enter");
+    h.db(DbAnswer::QueryDone(Arc::new(grid(3, 2))));
+    h.keys("ctrl-p").type_str("export result").keys("enter");
     assert_eq!(h.dialog_title(), Some("Export"));
 }
 

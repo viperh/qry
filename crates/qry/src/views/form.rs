@@ -74,7 +74,12 @@ pub(crate) fn draw(
         let w = u16::try_from(Span::raw(&text).width()).unwrap_or(u16::MAX);
         if w + 4 < rect.width {
             let at = Rect::new(rect.right() - w - 2, rect.y, w, 1);
-            frame.render_widget(Span::styled(text, theme.muted()), at);
+            let style = if form.subtitle_warns() {
+                theme.subtitle_warning()
+            } else {
+                theme.muted()
+            };
+            frame.render_widget(Span::styled(text, style), at);
         }
     }
     let inner = inner.inner(Margin::new(1, 0));
@@ -140,14 +145,23 @@ fn footer(
     Line::from(spans)
 }
 
-/// The note in its tone's colour.
+/// The note, each part in its tone's colour.
 fn note_line(note: &Note, theme: &Theme) -> Line<'static> {
-    let style = match note.tone {
+    let style = |tone: Tone| match tone {
         Tone::Ok => theme.value_ok(),
         Tone::Error => theme.value_error(),
         Tone::Busy => theme.spinner(),
+        Tone::Plain => theme.field(),
+        Tone::Dim => theme.dim(),
     };
-    Line::styled(format!("  {}", note.text), style)
+    let mut spans = vec![Span::styled(format!("  {}", note.text), style(note.tone))];
+    spans.extend(
+        note.more
+            .iter()
+            .map(|(tone, text)| Span::styled(text.clone(), style(*tone))),
+    );
+    // The first tone runs on to the end of the line, as one part did.
+    Line::from(spans).style(style(note.tone))
 }
 
 /// Draws as many rows as fit, scrolled so the focused field (and the error
