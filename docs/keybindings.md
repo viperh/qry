@@ -132,7 +132,7 @@ These are the defaults, as `.config/config.json` sets them. A user config can re
 
 | Keys | Action |
 | --- | --- |
-| `ctrl-s` | export the results to a file |
+| `ctrl-e` | export the result to a file |
 | `/` | search the results |
 | `y` | copy the cell |
 | `Y` | copy the row |

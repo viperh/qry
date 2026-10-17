@@ -29,7 +29,9 @@ SQLite and Oracle.
   the palette, and a question before quitting with one open.
 - **History and snippets**: every statement per connection (`ctrl-r`),
   with passwords redacted, and named snippets.
-- **Exports** of a result to a file.
+- **Exports** to CSV, TSV, JSON, JSON Lines, Excel, Markdown, SQL `INSERT`s
+  or aligned text, of the fetched rows or of every row (streamed, as a
+  cancellable job), with an overwrite check.
 - **Several sessions** at once, each with its own connection, editor and
   results.
 - **Passwords** in the OS keychain, an environment variable or a prompt;

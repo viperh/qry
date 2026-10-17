@@ -169,7 +169,7 @@
 <text x="58.8" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="58.8">inspect</text>
 <text x="134.4" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="8.4">y</text>
 <text x="151.2" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="33.6">copy</text>
-<text x="201.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="50.4">ctrl-s</text>
+<text x="201.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="50.4">ctrl-e</text>
 <text x="260.4" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="50.4">export</text>
 <text x="327.6" y="506.0" fill="#f2b04a" font-weight="bold" xml:space="preserve" textLength="25.2">Tab</text>
 <text x="361.2" y="506.0" fill="#8a94a3" xml:space="preserve" textLength="75.6">next pane</text>
