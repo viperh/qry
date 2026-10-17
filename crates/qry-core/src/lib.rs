@@ -112,15 +112,23 @@ impl ExportType {
         }
     }
 
-    /// The path with this type's extension, added unless it is already there.
+    /// The path with this type's extension: added unless it is already
+    /// there, or put in place of another export format's.
     /// The check ignores case, so `ROWS.CSV` is left alone.
     pub fn with_extension(self, path: &str) -> String {
         let extension = self.extension();
-        let present = path
-            .rsplit_once('.')
-            .is_some_and(|(_, last)| last.eq_ignore_ascii_case(extension));
-        match path {
+        let last = path.rsplit_once('.');
+        let present = last.is_some_and(|(_, last)| last.eq_ignore_ascii_case(extension));
+        // Another format's extension, left from before the format changed,
+        // is swapped for this one's; anything else stays part of the name.
+        let other = last.filter(|(_, last)| {
+            Self::ALL
+                .iter()
+                .any(|t| last.eq_ignore_ascii_case(t.extension()))
+        });
+        match (path, other) {
             _ if present => path.to_string(),
+            (_, Some((stem, _))) => format!("{stem}.{extension}"),
             // A trailing dot already separates the extension.
             _ if path.ends_with('.') => format!("{path}{extension}"),
             _ => format!("{path}.{extension}"),

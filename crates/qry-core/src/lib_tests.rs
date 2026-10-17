@@ -85,8 +85,20 @@ fn each_type_has_an_extension_and_adds_it_once() {
     // Already there, whatever the case.
     assert_eq!(ExportType::Csv.with_extension("ROWS.CSV"), "ROWS.CSV");
     assert_eq!(ExportType::Csv.with_extension("rows."), "rows.csv");
-    // A different extension is kept, and the right one added after it.
-    assert_eq!(ExportType::Csv.with_extension("rows.txt"), "rows.txt.csv");
+    // Another format's extension is replaced, as when the format changes
+    // after the path was typed.
+    assert_eq!(ExportType::Csv.with_extension("rows.txt"), "rows.csv");
+    assert_eq!(
+        ExportType::JsonLines.with_extension("all.xlsx"),
+        "all.jsonl"
+    );
+    assert_eq!(ExportType::Json.with_extension("all.JSONL"), "all.json");
+    // Any other extension is part of the name, and this one is added.
+    assert_eq!(ExportType::Csv.with_extension("rows.2026"), "rows.2026.csv");
+    assert_eq!(
+        ExportType::Csv.with_extension("out.v1/rows"),
+        "out.v1/rows.csv"
+    );
     assert_eq!(
         ExportType::Excel.with_extension(r"C:\data\rows"),
         r"C:\data\rows.xlsx"
