@@ -131,7 +131,7 @@ tempfile = "3.27.0"
 calamine = { version = "0.36.1", default-features = false }
 csv = "1.4.0"
 # Already in the tree through rust_xlsxwriter; opens exported workbooks.
-zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.3", default-features = false, features = ["deflate"] }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]
