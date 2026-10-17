@@ -131,6 +131,12 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         Action::FocusPrev => state.focus = state.focus.prev(),
         Action::FocusTree => state.focus = Focus::Tree,
         Action::FocusEditor => state.focus = Focus::Editor,
+        // Esc in the inspector leaves describe mode before the panel.
+        Action::FocusResults
+            if context == KeyContext::Inspector && inspector::describing(state) =>
+        {
+            inspector::leave_describe(state)
+        }
         Action::FocusResults => state.focus = Focus::Results,
         Action::NewConnection | Action::ImportConnections | Action::ExportConnections => {
             dialogs::open(state, action)
@@ -145,6 +151,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
         }
         Action::ToggleHints => state.chrome.hints = !state.chrome.hints,
         Action::ToggleInspector => inspector::toggle(state),
+        Action::Describe => inspector::describe(state, context, fx),
         Action::Inspect if context != KeyContext::Help => inspector::open_popup(state),
         Action::Palette => palette::toggle(state),
         Action::History => history::open(state),

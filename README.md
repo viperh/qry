@@ -22,7 +22,8 @@ SQLite and Oracle.
   several columns, incremental search, column resizing, a frozen first
   column and copying as CSV, TSV, JSON, Markdown or SQL `INSERT`s.
 - **Inspector**: the selected record, a column's profile, and a popup for
-  long values (JSON pretty-printed, binaries as hex).
+  long values (JSON pretty-printed, binaries as hex); `d` describes a
+  table's columns and indexes there.
 - **Jobs**: a spinner and timer while a statement runs, `ctrl-c` to cancel
   it on the server, a row limit, and a drawer (`J`) listing what ran.
 - **Transactions**: a `TX` pill while one is open, Commit and Rollback in

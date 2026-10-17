@@ -251,11 +251,12 @@ Second pass (load more, live counts, autocommit):
   `A`'s re-run, a schema load, an export re-run, autocommit, connecting)
   drops it first and says `CursorClosed`; closing the session drops the
   worker and with it the stream. Only a backend whose `streams_rows()` is
-  true (new on `Database`, default false: Postgres, SQLite, the fake) is
-  streamed this way. MySQL, MariaDB and Oracle still read through
-  `query_limited` until their `query_stream` reads as it goes (the default
-  reads the whole result first, which a 10M-row table cannot afford); on
-  them a truncated result offers `A` only, and `L` falls back to it
+  true (new on `Database`, default false) is streamed this way: all five
+  backends once T307's streaming landed for MySQL, MariaDB and Oracle
+  (they report true since the merge; dropping a kept MySQL/MariaDB stream
+  drains the rest of the result so the connection stays usable, and an
+  Oracle one closes its cursor). A backend without it offers `A` only, and
+  `L` falls back to that
   (re-run, every row, after the confirm). Closing a Postgres stream early
   lets the connection drain the rest of the rows before the next
   statement, as stopping at the limit did before.

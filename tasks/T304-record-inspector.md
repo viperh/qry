@@ -131,7 +131,7 @@ Editing values, image previews, histograms for numeric columns (a follow-up may 
 - [x] RECORD lists every field of the selected row and follows the grid cursor.
 - [x] Focused section labels are amber bold; unfocused ones are dim.
 - [x] RECORD navigation, `Enter` to the popup and `y` to copy work when the inspector is focused.
-- [ ] Describe mode shows table structure from the schema cache. `Esc` leaves it.
+- [x] Describe mode shows table structure from the schema cache. `Esc` leaves it.
 - [x] The value popup renders text (wrap/no-wrap), pretty JSON (toggle `f`), hex for binary, and NULL. `y` copies the full value.
 - [x] The popup's bottom border shows its keys and a scroll position, as in the T204 help overlay.
 - [x] All styles come from `Theme` helpers.
@@ -233,10 +233,39 @@ Editing values, image previews, histograms for numeric columns (a follow-up may 
   the 80×24 minimum and draws only the too-small message. JSON lines are
   never wrapped (pan with `h`/`l`). A huge value is laid out whole once
   per open/toggle/resize rather than lazily line by line.
-- **Not done.** Describe mode (box unticked, and no
-  `describe_mode_from_tree_and_esc_returns` test): it needs T301's
-  `SchemaCache` and its `d` key, neither of which exists yet. The
-  `fuzz/fuzz_targets/render_value.rs` target: there is no `fuzz/` crate
+- **Describe mode** (added once T301 landed). `Action::Describe`, bound to
+  `d` in the Tree (on a table or view, or a row under one) and the Results
+  (when the active tab's statement read one table: `tab.table`, with no
+  JOIN, second FROM item or UNION, checked by
+  `reducer::inspector::reads_one_table`, resolved against the loaded
+  objects case-insensitively, else the given or default catalog with the
+  name folded as the server folds it). It sets
+  `SessionState::describe: Option<Describe { catalog, object, back,
+  scroll }>`, shows the inspector and focuses it. The columns and indexes
+  come from the session's `SchemaCache`; when they are not there,
+  `tree::after`'s `ensure_loaded` asks for them through `LoadSchema` like
+  an open node (so DDL or a reconnect reloads them), after any catalogs or
+  objects load above them, whose answer would drop them; a failed load is
+  asked for again by pressing `d` again. The panel then shows
+  `TABLE · catalog.name` (`VIEW` for views) with one line per column:
+  name, type, `PK` amber, `FK → t.col` purple, `NULL` dim, `= default`
+  dim (the tree's `tree_*` Theme helpers), then `INDEXES · n` with
+  `name  (cols)  UNIQUE`; a teal spinner (the tree's frame) and
+  `loading…` while it loads, `! error` and `d tries again` if it failed.
+  Lines are cut at the panel with `…`. Focused, `↑↓`/`g g`/`G` scroll it
+  and the hints read `j scroll  Esc back`; `Esc` leaves describe mode and
+  returns the focus to where `d` was pressed; hiding the panel with `i`
+  ends it too. Deviation: RECORD is not drawn in describe mode, so the
+  structure has the panel's height (the described table and the grid's
+  result are often unrelated). Tests: `describe_mode_from_tree_and_esc_returns`
+  and eight more in `app/reducer/inspector_tests.rs` (cache hit, no table,
+  retry, cleared cache, scrolling, from the results, the one-table check);
+  `views/inspector_tests.rs` has `inspector_describe_160x40` (the spec's
+  snapshot), `inspector_describe_overlay_80x24` and
+  `inspector_describe_loading_80x24`, plain and styled, plus a view and a
+  failure and line cutting. Re-accepted: help, palette and
+  `print_config_default` snapshots, and `docs/keybindings.md`.
+- **Not done.** The `fuzz/fuzz_targets/render_value.rs` target: there is no `fuzz/` crate
   until T005; its twin, `fuzz_render_value`, is in `inspect_tests.rs`. A
   mouse click on the inspector does not focus it. No `arboard` fallback
   (copying is OSC 52, as in T303).

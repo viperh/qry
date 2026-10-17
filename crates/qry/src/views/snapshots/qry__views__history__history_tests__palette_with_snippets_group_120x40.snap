@@ -6,7 +6,7 @@ expression: "h.render(120, 40)"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › snippet                                                                             4 / 69 │            
+            │ › snippet                                                                             4 / 70 │            
             │ snippet: big orders                           snippets                                       │            
             │ snippet: active users                         snippets                                       │            
             │ Save snippet                                  query                                   ctrl-s │            

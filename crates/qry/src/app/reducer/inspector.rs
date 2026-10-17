@@ -9,15 +9,18 @@
 use qry_core::{
     ValueKind,
     inspect::{self, Profiler, Rendered},
+    schema::SchemaPath,
+    sql::{Dialect, TokenKind, lex},
 };
 
-use super::notices::notify;
+use super::{notices::notify, sessions, tree};
 use crate::{
     action::Action,
     app::{
         effects::Effect,
-        state::{Focus, Overlay, State, ValuePopup},
+        state::{Describe, Focus, Overlay, SessionId, SessionState, State, ValuePopup},
     },
+    keymap::KeyContext,
     notice::Notice,
     views::value_popup::content_size,
 };
@@ -28,11 +31,191 @@ pub(crate) const PROFILE_CAP: usize = 100_000;
 pub(crate) const PROFILE_BUDGET: usize = 20_000;
 
 /// `i`: shows or hides the inspector. Hiding it while it has focus gives
-/// the focus back to the grid.
+/// the focus back to the grid, and ends describe mode.
 pub(super) fn toggle(state: &mut State) {
     state.chrome.inspector = !state.chrome.inspector;
-    if !state.chrome.inspector && state.focus == Focus::Inspector {
-        state.focus = Focus::Results;
+    if !state.chrome.inspector {
+        state.sessions.active_mut().describe = None;
+        if state.focus == Focus::Inspector {
+            state.focus = Focus::Results;
+        }
+    }
+}
+
+/// `d`: the inspector describes a table or view instead of the cursor's
+/// column: the tree's selected one from the tree, else the one the active
+/// result was read from. Its columns and indexes load through the schema
+/// cache once the event is handled (`tree::after`) if they are not there;
+/// one whose load failed is asked for again.
+pub(super) fn describe(state: &mut State, context: KeyContext, fx: &mut Vec<Effect>) {
+    let target = match context {
+        KeyContext::Tree => tree::selected_object(state),
+        _ => result_table(state).or_else(|| tree::selected_object(state)),
+    };
+    let Some((session, catalog, object)) = target else {
+        let message = if context == KeyContext::Tree {
+            "select a table or view to describe"
+        } else {
+            "this result was not read from one table"
+        };
+        notify(state, Notice::info(message), fx);
+        return;
+    };
+    let back = match state.focus {
+        Focus::Inspector => state
+            .sessions
+            .active()
+            .describe
+            .as_ref()
+            .map_or(Focus::Results, |d| d.back),
+        focus => focus,
+    };
+    sessions::switch(state, session);
+    state.chrome.inspector = true;
+    state.focus = Focus::Inspector;
+    let Some(s) = state.sessions.get_mut(session) else {
+        return;
+    };
+    let path = SchemaPath::details(&catalog, &object);
+    let failed = s
+        .schema
+        .details_entry(&catalog, &object)
+        .is_some_and(|entry| entry.error.is_some());
+    s.describe = Some(Describe {
+        catalog,
+        object,
+        back,
+        scroll: 0,
+    });
+    if failed {
+        tree::load(state, session, path, fx);
+    }
+}
+
+/// Whether the active session's inspector is describing a table.
+pub(super) fn describing(state: &State) -> bool {
+    state.sessions.active().describe.is_some()
+}
+
+/// `Esc` in describe mode: the normal sections come back, and the focus
+/// goes back to where `d` was pressed.
+pub(super) fn leave_describe(state: &mut State) {
+    if let Some(describe) = state.sessions.active_mut().describe.take() {
+        state.focus = describe.back;
+    }
+}
+
+/// The table the active tab's result was read from, as the session's
+/// catalog and object names, when the statement read only that one.
+fn result_table(state: &State) -> Option<(SessionId, String, String)> {
+    let session = state.sessions.active();
+    let tab = &session.tabs[session.active_tab.min(session.tabs.len() - 1)];
+    let name = tab.table.as_deref()?;
+    tab.results.result.as_ref()?;
+    if !reads_one_table(session.dialect(), &tab.sql) {
+        return None;
+    }
+    let (catalog, object) = resolve(session, name)?;
+    Some((session.id, catalog, object))
+}
+
+/// Whether `sql` reads from a single table: nothing joined to it or listed
+/// after it in its FROM, and no UNION (or the like) with another query.
+pub(crate) fn reads_one_table(dialect: Dialect, sql: &str) -> bool {
+    let tokens: Vec<_> = lex(dialect, sql)
+        .into_iter()
+        .filter(|t| !matches!(t.kind, TokenKind::Whitespace | TokenKind::Comment))
+        .collect();
+    let word = |t: &qry_core::sql::Token, w: &str| {
+        t.kind == TokenKind::Keyword && sql[t.span.clone()].eq_ignore_ascii_case(w)
+    };
+    let mut depth = 0usize;
+    // Inside the FROM clause, and past it.
+    let (mut from, mut past) = (false, false);
+    for t in &tokens {
+        let text = &sql[t.span.clone()];
+        match t.kind {
+            TokenKind::Punct if text == "(" => depth += 1,
+            TokenKind::Punct if text == ")" => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            _ if ["UNION", "INTERSECT", "EXCEPT", "MINUS"]
+                .iter()
+                .any(|w| word(t, w)) =>
+            {
+                return false;
+            }
+            _ if word(t, "FROM") && !past => from = true,
+            _ if !from || past => {}
+            TokenKind::Punct if text == "," => return false,
+            _ if word(t, "JOIN") => return false,
+            TokenKind::Keyword
+                if [
+                    "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "OFFSET", "FETCH", "WINDOW",
+                    "FOR",
+                ]
+                .iter()
+                .any(|w| word(t, w)) =>
+            {
+                past = true;
+            }
+            _ => {}
+        }
+    }
+    from
+}
+
+/// `name` as the run read it (`orders`, `main.orders`) as the catalog and
+/// object of the session's schema: an object it has loaded, matched without
+/// regard to case and in its own catalog first, or else the name in the
+/// catalog given or the connection's own, folded as the server folds an
+/// unquoted name.
+fn resolve(session: &SessionState, name: &str) -> Option<(String, String)> {
+    let (catalog, object) = match name.rsplit_once('.') {
+        Some((catalog, object)) => (Some(catalog), object),
+        None => (None, name),
+    };
+    let cache = &session.schema;
+    let own = cache
+        .catalogs()
+        .and_then(|catalogs| catalogs.iter().find(|c| c.is_default))
+        .map(|c| c.name.as_str());
+    let matches = |o: &&qry_core::schema::DbObject| {
+        o.name.eq_ignore_ascii_case(object)
+            && catalog.is_none_or(|c| o.catalog.eq_ignore_ascii_case(c))
+    };
+    let mut found: Vec<_> = cache.loaded_objects().filter(matches).collect();
+    found.sort_by_key(|o| Some(o.catalog.as_str()) != own);
+    if let Some(o) = found.first() {
+        return Some((o.catalog.clone(), o.name.clone()));
+    }
+    let catalog = catalog.or(own)?;
+    let object = match session.dialect() {
+        Dialect::Postgres => object.to_lowercase(),
+        Dialect::Oracle => object.to_uppercase(),
+        _ => object.to_string(),
+    };
+    Some((catalog.to_string(), object))
+}
+
+/// What an `Inspector` binding does in describe mode: `↑↓`, `g` and `G`
+/// scroll the description.
+fn scroll_describe(state: &mut State, action: Action) {
+    let session = state.sessions.active_mut();
+    let Some(describe) = session.describe.as_mut() else {
+        return;
+    };
+    let lines = session
+        .schema
+        .details(&describe.catalog, &describe.object)
+        .map_or(0, crate::views::inspector::describe_line_count);
+    let last = lines.saturating_sub(1);
+    let scroll = &mut describe.scroll;
+    match action {
+        Action::Up => *scroll = scroll.saturating_sub(1),
+        Action::Down => *scroll = (*scroll + 1).min(last),
+        Action::Top => *scroll = 0,
+        Action::Bottom => *scroll = last,
+        _ => {}
     }
 }
 
@@ -79,6 +262,9 @@ pub(super) fn step_profile(state: &mut State) -> bool {
 /// What an `Inspector` binding does: `↑↓` pick a RECORD field (the grid's
 /// column), `←→` the record before or after, `y` copies the field's value.
 pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
+    if describing(state) {
+        return scroll_describe(state, action);
+    }
     if action == Action::CopyCell {
         copy_value(state, None, fx);
         return;

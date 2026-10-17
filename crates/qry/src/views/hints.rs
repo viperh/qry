@@ -94,9 +94,21 @@ pub(crate) fn pairs(state: &State) -> (Vec<(String, &'static str)>, Option<Strin
     } else {
         &[]
     };
+    // Describing a table, the inspector's keys scroll it and Esc goes back.
+    let describing: &[Hint] = &[
+        (&[Action::Down, Action::Up], "scroll"),
+        (&[Action::FocusResults], "back"),
+        (&[Action::Quit], "quit"),
+    ];
+    let hints =
+        if contexts[0] == KeyContext::Inspector && state.sessions.active().describe.is_some() {
+            describing
+        } else {
+            table(contexts[0])
+        };
     let pairs = cancel
         .iter()
-        .chain(table(contexts[0]))
+        .chain(hints)
         .filter_map(|(actions, label)| {
             let key = actions.iter().find_map(|a| key_for(state, &contexts, *a))?;
             Some((key, *label))

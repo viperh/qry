@@ -91,6 +91,9 @@ pub enum Action {
     InsertSelect,
     /// Copies the selected table's qualified name.
     CopyName,
+    /// Shows the columns and indexes of the selected table, or of the
+    /// result's table, in the inspector.
+    Describe,
     /// Closes the selected connection's session.
     Disconnect,
     Search,
@@ -228,6 +231,7 @@ impl Action {
             Self::ToggleSystemObjects => "Show / hide system objects",
             Self::InsertSelect => "Insert SELECT * FROM the table",
             Self::CopyName => "Copy the qualified name",
+            Self::Describe => "Describe the table",
             Self::Disconnect => "Disconnect its session",
             Self::Search => "Search",
             Self::CopyCell => "Copy the cell",
@@ -327,6 +331,7 @@ impl Action {
             Self::ToggleSystemObjects => "Toggle system objects",
             Self::InsertSelect => "Insert SELECT for table",
             Self::CopyName => "Copy qualified name",
+            Self::Describe => "Describe table",
             Self::Disconnect => "Disconnect",
             Self::Search => "Search the results",
             Self::CopyCell => "Copy cell",
@@ -372,6 +377,7 @@ impl Action {
             | Self::ToggleSystemObjects
             | Self::InsertSelect
             | Self::CopyName
+            | Self::Describe
             | Self::Disconnect => "connection",
             Self::OpenNewSession | Self::NextSession | Self::PrevSession | Self::CloseSession => {
                 "session"

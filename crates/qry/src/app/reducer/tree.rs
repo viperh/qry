@@ -226,6 +226,19 @@ fn object_names(state: &State, node: TreeNode) -> Option<(String, String)> {
     Some((object.catalog.clone(), object.name.clone()))
 }
 
+/// The session, catalog and name of the selected row's table or view, for
+/// `d`: an object row, or a row under one (its columns and indexes).
+pub(super) fn selected_object(state: &State) -> Option<(SessionId, String, String)> {
+    let node = match state.tree.selected_row()?.node {
+        TreeNode::Section { conn, cat, obj, .. }
+        | TreeNode::Column { conn, cat, obj, .. }
+        | TreeNode::Index { conn, cat, obj, .. } => TreeNode::Object { conn, cat, obj },
+        node => node,
+    };
+    let (catalog, object) = object_names(state, node)?;
+    Some((open_session(state, node.conn())?, catalog, object))
+}
+
 /// `SELECT * FROM` the table or view of an object row, run or not.
 fn browse(state: &mut State, node: TreeNode, run: bool, fx: &mut Vec<Effect>) {
     let Some((catalog, object)) = object_names(state, node) else {
@@ -318,7 +331,7 @@ fn refresh(state: &mut State, node: TreeNode, fx: &mut Vec<Effect>) {
 }
 
 /// Asks session `session` for `path`.
-fn load(state: &mut State, session: SessionId, path: SchemaPath, fx: &mut Vec<Effect>) {
+pub(super) fn load(state: &mut State, session: SessionId, path: SchemaPath, fx: &mut Vec<Effect>) {
     let Some(s) = state.sessions.get_mut(session) else {
         return;
     };
@@ -524,6 +537,24 @@ fn ensure_loaded(state: &mut State, fx: &mut Vec<Effect>) {
                 if shown && open && !cache.is_known(&path) {
                     wanted.push((session.id, path));
                 }
+            }
+        }
+    }
+    for (session, path) in wanted.drain(..) {
+        load(state, session, path, fx);
+    }
+    // What the inspector describes loads like an open node: again after a
+    // reconnect or DDL cleared it. It waits for the catalogs or objects
+    // loading above it (asked for just now, perhaps), whose answer would
+    // drop it.
+    for session in state.sessions.iter() {
+        if let Some(describe) = &session.describe {
+            let cache = &session.schema;
+            let path = SchemaPath::details(&describe.catalog, &describe.object);
+            let above = cache.is_loading(&SchemaPath::Catalogs)
+                || cache.is_loading(&SchemaPath::objects(&describe.catalog));
+            if session.is_open() && !above && !cache.is_known(&path) {
+                wanted.push((session.id, path));
             }
         }
     }

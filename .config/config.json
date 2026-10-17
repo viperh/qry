@@ -92,6 +92,7 @@
       "<space>": "Toggle",
       "<s>": "InsertSelect",
       "<y>": "CopyName",
+      "<d>": "Describe",
       "<n>": "NewConnection",
       "<e>": "EditConnection",
       "<delete>": "DeleteConnection",
@@ -196,11 +197,14 @@
       "<Y>": "CopyRow",
       "</>": "Search",
       "<i>": "ToggleInspector",
+      // When the result came from one table.
+      "<d>": "Describe",
       "<enter>": "Inspect",
       "<ctrl-e>": "ExportResults"
     },
     // The RECORD fields go up and down, and the records left and right.
-    // Tab and Esc go back to the grid.
+    // Tab and Esc go back to the grid. Describing a table, up and down
+    // scroll it and Esc goes back to where `d` was pressed.
     "Inspector": {
       "<?>": "Help",
       "<:>": "Palette",

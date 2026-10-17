@@ -133,6 +133,12 @@ impl Database for MariaDb {
     }
 
     /// The same protocol as MySQL, so the same stream.
+    /// Rows arrive a batch at a time (see `query_stream`), so a kept stream
+    /// can be read on later (`L`).
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
     async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
         let mut conn = self.conn.lock().await;
         crate::mysql::stream(&mut conn, sql, fetch_size, &out).await

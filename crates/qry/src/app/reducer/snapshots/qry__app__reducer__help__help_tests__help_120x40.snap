@@ -17,28 +17,28 @@ expression: "h.render(w, ht)"
 │ ctrl-↓               shrink the editor                     ?           show / hide the help                          │
 │ F11                  maximise the pane / restore           :           command palette                               │
 │ ctrl-l               show the messages                     ctrl-c      cancel the query (copy when none runs)        │
-│ Esc                  dismiss the message                   s           sort by the column                            │
-│                                                            S           add the column to the sort                    │
-│ Tree                                                       ctrl-g      go to a row                                   │
-│ ?                    show / hide the help                  <           narrow the column                             │
-│ :                    command palette                       >           widen the column                              │
-│ n                    new connection                        =           reset the column widths                       │
-│ e                    edit this connection                  F           freeze the first column                       │
-│ D Del                forget this connection                L           load the next rows                            │
-│ c                    duplicate this connection             A           fetch every row                               │
-│ k ↑                  up                                    J           show / hide the jobs                          │
-│ j ↓                  down                                                                                            │
-│ h ←                  left                                  Inspector                                                 │
-│ l →                  right                                 ?           show / hide the help                          │
-│ PgUp                 up a page                             :           command palette                               │
-│ PgDn                 down a page                           Esc         go to the results                             │
-│ g g Home             to the top                            k ↑         up                                            │
-│ G End                to the bottom                         j ↓         down                                          │
-│ Space                expand / collapse                     h ←         left                                          │
-│ Enter                connect / switch to its session       l →         right                                         │
-│ shift-Enter          open another session on it            g g         to the top                                    │
-│ r                    refresh the node                      G           to the bottom                                 │
+│ Esc                  dismiss the message                   d           describe the table                            │
+│                                                            s           sort by the column                            │
+│ Tree                                                       S           add the column to the sort                    │
+│ ?                    show / hide the help                  ctrl-g      go to a row                                   │
+│ :                    command palette                       <           narrow the column                             │
+│ n                    new connection                        >           widen the column                              │
+│ e                    edit this connection                  =           reset the column widths                       │
+│ D Del                forget this connection                F           freeze the first column                       │
+│ c                    duplicate this connection             L           load the next rows                            │
+│ k ↑                  up                                    A           fetch every row                               │
+│ j ↓                  down                                  J           show / hide the jobs                          │
+│ h ←                  left                                                                                            │
+│ l →                  right                                 Inspector                                                 │
+│ PgUp                 up a page                             ?           show / hide the help                          │
+│ PgDn                 down a page                           :           command palette                               │
+│ g g Home             to the top                            Esc         go to the results                             │
+│ G End                to the bottom                         k ↑         up                                            │
+│ Space                expand / collapse                     j ↓         down                                          │
+│ Enter                connect / switch to its session       h ←         left                                          │
+│ shift-Enter          open another session on it            l →         right                                         │
+│ r                    refresh the node                      g g         to the top                                    │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value       │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 1–35 of 104 ─┘
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ─────────────────────────────────────────── 1–35 of 105 ─┘

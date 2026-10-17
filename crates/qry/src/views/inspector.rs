@@ -7,6 +7,7 @@
 use qry_core::{
     QueryResult,
     inspect::{ColumnProfile, Profiler},
+    schema::Details,
 };
 use ratatui::{
     prelude::*,
@@ -21,7 +22,7 @@ use super::{
     status_line::thousands,
 };
 use crate::{
-    app::state::{Focus, ResultsState, State},
+    app::state::{Describe, Focus, ResultsState, State},
     theme::Theme,
 };
 
@@ -89,6 +90,15 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
     let [title, body] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
     pane_title::draw("INSPECTOR", "", focused, theme, frame, title);
     let body = body.inner(Margin::new(1, 0));
+    let session = state.sessions.active();
+    if let Some(describe) = &session.describe {
+        let lines = describe_lines(state, describe, usize::from(body.width), focused, theme);
+        let room = usize::from(body.height);
+        let scroll = describe.scroll.min(lines.len().saturating_sub(room));
+        let shown: Vec<Line> = lines.into_iter().skip(scroll).take(room).collect();
+        frame.render_widget(Paragraph::new(shown), body);
+        return;
+    }
     let results = state.results();
     let Some(result) = results.result.as_deref().filter(|r| !r.columns.is_empty()) else {
         frame.render_widget(Paragraph::new(Span::styled("no result", theme.dim())), body);
@@ -164,6 +174,147 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
         lines.push(line);
     }
     frame.render_widget(Paragraph::new(lines), body);
+}
+
+/// Describe mode's lines: `TABLE · catalog.name` (or `VIEW`) over the
+/// object's columns, then INDEXES; a spinner while they load, the error if
+/// that failed.
+fn describe_lines<'a>(
+    state: &State,
+    describe: &Describe,
+    width: usize,
+    focused: bool,
+    theme: &Theme,
+) -> Vec<Line<'a>> {
+    let label_style = if focused {
+        theme.inspector_label_focused()
+    } else {
+        theme.inspector_label()
+    };
+    let label = |text: &'static str, detail: String| {
+        Line::from(vec![
+            Span::styled(text, label_style),
+            Span::styled(format!(" · {detail}"), theme.dim()),
+        ])
+    };
+    let cache = &state.sessions.active().schema;
+    let (catalog, object) = (&describe.catalog, &describe.object);
+    let view = cache.objects(catalog).is_some_and(|objects| {
+        objects
+            .iter()
+            .any(|o| o.name == *object && o.kind.is_view())
+    });
+    let title = if view { "VIEW" } else { "TABLE" };
+    let mut lines = vec![fit(label(title, format!("{catalog}.{object}")), width)];
+    let entry = cache.details_entry(catalog, object);
+    let Some(details) = entry.and_then(|e| e.value.as_ref()) else {
+        match entry.and_then(|e| e.error.as_deref()) {
+            Some(error) => {
+                let error = error.lines().next().unwrap_or_default();
+                lines.push(fit(
+                    Line::styled(format!("! {error}"), theme.tree_error()),
+                    width,
+                ));
+                lines.push(Line::styled("d tries again", theme.dim()));
+            }
+            None => {
+                let spinner = SPINNER[state.tree.spinner % SPINNER.len()];
+                lines.push(Line::from(vec![
+                    Span::styled(spinner, theme.spinner()),
+                    Span::styled(" loading…", theme.dim()),
+                ]));
+            }
+        }
+        return lines;
+    };
+
+    let name_width = details
+        .columns
+        .iter()
+        .map(|c| qry_core::grid::width(&c.name))
+        .max()
+        .unwrap_or(1)
+        .clamp(1, FIELD_WIDTH.min(width / 2));
+    if details.columns.is_empty() {
+        lines.push(Line::styled("no columns", theme.dim()));
+    }
+    for column in &details.columns {
+        let name = truncate(&column.name, name_width);
+        let pad = name_width.saturating_sub(qry_core::grid::width(&name));
+        let mut spans = vec![
+            Span::styled(name, theme.record_field()),
+            Span::raw(" ".repeat(pad + 2)),
+            Span::styled(column.data_type.clone(), theme.tree_column_type()),
+        ];
+        if column.primary_key {
+            spans.push(Span::styled("  PK", theme.tree_pk()));
+        }
+        if let Some((table, to)) = &column.references {
+            let target = if to.is_empty() {
+                table.clone()
+            } else {
+                format!("{table}.{to}")
+            };
+            spans.push(Span::styled(format!("  FK → {target}"), theme.tree_fk()));
+        }
+        if column.nullable {
+            spans.push(Span::styled("  NULL", theme.tree_null()));
+        }
+        if let Some(default) = &column.default {
+            spans.push(Span::styled(format!("  = {default}"), theme.dim()));
+        }
+        lines.push(fit(Line::from(spans), width));
+    }
+
+    lines.push(Line::default());
+    lines.push(label("INDEXES", details.indexes.len().to_string()));
+    if details.indexes.is_empty() {
+        lines.push(Line::styled("none", theme.dim()));
+    }
+    for index in &details.indexes {
+        let mut spans = vec![
+            Span::styled(index.name.clone(), theme.record_field()),
+            Span::styled(
+                format!("  ({})", index.columns.join(", ")),
+                theme.tree_column_type(),
+            ),
+        ];
+        if index.unique {
+            spans.push(Span::styled("  UNIQUE", theme.tree_pk()));
+        }
+        lines.push(fit(Line::from(spans), width));
+    }
+    lines
+}
+
+/// How many lines describe mode draws for `details`, which its scrolling
+/// stops at.
+pub(crate) fn describe_line_count(details: &Details) -> usize {
+    // The title, the columns, a blank line, INDEXES and the indexes.
+    3 + details.columns.len().max(1) + details.indexes.len().max(1)
+}
+
+/// `line` cut at `width` cells, its last span ending in `…` where it is
+/// cut.
+fn fit(line: Line<'_>, width: usize) -> Line<'_> {
+    if line.width() <= width {
+        return line;
+    }
+    let mut room = width;
+    let mut spans = Vec::new();
+    for span in line.spans {
+        let w = span.width();
+        if w <= room {
+            room -= w;
+            spans.push(span);
+            continue;
+        }
+        if room > 0 {
+            spans.push(Span::styled(truncate(&span.content, room), span.style));
+        }
+        break;
+    }
+    Line::from(spans).style(line.style)
 }
 
 /// The COLUMN section and, when it says something, TOP VALUES.

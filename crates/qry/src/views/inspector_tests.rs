@@ -11,7 +11,7 @@ use super::*;
 use crate::{
     app::{DbAnswer, UiEvent, state::Overlay},
     config::Config,
-    testing::{AppHarness, styled},
+    testing::{AppHarness, FakeSchema, styled},
     views::layout::compute_layout,
 };
 
@@ -291,4 +291,159 @@ fn bars_fill_by_eighths() {
     assert_eq!(bar(2, 4), "████    ");
     assert_eq!(bar(1, 3), "██▊     ");
     assert_eq!(bar(0, 4), "        ");
+}
+
+/// The scratch database's schema for describe mode: `orders` with a key, a
+/// reference, a default and two indexes, `users`, and a view.
+pub(crate) fn describe_schema() -> FakeSchema {
+    use qry_core::schema::{Column, Index};
+    FakeSchema::new()
+        .catalog("main", true, false)
+        .table("main", "orders")
+        .table("main", "users")
+        .view("main", "big_orders")
+        .column("main", "orders", FakeSchema::pk("id", "integer"))
+        .column(
+            "main",
+            "orders",
+            FakeSchema::fk("user_id", "integer", "users", "id"),
+        )
+        .column("main", "orders", FakeSchema::col("total", "numeric(10,2)"))
+        .column(
+            "main",
+            "orders",
+            Column {
+                nullable: false,
+                default: Some("CURRENT_TIMESTAMP".into()),
+                ..FakeSchema::col("created_at", "timestamp")
+            },
+        )
+        .column("main", "orders", FakeSchema::col("note", "text"))
+        .index(
+            "main",
+            "orders",
+            Index {
+                name: "orders_pkey".into(),
+                columns: vec!["id".into()],
+                unique: true,
+            },
+        )
+        .index(
+            "main",
+            "orders",
+            Index {
+                name: "orders_user".into(),
+                columns: vec!["user_id".into(), "created_at".into()],
+                unique: false,
+            },
+        )
+        .column("main", "users", FakeSchema::pk("id", "integer"))
+        .column("main", "big_orders", FakeSchema::col("id", "integer"))
+}
+
+/// The app on a scratch database with `schema`, the tree open on its
+/// tables and the selection on `orders`, at `w`x`h`.
+pub(crate) fn on_orders(schema: FakeSchema, w: u16, h: u16) -> AppHarness {
+    on_orders_with(qry_core::testing::FakeDatabase::default(), schema, w, h)
+}
+
+/// [`on_orders`] with `db` answering the queries.
+pub(crate) fn on_orders_with(
+    db: qry_core::testing::FakeDatabase,
+    schema: FakeSchema,
+    w: u16,
+    h: u16,
+) -> AppHarness {
+    let mut app = AppHarness::new(Config::embedded()).with_database(db.schema(schema));
+    app.send(UiEvent::Started);
+    app.state_mut().focus = Focus::Tree;
+    app.resize(w, h);
+    app.keys("l");
+    // scratch, main, Tables, orders.
+    app.keys("j j j");
+    app.advance(60_000);
+    app.take_effects();
+    app
+}
+
+#[test]
+fn inspector_describe_160x40() {
+    let mut app = on_orders(describe_schema(), 160, 40);
+    app.keys("d");
+    let text = app.render(160, 40);
+    for wanted in [
+        "TABLE · main.orders",
+        "id          integer  PK",
+        "user_id     integer  FK → users.id",
+        "total       numeric(10,2)  NULL",
+        "created_at  timestamp  = CURRENT_TIM",
+        "INDEXES · 2",
+        "orders_pkey  (id)  UNIQUE",
+        "orders_user  (user_id, created_at)",
+    ] {
+        assert!(text.contains(wanted), "{wanted:?} in\n{text}");
+    }
+    assert!(
+        !text.contains("COLUMN"),
+        "describe replaces COLUMN:\n{text}"
+    );
+    snapshot("inspector_describe", &mut app, 160, 40);
+}
+
+#[test]
+fn inspector_describe_overlay_80x24() {
+    let mut app = on_orders(describe_schema(), 80, 24);
+    app.keys("d");
+    let text = app.render(80, 24);
+    assert!(text.contains("TABLE · main.orders"), "{text}");
+    snapshot("inspector_describe_overlay", &mut app, 80, 24);
+}
+
+#[test]
+fn inspector_describe_loading_80x24() {
+    use qry_core::schema::SchemaPath;
+    let schema = describe_schema().delay(SchemaPath::details("main", "orders"), 1_000);
+    let mut app = on_orders(schema, 80, 24);
+    app.keys("d");
+    let text = app.render(80, 24);
+    assert!(text.contains("loading…"), "{text}");
+    snapshot("inspector_describe_loading", &mut app, 80, 24);
+    app.advance(1_000);
+    assert!(app.render(80, 24).contains("orders_pkey"));
+}
+
+#[test]
+fn a_view_is_described_as_one_and_a_failure_shows_on_the_panel() {
+    use qry_core::schema::SchemaPath;
+    let schema = describe_schema().fail(SchemaPath::details("main", "orders"), "no such table");
+    let mut app = on_orders(schema, 120, 40);
+    app.keys("d");
+    let text = app.render(120, 40);
+    assert!(text.contains("! no such table"), "{text}");
+    assert!(text.contains("d tries again"), "{text}");
+    // Esc, then down to the view, its folder opened.
+    app.keys("esc j j l j d");
+    let text = app.render(120, 40);
+    assert!(text.contains("VIEW · main.big_orders"), "{text}");
+}
+
+#[test]
+fn long_lines_are_cut_at_the_panel() {
+    use qry_core::schema::Column;
+    let schema = describe_schema().column(
+        "main",
+        "orders",
+        Column {
+            default: Some("a default far too long to fit in the inspector's forty columns".into()),
+            ..FakeSchema::col("long", "text")
+        },
+    );
+    let mut app = on_orders(schema, 160, 40);
+    app.keys("d");
+    let text = app.render(160, 40);
+    let line = text.lines().find(|l| l.contains("long  ")).unwrap();
+    assert!(
+        line.ends_with('…') || line.trim_end().ends_with('…'),
+        "{line}"
+    );
 }

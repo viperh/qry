@@ -35,7 +35,8 @@ The interface redesign. Everything below lands in the first release after
   indexes, loaded lazily with bound catalog queries, with a filter, system
   schemas on demand, and `SELECT *` on Enter.
 - A record inspector and a value popup (pretty JSON, hex dumps, word wrap)
-  with a column profile.
+  with a column profile, and a describe mode (`d` in the tree or the
+  results) showing a table's columns, keys, defaults and indexes.
 - Query jobs: a spinner and elapsed time while running, `ctrl-c` cancels on
   the server (Postgres, MySQL, MariaDB, SQLite), a `max_rows` limit (1000 by
   default) with a fetch-all, and a jobs drawer (`J`).

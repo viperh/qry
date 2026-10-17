@@ -513,6 +513,12 @@ impl Database for Oracle {
     /// trip, handing each batch on as it fills. No more than a batch is
     /// held: a reader that falls behind blocks the walk, and once it has
     /// gone the cursor is closed with the rest unread.
+    /// Rows arrive a batch at a time (see `query_stream`), so a kept stream
+    /// can be read on later (`L`).
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
     async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
         let sql = sql.to_string();
         self.with_conn(move |conn| {

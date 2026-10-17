@@ -43,13 +43,13 @@ expression: "styled(&h.render_buffer(w, ht))"
 │ .                    show / hide system objects      Results · Other                                      Backspace   delete the character before            │
 │ s                    insert SELECT * FROM the tab…   ?              show / hide the help                  Del         delete the character after             │
 │ y                    copy the qualified name         :              command palette                                                                          │
-│ x                    disconnect its session          ctrl-c         cancel the query (copy when none r…   Jobs                                               │
-│ J                    show / hide the jobs            s              sort by the column                    ?           show / hide the help                   │
-│ Esc                  clear the filter                S              add the column to the sort            :           command palette                        │
+│ d                    describe the table              ctrl-c         cancel the query (copy when none r…   Jobs                                               │
+│ x                    disconnect its session          d              describe the table                    ?           show / hide the help                   │
+│ J                    show / hide the jobs            s              sort by the column                    :           command palette                        │
 │                                                                                                                                                              │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Y copy row  Enter inspect value                                               │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                                                               │
-└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────────────────────────────────────────────── 1–43 of 77 ─┘
+└─ k/j scroll  PgUp/PgDn page  Home/G top/bottom  ?/Esc close ──────────────────────────────────────────────────────────────────────────────────── 1–43 of 78 ─┘
 --- styles (x,y fg bg modifiers) ---
 0,0 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,0 Rgb(79, 193, 201) Rgb(30, 38, 50) BOLD
@@ -621,7 +621,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 2,41 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 3,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 23,41 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-45,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+41,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,41 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 61,41 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 70,41 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -634,7 +634,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 2,42 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 3,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 23,42 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-43,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+45,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,42 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 56,42 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 70,42 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
@@ -647,13 +647,13 @@ expression: "styled(&h.render_buffer(w, ht))"
 0,43 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 2,43 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
-5,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+3,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 23,43 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-39,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+43,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 55,43 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 56,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 70,43 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-96,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+88,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 108,43 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 109,43 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 120,43 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE

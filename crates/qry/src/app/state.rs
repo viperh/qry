@@ -114,6 +114,9 @@ pub(crate) struct SessionState {
     pub(crate) expand_when_connected: bool,
     /// What the schema browser has loaded through this session.
     pub(crate) schema: SchemaCache,
+    /// The table or view the inspector describes instead of the cursor's
+    /// column (T304's describe mode), while it does.
+    pub(crate) describe: Option<Describe>,
     /// Its connection's label; `prod` asks before the first write.
     pub(crate) label: Option<ConnLabel>,
     /// A write was confirmed on this `prod` session, so it is not asked
@@ -154,6 +157,7 @@ impl SessionState {
             cursor_kept: false,
             expand_when_connected: false,
             schema: SchemaCache::default(),
+            describe: None,
             label: record.label,
             writes_confirmed: false,
             held: Vec::new(),
@@ -305,6 +309,20 @@ pub(crate) struct TabError {
     /// A byte offset into `sql`.
     pub(crate) position: Option<usize>,
     pub(crate) sql: String,
+}
+
+/// A table or view the inspector describes: its columns and indexes from
+/// the session's [`SchemaCache`], loaded through it when they are not
+/// there yet.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Describe {
+    pub(crate) catalog: String,
+    pub(crate) object: String,
+    /// Where `d` was pressed, which `Esc` goes back to.
+    pub(crate) back: Focus,
+    /// The first line shown, while the description is longer than the
+    /// panel.
+    pub(crate) scroll: usize,
 }
 
 /// One statement's outcome: its rows, or why it failed.

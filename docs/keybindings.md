@@ -50,6 +50,7 @@ These are the defaults, as `.config/config.json` sets them. A user config can re
 | `.` | show / hide system objects |
 | `s` | insert SELECT * FROM the table |
 | `y` | copy the qualified name |
+| `d` | describe the table |
 | `x` | disconnect its session |
 | `J` | show / hide the jobs |
 | `Esc` | clear the filter |
@@ -149,6 +150,7 @@ These are the defaults, as `.config/config.json` sets them. A user config can re
 | `?` | show / hide the help |
 | `:` | command palette |
 | `ctrl-c` | cancel the query (copy when none runs) |
+| `d` | describe the table |
 | `s` | sort by the column |
 | `S` | add the column to the sort |
 | `ctrl-g` | go to a row |
@@ -178,6 +180,8 @@ These are the defaults, as `.config/config.json` sets them. A user config can re
 | `i` | show / hide the inspector |
 
 In the value popup: y copies the whole value, w wraps, f formats JSON, h/l pan, q closes
+
+Describing a table (d in the tree or the results): j/k scroll, Esc goes back
 
 ## Sessions
 

@@ -73,6 +73,7 @@ expression: "Config::embedded().effective_json()"
       ".": "ToggleSystemObjects",
       "s": "InsertSelect",
       "y": "CopyName",
+      "d": "Describe",
       "x": "Disconnect",
       "J": "ToggleJobs",
       "Esc": "Cancel"
@@ -146,6 +147,7 @@ expression: "Config::embedded().effective_json()"
       "Home": "LineStart",
       "$": "LineEnd",
       "End": "LineEnd",
+      "d": "Describe",
       "/": "Search",
       "y": "CopyCell",
       "Y": "CopyRow",

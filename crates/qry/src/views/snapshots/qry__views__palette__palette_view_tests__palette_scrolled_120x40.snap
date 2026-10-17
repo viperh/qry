@@ -6,7 +6,7 @@ expression: text
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ ›                                                                                    67 / 67 │            
+            │ ›                                                                                    68 / 68 │            
             │ Go to the tree                                view                                           │            
             │ Go to the editor                              view                                           │            
             │ Go to the results                             view                                           │            
