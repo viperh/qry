@@ -639,3 +639,54 @@ proptest! {
         prop_assert_eq!(read, rows);
     }
 }
+
+/// A dropped export (a cancelled job, a closed session) stops writing and
+/// removes its temporary file, even while the query has rows to come and
+/// nothing cancels it on the server.
+#[tokio::test]
+async fn a_dropped_export_stops_and_removes_its_temporary_file() {
+    use std::sync::Arc;
+
+    let mut driver = crate::Driver::new();
+    driver
+        .connect(crate::ConnectionConfig::Sqlite(
+            crate::sqlite::SqliteConfig::new(":memory:", false),
+        ))
+        .await
+        .unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("endless.csv");
+    let endless = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) \
+                   SELECT i FROM n";
+    let started = Arc::new(tokio::sync::Notify::new());
+    let heard = started.clone();
+    let opts = ExportOptions::default();
+    let mut export = Box::pin(export_query(
+        &driver,
+        endless,
+        100,
+        ExportType::Csv,
+        &path,
+        &opts,
+        move |_| heard.notify_one(),
+    ));
+    tokio::select! {
+        outcome = &mut export => panic!("an endless query finished: {outcome:?}"),
+        () = started.notified() => {}
+    }
+    drop(export);
+    let names = || fs::read_dir(dir.path()).unwrap().count();
+    for _ in 0..200 {
+        if names() == 0 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert_eq!(names(), 0, "no temporary file is left, and no target made");
+    // The connection is free again: the reader stopped.
+    let next = tokio::time::timeout(std::time::Duration::from_secs(5), driver.query("SELECT 1"));
+    assert_eq!(
+        next.await.expect("the reader stopped").unwrap().rows.len(),
+        1
+    );
+}

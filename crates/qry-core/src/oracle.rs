@@ -521,6 +521,7 @@ impl Database for Oracle {
 
     async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
         let sql = sql.to_string();
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
         self.with_conn(move |conn| {
             let failed = |e| query_error(e, &sql);
             let mut batches = Batches::new(fetch_size);
@@ -535,7 +536,9 @@ impl Database for Oracle {
             // no rows.
             if !stmt.is_query() {
                 stmt.execute(&[]).map_err(failed)?;
-                conn.commit().ora()?;
+                if autocommit {
+                    conn.commit().ora()?;
+                }
                 shared::blocking_send(&out, StreamItem::Columns(Vec::new()))?;
                 return Ok(0);
             }

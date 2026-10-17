@@ -11,7 +11,10 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -179,11 +182,20 @@ pub async fn export_query(
         sink(etype, path, opts).with_context(|| format!("could not write {}", path.display()))?;
     let (rows_tx, mut rows_rx) = tokio::sync::mpsc::channel::<StreamItem>(1);
     let (done_tx, done_rx) = tokio::sync::oneshot::channel::<bool>();
+    // Dropping this future (a cancelled job, a closed session) stops the
+    // writer at its next batch, and with its receiver gone a driver that
+    // reads on a thread of its own (Oracle) stops reading too.
+    // Kept, not read, until the end of this future.
+    let _abandoned = Abandoned::default();
+    let given_up = _abandoned.0.clone();
     // `None` when the query did not finish: the sink goes unfinished.
     let writer = tokio::task::spawn_blocking(move || -> Result<Option<Written>> {
         let mut sink = sink;
         let (mut begun, mut rows) = (false, 0u64);
         while let Some(item) = rows_rx.blocking_recv() {
+            if given_up.load(Ordering::SeqCst) {
+                return Ok(None);
+            }
             match item {
                 StreamItem::Columns(columns) => {
                     sink.begin(&columns)?;
@@ -218,6 +230,16 @@ pub async fn export_query(
         (_, Err(e)) => Err(e),
         (Err(e), Ok(None)) => Err(e),
         (Ok(_), Ok(None)) => bail!("the export stopped before its end"),
+    }
+}
+
+/// Set when the export that owns it is dropped.
+#[derive(Default)]
+struct Abandoned(Arc<AtomicBool>);
+
+impl Drop for Abandoned {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
     }
 }
 
