@@ -75,7 +75,7 @@ pub const ARGUMENTS: &[(&str, &str, ArgKind, &str)] = &[
     (
         "export tsv ",
         "path",
-        ArgKind::Export(ExportType::Text, "\t"),
+        ArgKind::Export(ExportType::Tsv, "\t"),
         "results",
     ),
     (

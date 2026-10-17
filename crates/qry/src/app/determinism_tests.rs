@@ -96,8 +96,22 @@ fn db_answer() -> impl Strategy<Value = DbAnswer> {
         Just(DbAnswer::SecretNotStored("c1".into())),
         (1..30usize, 1..6usize)
             .prop_map(|(rows, cols)| DbAnswer::QueryDone(Arc::new(grid(rows, cols)))),
-        Just(DbAnswer::Exported("rows.csv".into())),
-        Just(DbAnswer::ExportFailed("cannot write".into())),
+        Just(DbAnswer::Exported {
+            job: None,
+            rows: 3,
+            path: "rows.csv".into(),
+            warning: None,
+        }),
+        Just(DbAnswer::ExportFailed {
+            job: None,
+            rows: 3,
+            path: "rows.csv".into(),
+            message: "cannot write".into(),
+        }),
+        Just(DbAnswer::ExportExists {
+            job: None,
+            path: "rows.csv".into(),
+        }),
         (0..4u64).prop_map(|generation| DbAnswer::Schema {
             path: SchemaPath::Catalogs,
             generation,

@@ -43,14 +43,6 @@ fn connection_form_new_snapshot() {
 }
 
 #[test]
-fn export_form_snapshot() {
-    let mut h = harness();
-    // ctrl-s with the results focused.
-    h.keys("shift-tab ctrl-s");
-    insta::assert_snapshot!("export_form_80x24", h.render(80, 24));
-}
-
-#[test]
 fn password_prompt_snapshot() {
     let mut h = harness();
     h.db(DbAnswer::NeedPassword {

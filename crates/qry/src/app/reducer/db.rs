@@ -1,6 +1,6 @@
 //! The database workers' answers, each from one session.
 
-use super::{dialogs, notices, run, tree};
+use super::{dialogs, export, notices, run, tree};
 use crate::app::{
     effects::Effect,
     event::DbAnswer,
@@ -50,8 +50,10 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
         DbAnswer::QueryFailed { message, position } => {
             run::failed(state, id, message, position, fx);
         }
-        DbAnswer::Exported(_) => dialogs::done(state, Awaiting::Export(id)),
-        DbAnswer::ExportFailed(message) => dialogs::failed(state, Awaiting::Export(id), &message),
+        answer @ (DbAnswer::Exported { .. }
+        | DbAnswer::ExportFailed { .. }
+        | DbAnswer::ExportExists { .. }
+        | DbAnswer::ExportProgress { .. }) => export::answer(state, id, answer, fx),
         DbAnswer::Schema {
             path,
             generation,

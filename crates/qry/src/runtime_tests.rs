@@ -239,6 +239,34 @@ async fn a_test_takes_its_password_from_the_stash_and_leaves_none_behind() {
 }
 
 #[tokio::test]
+async fn the_export_preview_looks_at_the_file_off_the_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);
+    std::fs::write(dir.path().join("orders.csv"), "old").unwrap();
+    let input = dir.path().join("orders").display().to_string();
+
+    finished(executor.execute(Effect::ProbeExportPath {
+        input: input.clone(),
+        etype: qry_core::ExportType::Csv,
+    }))
+    .await;
+    let UiEvent::File(FileAnswer::ExportProbed(probe)) = events.try_recv().unwrap() else {
+        panic!("expected a probe");
+    };
+    assert_eq!(probe.input, input);
+    assert_eq!(probe.resolved, format!("{input}.csv"));
+    assert!(probe.exists && !probe.is_dir);
+
+    // `~/` is the home directory; a folder says so.
+    let home = dir.path();
+    let probe = probe_export_path("~/".into(), qry_core::ExportType::Json, home);
+    assert_eq!(probe.resolved, home.join(".json").display().to_string());
+    std::fs::create_dir(dir.path().join("sub.csv")).unwrap();
+    let probe = probe_export_path("~/sub".into(), qry_core::ExportType::Csv, home);
+    assert!(probe.exists && probe.is_dir);
+}
+
+#[tokio::test]
 async fn an_export_over_an_existing_file_waits_to_be_told() {
     let dir = tempfile::tempdir().unwrap();
     let (mut executor, _answers, mut events) = Executor::new(dir.path().to_path_buf(), 0);

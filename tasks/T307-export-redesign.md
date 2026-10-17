@@ -105,14 +105,14 @@ Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, sch
 
 ## Acceptance criteria
 
-- [ ] The amber export dialog uses the T203 frame, `› ` focus marker, `‹ ›` choices, live path preview, and format-dependent fields.
-- [ ] All eight formats are written correctly. Excel cells are typed by `ValueKind`, with a bold frozen header and autofilter.
-- [ ] Header and NULL-as options apply to every format they make sense for.
+- [x] The amber export dialog uses the T203 frame, `› ` focus marker, `‹ ›` choices, live path preview, and format-dependent fields.
+- [x] All eight formats are written correctly. Excel cells are typed by `ValueKind`, with a bold frozen header and autofilter.
+- [x] Header and NULL-as options apply to every format they make sense for.
 - [ ] Fetched-row exports of truncated results are visibly labelled. All-rows exports stream through a cancellable job, with no full materialisation (memory bounded by `fetch_size`).
-- [ ] An existing file prompts before overwrite. Writes are atomic: a failed or cancelled export leaves the original intact and no temp file behind.
-- [ ] Non-SELECT re-runs are warned about and confirmed.
-- [ ] The existing modal behaviours (wait, keep path on failure, close on success, ignore answers meant for other modals) still hold, with their tests ported.
-- [ ] Success and failure toasts show the row count and resolved path.
+- [x] An existing file prompts before overwrite. Writes are atomic: a failed or cancelled export leaves the original intact and no temp file behind.
+- [x] Non-SELECT re-runs are warned about and confirmed.
+- [x] The existing modal behaviours (wait, keep path on failure, close on success, ignore answers meant for other modals) still hold, with their tests ported.
+- [x] Success and failure toasts show the row count and resolved path.
 
 ## Tests
 
@@ -162,3 +162,90 @@ Exporting to clipboard (T303 copy covers it), Parquet, exporting schema DDL, sch
 - `cancelled_export_removes_temp_and_keeps_original`
 
 **Fuzz:** not applicable (no untrusted input parsed).
+
+## Implementation notes
+
+- **qry-core.** `ExportType` has the eight formats in the table's order, with
+  `uses_separator`, `has_header`, `uses_null_as`, `is_text` and `row_limit`.
+  `exporter.rs` is now the spec's streaming writer: `ExportOptions` (plus
+  `bom`, for the Encoding row), `RowSink`, `sink`, `resolve_path`, and also
+  `display_path` (`~/…` for toasts), `parse_separator`, `write_result` (the
+  rows in hand; refuses a result over Excel's limit before opening
+  anything) and `export_query` (every row: `Database::query_stream` feeds a
+  writer on a blocking thread through a channel of one). Every sink writes
+  to `.<name>.<pid>-<n>.part` beside the target and renames it over the
+  target in `finish`; dropped before that (failure, cancel, the future
+  dropped by a closed session) it removes the temporary file. The text
+  writers reuse `copy.rs`'s field helpers (now `pub(crate)`). CSV quotes an
+  empty string (`""`) so it reads apart from a NULL written as nothing.
+  JSON writes numbers (valid JSON numbers only) and booleans unquoted by
+  `ValueKind`. SQL INSERT batches `batch` rows per statement, quotes each
+  part of a dotted table name, leaves out the column list with Header off,
+  and uses `INSERT ALL … SELECT 1 FROM DUAL` for Oracle. Excel types numbers,
+  booleans, dates, times and timestamps, bolds and freezes the header, adds
+  an autofilter and column widths (first 1 000 rows), strips control
+  characters below 0x20 but tab and newline (and cuts text at Excel's
+  32 767), and says so through `RowSink::warning`.
+- **Streaming.** `Database::query_stream(sql, fetch_size, RowSender)` and
+  `StreamItem::{Columns, Rows}`. SQLite steps on its connection thread with
+  `blocking_send`; Postgres reads the `simple_query_raw` stream; both hold
+  at most a batch. The default (MySQL, MariaDB, Oracle, the fake) runs the
+  query whole and sends it in batches, so those backends still materialise
+  the result: that is why the fourth box is not ticked.
+- **The dialog** (`app/dialogs/exportform.rs`, the spec's
+  `components/exportform.rs`): amber, 80 wide, rows Path, Format, Rows,
+  Separator, Custom (for `other`), Line ends (CSV), Header, NULL as, Table
+  (SQL INSERT), Encoding, laid out again on every change with hidden rows
+  keeping their values. The subtitle is `result N table · R rows (all
+  fetched)`, or `(R of more)` in amber (`Form::subtitle_warns`,
+  `Theme::subtitle_warning`). The preview is the form's note
+  (`Note::then`, `Tone::{Plain, Dim}`): the reducer emits
+  `Effect::ProbeExportPath` once per path and format, the runtime resolves
+  it with the real home directory and answers `FileAnswer::ExportProbed`, so
+  neither the reducer nor the view touches the disk. A Rows choice of `all
+  rows (re-run)` on a statement `sql::is_read_only` does not pass shows
+  `re-running may change data` in coral under the row. The session
+  remembers the folder of the last path (prefilled), the format and the
+  separator (`SessionState::export`).
+- **Flow** (`app/reducer/export.rs`). Enter asks the coral `Run Again`
+  confirm first when needed, then the coral `File Exists` (`orders.csv
+  exists — overwrite?`, Overwrite / Cancel) when the preview found the file;
+  either one's Cancel (Esc, `n`) goes back to the dialog as it was, and its
+  yes resubmits. The worker checks again (`overwrite: false` and the file
+  there answers `ExportExists`, which opens the same confirm). Fetched rows
+  go as `DbCommand::Export(ExportJob { source: Fetched(Arc<QueryResult>) })`
+  (the tab's own result, so the worker no longer keeps `last`) and the
+  dialog waits as before. All rows queue a `Queued { export }` in the
+  session as a `JobKind::Export` job; the dialog closes, the worker sends
+  `ExportProgress` per batch, the status line and drawer read `exporting ·
+  120 000 rows · 2.8 s`, `ctrl-c` / drawer `c` cancel it (`export
+  cancelled`), and closing the session cancels it before dropping the
+  worker. Toasts: `exported 1 000 rows to ~/exports/orders.csv` (a warning
+  with Excel's note), `could not export 7 rows to …: …` and `export to …
+  failed after 3 000 rows: …`. With no result `ctrl-e` toasts `nothing to
+  export` and the palette leaves `Export result…` out. The palette's
+  `export csv|tsv|json|xlsx <path>` write the active tab's rows at once
+  (`export tsv` is now TSV) and do not replace a file that is there.
+- **Keys.** `ExportResults` is Results `ctrl-e` (was `ctrl-s`); re-accepted
+  after review: the help, hints, inspector, palette and `print_config_default`
+  snapshots and `dialog_export_120x40`. `export_form_80x24` (views_tests) is
+  gone: `export_dialog_csv_80x24` replaces it.
+- **Tests.** `exporter_tests.rs` (the ported five, every listed test,
+  `prop_csv_export_round_trips` reading back with the `csv` crate, Excel
+  read back with `calamine` and its XML through `zip`, all three new
+  dev-dependencies; zip was in the tree already). `tests/db_export.rs` has
+  the three DB tests per backend (SQLite ran here; the servers did not).
+  `exportform_tests.rs` has the listed form and harness tests, the ported
+  `home.rs` ones, cancel, close-session, failure and warning toasts, and the
+  six snapshots plain and styled (the harness answers probes itself from
+  `with_existing_file`, `~` being `/home/test`). `db_tests` and
+  `runtime_tests` cover the worker and the probe.
+- **Not done.** The `selection` scope: the grid has a cell cursor and no
+  row or range selection (T303), so the choice is not offered. The Rows
+  choice shows its value only (`‹ fetched rows ›`), not the mockup's three
+  options side by side, since the T203 form draws one value. The footer
+  reads `→ change` (one action per hint). `\r\n` is a Line ends row for CSV
+  only. No pty run of the real binary was made.
+- **Checks run locally:** `cargo fmt --all`, clippy with `-D warnings`,
+  `QRY_KEYRING=off QRY_DB_TESTS=skip CI=true cargo test --workspace
+  --all-features --locked` and the CI docs command.

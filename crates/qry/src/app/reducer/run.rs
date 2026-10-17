@@ -118,7 +118,11 @@ pub(crate) fn enqueue_on(
     let statements: Vec<Queued> = statements
         .into_iter()
         .map(|mut q| {
-            q.job = Some(jobs.enqueue(id, JobKind::Query, q.sql.clone()));
+            let kind = match q.export {
+                Some(_) => JobKind::Export,
+                None => JobKind::Query,
+            };
+            q.job = Some(jobs.enqueue(id, kind, q.sql.clone()));
             q
         })
         .collect();
@@ -153,6 +157,10 @@ pub(super) fn cancel_session(state: &mut State, id: SessionId, fx: &mut Vec<Effe
     let Some(job) = session.in_flight.as_ref().and_then(|q| q.job) else {
         return false;
     };
+    let exporting = session
+        .in_flight
+        .as_ref()
+        .is_some_and(|q| q.export.is_some());
     if state.jobs.cancel(job, now) != Cancelled::Running {
         return false;
     }
@@ -162,7 +170,12 @@ pub(super) fn cancel_session(state: &mut State, id: SessionId, fx: &mut Vec<Effe
         }
     }
     fx.push(Effect::CancelQuery(id));
-    notify(state, Notice::info("query cancelled"), fx);
+    let what = if exporting {
+        "export cancelled"
+    } else {
+        "query cancelled"
+    };
+    notify(state, Notice::info(what), fx);
     true
 }
 
@@ -206,8 +219,28 @@ pub(crate) fn drop_held(state: &mut State) {
     }
 }
 
+/// Session `id`'s export job `job` has ended: it is no longer what the
+/// session runs, and what it did to the transaction holds if it `ok`.
+/// Returns whether it was what the session was running.
+pub(super) fn export_ended(state: &mut State, id: SessionId, job: JobId, ok: bool) -> bool {
+    let Some(session) = state.sessions.get_mut(id) else {
+        return false;
+    };
+    if session.in_flight.as_ref().and_then(|q| q.job) != Some(job) {
+        return false;
+    }
+    session.in_flight = None;
+    session.running = session.running.saturating_sub(1);
+    if let Some(Some(begins)) = session.tx_changes.pop_front()
+        && ok
+    {
+        session.in_transaction = begins;
+    }
+    true
+}
+
 /// Sends session `id`'s next statement, if its worker is free.
-fn pump(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
+pub(super) fn pump(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
     let Some(session) = state.sessions.get_mut(id) else {
         return;
     };
@@ -222,10 +255,14 @@ fn pump(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
     };
     session.running += 1;
     session.tx_changes.push_back(tx_change(&next.sql));
-    let command = if next.all_rows {
-        DbCommand::QueryAll(next.sql.clone())
-    } else {
-        DbCommand::Query(next.sql.clone())
+    let command = match &next.export {
+        // The export answers with its job, so its progress finds it.
+        Some(export) => DbCommand::Export(Box::new(crate::db::ExportJob {
+            job: next.job,
+            ..(**export).clone()
+        })),
+        None if next.all_rows => DbCommand::QueryAll(next.sql.clone()),
+        None => DbCommand::Query(next.sql.clone()),
     };
     fx.push(Effect::Db(id, command));
     if let Some(job) = next.job {

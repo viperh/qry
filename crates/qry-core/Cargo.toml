@@ -43,6 +43,10 @@ tokio-rusqlite = { workspace = true }
 unicode-width = { workspace = true }
 
 [dev-dependencies]
+# Reads the exported workbooks and CSV files back (T307).
+calamine = { workspace = true }
+csv = { workspace = true }
+zip = { workspace = true }
 criterion = { workspace = true }
 # A TLS server for the Oracle tests.
 rustls = { workspace = true }

@@ -17,10 +17,15 @@ fn harness() -> AppHarness {
     AppHarness::new(Config::embedded())
 }
 
-/// Opens the results' Export modal: ctrl-s with the results focused.
+/// Opens the results' Export modal on a result: ctrl-e with the results
+/// focused. The export tests themselves are in `exportform_tests.rs`.
 fn open_export(h: &mut AppHarness) -> &mut AppHarness {
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        qry_core::testing::grid(2, 2),
+    )));
+    h.take_effects();
     h.state_mut().focus = Focus::Results;
-    h.keys("ctrl-s")
+    h.keys("ctrl-e")
 }
 
 #[test]
@@ -89,29 +94,6 @@ fn keys_reach_the_open_modal_and_it_reopens_empty() {
     h.keys("esc");
     open_export(&mut h);
     assert!(!h.render(80, 50).contains("rows.csv"));
-}
-
-#[test]
-fn a_failed_export_keeps_the_modal_and_the_path() {
-    let mut h = harness();
-    open_export(&mut h)
-        .type_str("no/such/dir/rows.csv")
-        .keys("enter");
-
-    let effects = h.take_effects();
-    let [Effect::Db(_, DbCommand::Export(config))] = effects.as_slice() else {
-        panic!("expected an export, got {effects:?}");
-    };
-    assert_eq!(config.path, "no/such/dir/rows.csv");
-    assert_eq!(h.dialog_title(), Some("Export"), "still open");
-    assert!(h.render(80, 50).contains("Exporting"));
-
-    h.db(DbAnswer::ExportFailed(
-        "could not write no/such/dir/rows.csv".into(),
-    ));
-    let text = h.render(80, 50);
-    assert!(text.contains("could not write"), "{text}");
-    assert!(text.contains("no/such/dir/rows.csv"), "{text}");
 }
 
 #[test]
@@ -218,53 +200,6 @@ fn exporting_no_saved_connections_is_refused_in_the_modal() {
         "{text}"
     );
     assert_eq!(h.dialog_title(), Some("Export Connections"));
-}
-
-#[test]
-fn a_written_export_closes_the_modal() {
-    let mut h = harness();
-    open_export(&mut h).type_str("rows.csv").keys("enter");
-    assert!(matches!(
-        h.take_effects().as_slice(),
-        [Effect::Db(_, DbCommand::Export(_))]
-    ));
-
-    h.db(DbAnswer::Exported("rows.csv".into()));
-    assert!(h.state().dialog().is_none());
-    assert_eq!(h.dialog_title(), None);
-}
-
-#[test]
-fn late_answer_for_closed_modal_is_ignored() {
-    let mut h = harness();
-    open_export(&mut h).type_str("rows.csv").keys("enter esc");
-    assert!(h.state().dialog().is_none());
-
-    let before = h.state().clone();
-    h.db(DbAnswer::Exported("rows.csv".into()));
-    h.db(DbAnswer::ExportFailed("too late".into()));
-    let mut after = h.state().clone();
-    after.dirty = before.dirty;
-    assert_eq!(after, before, "a late answer changed the state");
-    assert!(h.state().overlays.is_empty());
-}
-
-#[test]
-fn answer_for_other_modal_is_ignored() {
-    let mut h = harness();
-    // An export is waiting, and a connection's answer arrives late.
-    open_export(&mut h).type_str("rows.csv").keys("enter");
-    h.db(DbAnswer::Connected(":memory:".into()));
-    h.db(DbAnswer::ConnectFailed("nope".into()));
-
-    let text = h.render(80, 50);
-    let dialog = h.state().dialog();
-    assert!(
-        dialog.is_some(),
-        "the export modal was closed by a connection"
-    );
-    assert_eq!(dialog.unwrap().form().error(), None);
-    assert!(text.contains("Exporting"), "{text}");
 }
 
 #[test]

@@ -6,14 +6,14 @@ expression: "h.render(120, 40)"
  SCHEMA                       │ QUERY  ln 1, col 1                                                                      
 ▌▸ ⠋ sq  scratch              │  1 │                                                                                    
             ┌──────────────────────────────────────────────────────────────────────────────────────────────┐            
-            │ › exp                                                                                 6 / 66 │            
+            │ › exp                                                                                 5 / 65 │            
             │ Export connections…                           connection                                     │            
-            │ Export results                                results                                 ctrl-s │            
             │ export csv <path>                             results                                        │            
             │ export tsv <path>                             results                                        │            
             │ export json <path>                            results                                        │            
             │ export xlsx <path>                            results                                        │            
             └──────────────────────────────────────────────────────────────────────────────────────────────┘            
+                              │                                                                                         
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         

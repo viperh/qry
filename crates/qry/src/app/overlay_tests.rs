@@ -77,7 +77,10 @@ fn each_dialog_uses_its_accent() {
     assert_eq!(corner(&mut h), t.teal, "Import");
     h.keys("esc");
     h.state_mut().focus = state::Focus::Results;
-    h.keys("ctrl-s");
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        qry_core::testing::grid(2, 2),
+    )));
+    h.keys("ctrl-e");
     assert_eq!(corner(&mut h), t.amber, "Export");
     h.keys("esc");
     with_saved(&mut h);
@@ -208,13 +211,17 @@ fn dialog_snapshots() {
 
     let mut h = harness();
     h.state_mut().focus = state::Focus::Results;
-    h.keys("ctrl-s");
+    h.db(DbAnswer::QueryDone(std::sync::Arc::new(
+        qry_core::testing::grid(2, 2),
+    )));
+    h.keys("ctrl-e");
     insta::assert_snapshot!("dialog_export_120x40", h.render(120, 40));
     insta::assert_snapshot!(
         "dialog_export_120x40_styled",
         styled(&h.render_buffer(120, 40))
     );
-    h.keys("esc ctrl-o");
+    let mut h = harness();
+    h.keys("ctrl-o");
     insta::assert_snapshot!("dialog_import_120x40", h.render(120, 40));
     h.keys("esc");
     h.db(DbAnswer::NeedPassword {

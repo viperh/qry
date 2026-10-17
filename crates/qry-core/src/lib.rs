@@ -24,7 +24,7 @@ pub mod sqlite;
 #[cfg(any(test, feature = "test-util"))]
 pub mod testing;
 
-pub use exporter::Exporter;
+pub use exporter::{ExportOptions, RowSink};
 use mariadb::{MariaDb, MariadbConfig};
 use mysql::{MySql, MySqlConfig};
 use oracle::{Oracle, OracleConfig};
@@ -44,32 +44,71 @@ pub enum DatabaseType {
 pub enum ExportType {
     #[default]
     Csv,
-    Excel,
-    Text,
+    Tsv,
     Json,
+    JsonLines,
+    Excel,
+    Markdown,
+    SqlInsert,
+    Text,
 }
 
 impl ExportType {
-    /// In the order the export form offers them.
-    pub const ALL: [ExportType; 4] = [
+    /// In the order the export dialog offers them.
+    pub const ALL: [ExportType; 8] = [
         ExportType::Csv,
-        ExportType::Excel,
-        ExportType::Text,
+        ExportType::Tsv,
         ExportType::Json,
+        ExportType::JsonLines,
+        ExportType::Excel,
+        ExportType::Markdown,
+        ExportType::SqlInsert,
+        ExportType::Text,
     ];
 
     /// Whether the rows are separated by a character the user chooses.
-    /// Excel writes cells and JSON writes objects, so neither uses one.
+    /// TSV is always tabs, and the others write cells, objects or
+    /// statements.
     pub fn uses_separator(self) -> bool {
         matches!(self, ExportType::Csv | ExportType::Text)
+    }
+
+    /// Whether a header line can be left out: JSON names every value
+    /// anyway.
+    pub fn has_header(self) -> bool {
+        !matches!(self, ExportType::Json | ExportType::JsonLines)
+    }
+
+    /// Whether a NULL is written as some text the user chooses. JSON has
+    /// `null` and SQL `NULL`.
+    pub fn uses_null_as(self) -> bool {
+        !matches!(
+            self,
+            ExportType::Json | ExportType::JsonLines | ExportType::SqlInsert
+        )
+    }
+
+    /// Whether the file is text, with an encoding to choose.
+    pub fn is_text(self) -> bool {
+        self != ExportType::Excel
+    }
+
+    /// The most rows the format holds, if it has a limit: a worksheet has
+    /// 1 048 576 rows, one of them the header.
+    pub fn row_limit(self) -> Option<usize> {
+        (self == ExportType::Excel).then_some(exporter::EXCEL_MAX_ROWS)
     }
 
     pub fn extension(self) -> &'static str {
         match self {
             ExportType::Csv => "csv",
-            ExportType::Excel => "xlsx",
-            ExportType::Text => "txt",
+            ExportType::Tsv => "tsv",
             ExportType::Json => "json",
+            ExportType::JsonLines => "jsonl",
+            ExportType::Excel => "xlsx",
+            ExportType::Markdown => "md",
+            ExportType::SqlInsert => "sql",
+            ExportType::Text => "txt",
         }
     }
 
@@ -93,9 +132,13 @@ impl std::fmt::Display for ExportType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             ExportType::Csv => "CSV",
-            ExportType::Excel => "Excel",
-            ExportType::Text => "Text",
+            ExportType::Tsv => "TSV",
             ExportType::Json => "JSON",
+            ExportType::JsonLines => "JSON lines",
+            ExportType::Excel => "Excel",
+            ExportType::Markdown => "Markdown",
+            ExportType::SqlInsert => "SQL INSERT",
+            ExportType::Text => "Text",
         })
     }
 }
@@ -193,6 +236,20 @@ impl Driver {
             bail!("not connected to a database");
         };
         db.query(sql).await
+    }
+
+    /// Runs `sql` and streams every row to `out`, `fetch_size` at a time
+    /// (see [`Database::query_stream`]).
+    pub async fn query_stream(
+        &self,
+        sql: &str,
+        fetch_size: usize,
+        out: shared::RowSender,
+    ) -> Result<u64> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.query_stream(sql, fetch_size, out).await
     }
 
     /// Runs `sql`, keeping at most `max_rows` rows (0 keeps all).

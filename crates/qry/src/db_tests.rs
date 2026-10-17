@@ -208,55 +208,131 @@ async fn failures_become_error_status() {
     ));
 }
 
+/// An export of `source` to `path`, as the dialog sends it.
+fn export(source: ExportSource, path: &str, overwrite: bool) -> DbCommand {
+    DbCommand::Export(Box::new(ExportJob {
+        job: None,
+        source,
+        path: path.into(),
+        etype: ExportType::Csv,
+        options: ExportOptions::default(),
+        overwrite,
+    }))
+}
+
 #[tokio::test]
-async fn export_writes_the_last_result() {
+async fn export_writes_the_fetched_rows() {
     let (db, mut answers) = spawn_first();
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("rows.csv").display().to_string();
+    // The extension is added.
+    let path = dir.path().join("rows").display().to_string();
+    let rows = Arc::new(result(
+        &["id", "name"],
+        &[&[Some("1"), Some("alice")], &[Some("2"), None]],
+    ));
 
-    // Nothing has run yet, so there is nothing to export.
-    db.send(DbCommand::Export(ExportConfig {
-        path: path.clone(),
-        separator: ",".into(),
-        etype: ExportType::Csv,
-    }))
-    .unwrap();
+    db.send(export(ExportSource::Fetched(rows.clone()), &path, false))
+        .unwrap();
+    let written = format!("{path}.csv");
     assert_eq!(
         answers.recv().await,
-        Some(DbAnswer::ExportFailed(
-            "Nothing to export yet: run a query first".into()
-        ))
+        Some(DbAnswer::Exported {
+            job: None,
+            rows: 2,
+            path: written.clone(),
+            warning: None,
+        })
     );
     assert_eq!(
-        answers.recv().await,
-        Some(error("Nothing to export yet: run a query first".into()))
-    );
-
-    db.send(in_memory()).unwrap();
-    db.send(DbCommand::Query(
-        "WITH t(id, name) AS (VALUES (1, 'alice'), (2, NULL)) SELECT * FROM t".into(),
-    ))
-    .unwrap();
-    db.send(DbCommand::Export(ExportConfig {
-        path: path.clone(),
-        separator: ",".into(),
-        etype: ExportType::Csv,
-    }))
-    .unwrap();
-
-    // Connected, its status, QueryDone, its status, Exported, its status.
-    let mut messages = Vec::new();
-    while messages.len() < 6 {
-        messages.push(answers.recv().await.unwrap());
-    }
-    assert_eq!(
-        messages.last(),
-        Some(&success(format!("Exported 2 rows to {path}")))
-    );
-    assert_eq!(
-        std::fs::read_to_string(&path).unwrap(),
+        std::fs::read_to_string(&written).unwrap(),
         "id,name\n1,alice\n2,\n"
     );
+
+    // It is there now: left alone until the user says to replace it.
+    db.send(export(ExportSource::Fetched(rows.clone()), &path, false))
+        .unwrap();
+    assert_eq!(
+        answers.recv().await,
+        Some(DbAnswer::ExportExists {
+            job: None,
+            path: written.clone(),
+        })
+    );
+    db.send(export(ExportSource::Fetched(rows), &path, true))
+        .unwrap();
+    assert!(matches!(
+        answers.recv().await,
+        Some(DbAnswer::Exported { rows: 2, .. })
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_export_names_the_path() {
+    let (db, mut answers) = spawn_first();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("no/such/rows.csv").display().to_string();
+    let rows = Arc::new(grid(3, 1));
+    db.send(export(ExportSource::Fetched(rows), &path, false))
+        .unwrap();
+    let Some(DbAnswer::ExportFailed {
+        job: None,
+        rows: 3,
+        path: shown,
+        message,
+    }) = answers.recv().await
+    else {
+        panic!("expected a failure");
+    };
+    assert_eq!(shown, path);
+    assert!(
+        message.contains("could not write") && message.contains("does not exist"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn an_export_of_every_row_streams_with_progress() {
+    let (db, mut answers) = spawn_first();
+    db.send(in_memory()).unwrap();
+    answers.recv().await; // Connected
+    answers.recv().await; // its status message
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("all.csv").display().to_string();
+    let sql = "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 2500) \
+               SELECT n FROM s";
+    db.send(DbCommand::Export(Box::new(ExportJob {
+        job: Some(JobId(7)),
+        source: ExportSource::Rerun(sql.into()),
+        path: path.clone(),
+        etype: ExportType::Csv,
+        options: ExportOptions::default(),
+        overwrite: false,
+    })))
+    .unwrap();
+    let mut progress = Vec::new();
+    loop {
+        match answers.recv().await.unwrap() {
+            DbAnswer::ExportProgress { job, rows } => {
+                assert_eq!(job, JobId(7));
+                progress.push(rows);
+            }
+            answer => {
+                assert_eq!(
+                    answer,
+                    DbAnswer::Exported {
+                        job: Some(JobId(7)),
+                        rows: 2500,
+                        path: path.clone(),
+                        warning: None,
+                    }
+                );
+                break;
+            }
+        }
+    }
+    assert_eq!(progress, [1000, 2000, 2500]);
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(text.lines().count(), 2501);
 }
 
 #[tokio::test]
@@ -280,10 +356,6 @@ async fn a_driver_error_comes_back_as_a_status_error() {
             },
             error("relation \"nope\" does not exist".into())
         ]
-    );
-    assert!(
-        worker.last.is_none(),
-        "a failed query leaves nothing to export"
     );
     assert_eq!(db.calls(), ["SELECT * FROM nope"]);
 }

@@ -4,7 +4,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ Global                                                     Results · Copy & search                                   │
-│ ctrl-q               quit                                  ctrl-s      export the results to a file                  │
+│ ctrl-q               quit                                  ctrl-e      export the result to a file                   │
 │ ctrl-z               suspend to the shell                  /           search the results                            │
 │ F1                   show / hide the help                  y           copy the cell                                 │
 │ ctrl-p               command palette                       Y           copy the row                                  │
@@ -62,7 +62,7 @@ expression: "styled(&h.render_buffer(w, ht))"
 61,2 Rgb(242, 176, 74) Rgb(22, 28, 37) BOLD
 67,2 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 73,2 Rgb(138, 148, 163) Rgb(22, 28, 37) NONE
-101,2 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
+100,2 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE
 119,2 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 0,3 Rgb(79, 193, 201) Rgb(22, 28, 37) NONE
 1,3 Rgb(211, 217, 224) Rgb(22, 28, 37) NONE

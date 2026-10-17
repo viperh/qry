@@ -185,6 +185,13 @@ fn detect(value: &Value) -> Option<Format> {
     }
 }
 
+/// The home directory, or nothing when there is none to find.
+pub(crate) fn home_dir() -> PathBuf {
+    directories::BaseDirs::new()
+        .map(|dirs| dirs.home_dir().to_path_buf())
+        .unwrap_or_default()
+}
+
 /// `~/x` is the home directory's `x`, as a shell would read it.
 pub(crate) fn expand_home(path: &str) -> PathBuf {
     let path = path.trim();

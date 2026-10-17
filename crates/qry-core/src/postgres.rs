@@ -9,7 +9,10 @@ use tokio_postgres::{Client, NoTls, SimpleQueryMessage};
 
 use crate::{
     Database, DatabaseType,
-    shared::{CancelHandle, ColumnMeta, QueryError, QueryResult, SslMode, ValueKind, first_column},
+    shared::{
+        self, CancelHandle, ColumnMeta, QueryError, QueryResult, RowSender, SslMode, StreamItem,
+        ValueKind, first_column,
+    },
 };
 
 /// A boolean as the text protocol writes it (`t`, `f`), as `true` or
@@ -20,6 +23,24 @@ fn bool_text(value: String) -> String {
         "f" => "false".into(),
         _ => value,
     }
+}
+
+/// Sends a batch of rows, booleans written as every backend shows them.
+async fn send_rows(
+    out: &RowSender,
+    columns: &[ColumnMeta],
+    mut rows: Vec<Vec<Option<String>>>,
+) -> Result<()> {
+    for (i, column) in columns.iter().enumerate() {
+        if column.kind == ValueKind::Bool {
+            for row in &mut rows {
+                if let Some(cell) = row.get_mut(i) {
+                    *cell = cell.take().map(bool_text);
+                }
+            }
+        }
+    }
+    shared::send(out, StreamItem::Rows(rows)).await
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -191,6 +212,68 @@ impl Database for Postgres {
             elapsed: std::time::Duration::ZERO,
             truncated,
         })
+    }
+
+    /// Reads the simple-protocol stream as it arrives, handing on
+    /// `fetch_size` rows at a time, so no more than a batch is held.
+    async fn query_stream(&self, sql: &str, fetch_size: usize, out: RowSender) -> Result<u64> {
+        let fetch_size = fetch_size.max(1);
+        let described: Option<Vec<ColumnMeta>> = self.client.prepare(sql).await.ok().map(|st| {
+            st.columns()
+                .iter()
+                .map(|c| ColumnMeta::new(c.name(), c.type_().name()))
+                .collect()
+        });
+        let stream = self
+            .client
+            .simple_query_raw(sql)
+            .await
+            .map_err(|e| positioned(sql, e))?;
+        pin_mut!(stream);
+
+        let mut columns: Option<Vec<ColumnMeta>> = None;
+        let mut batch: Vec<Vec<Option<String>>> = Vec::with_capacity(fetch_size);
+        let mut sent = 0u64;
+        while let Some(message) = stream.next().await {
+            let SimpleQueryMessage::Row(row) = message.map_err(|e| positioned(sql, e))? else {
+                continue;
+            };
+            if columns.is_none() {
+                let named: Vec<ColumnMeta> = row
+                    .columns()
+                    .iter()
+                    .map(|c| ColumnMeta::untyped(c.name()))
+                    .collect();
+                let chosen = match &described {
+                    Some(d) if d.len() == named.len() => d.clone(),
+                    _ => named,
+                };
+                shared::send(&out, StreamItem::Columns(chosen.clone())).await?;
+                columns = Some(chosen);
+            }
+            batch.push(
+                (0..row.len())
+                    .map(|i| row.get(i).map(str::to_string))
+                    .collect(),
+            );
+            if batch.len() == fetch_size {
+                sent += batch.len() as u64;
+                let full = std::mem::replace(&mut batch, Vec::with_capacity(fetch_size));
+                send_rows(&out, columns.as_deref().unwrap_or_default(), full).await?;
+            }
+        }
+        match &columns {
+            None => {
+                let columns = described.unwrap_or_default();
+                shared::send(&out, StreamItem::Columns(columns)).await?;
+            }
+            Some(columns) if !batch.is_empty() => {
+                sent += batch.len() as u64;
+                send_rows(&out, columns, batch).await?;
+            }
+            Some(_) => {}
+        }
+        Ok(sent)
     }
 
     /// The extended protocol, which `simple_query` cannot do: the catalog

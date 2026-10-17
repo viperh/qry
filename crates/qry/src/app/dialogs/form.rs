@@ -118,11 +118,13 @@ impl Field {
 }
 
 /// A line a form shows under its fields: green for good news, coral for
-/// bad, teal while something is under way, dim for a remark.
+/// bad, teal while something is under way, dim for a remark. More text in
+/// another tone can follow it on the same line.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Note {
     pub(crate) text: String,
     pub(crate) tone: Tone,
+    pub(crate) more: Vec<(Tone, String)>,
 }
 
 impl Note {
@@ -130,7 +132,14 @@ impl Note {
         Self {
             text: text.into(),
             tone,
+            more: Vec::new(),
         }
+    }
+
+    /// Adds `text` in `tone` after what is there.
+    pub(crate) fn then(mut self, tone: Tone, text: impl Into<String>) -> Self {
+        self.more.push((tone, text.into()));
+        self
     }
 }
 
@@ -139,6 +148,9 @@ pub(crate) enum Tone {
     Ok,
     Error,
     Busy,
+    /// Plain text, as a field's value is drawn.
+    Plain,
+    Dim,
 }
 
 /// The keys a form's footer offers by default.
@@ -176,6 +188,11 @@ pub(crate) trait Form {
     /// Shown next to the title, for what the title cannot carry.
     fn subtitle(&self) -> Option<String> {
         None
+    }
+
+    /// Whether the subtitle is a warning, drawn amber rather than muted.
+    fn subtitle_warns(&self) -> bool {
+        false
     }
 
     /// What is wrong with field `field`, shown in coral on a row of its own

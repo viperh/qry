@@ -16,8 +16,6 @@ pub(crate) mod passwordform;
 pub(crate) mod snippetform;
 pub(crate) mod textinput;
 
-use qry_core::ExportConfig;
-
 use self::{
     confirm::{Confirm, OnConfirm},
     conndialog::ConnDialog,
@@ -98,8 +96,8 @@ pub(crate) enum Submission {
         connection: String,
         password: Password,
     },
-    /// Write the last result to a file.
-    Export(ExportConfig),
+    /// Write the result to a file, as the Export dialog says.
+    Export(Box<exportform::ExportChoice>),
     /// Read connections from another file.
     Import { path: String, format: Format },
     /// Add these connections, picked in the import preview, and save.

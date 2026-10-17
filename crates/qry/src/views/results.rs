@@ -70,6 +70,18 @@ pub(crate) fn summary(state: &State) -> String {
 pub(crate) fn running(state: &State) -> Option<String> {
     let job = state.jobs.running(state.sessions.active().id)?;
     let frame = (state.now.as_millis() / 100) as usize % SPINNER.len();
+    // An export says how far it has got before how long it has taken.
+    if job.kind == qry_core::jobs::JobKind::Export {
+        let rows = match job.state {
+            JobState::Running { rows } => rows,
+            _ => 0,
+        };
+        let mut text = format!("{} exporting · {} rows", SPINNER[frame], format_rows(rows));
+        if let Some(elapsed) = job.elapsed(state.now) {
+            text.push_str(&format!(" · {}", took(elapsed)));
+        }
+        return Some(text);
+    }
     let mut text = format!("{} running", SPINNER[frame]);
     if let Some(elapsed) = job.elapsed(state.now) {
         text.push_str(&format!(" · {}", took(elapsed)));

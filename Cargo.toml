@@ -127,6 +127,11 @@ proptest = "1.11.0"
 rustls = "0.23.45"
 # Scratch directories that clean themselves up.
 tempfile = "3.27.0"
+# Reads exported workbooks and CSV files back in the exporter tests (T307).
+calamine = { version = "0.36.1", default-features = false }
+csv = "1.4.0"
+# Already in the tree through rust_xlsxwriter; opens exported workbooks.
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

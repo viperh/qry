@@ -75,7 +75,10 @@ async fn tls_only_ssl_modes_are_refused_before_connecting() {
 #[test]
 fn each_type_has_an_extension_and_adds_it_once() {
     let extensions: Vec<&str> = ExportType::ALL.iter().map(|t| t.extension()).collect();
-    assert_eq!(extensions, ["csv", "xlsx", "txt", "json"]);
+    assert_eq!(
+        extensions,
+        ["csv", "tsv", "json", "jsonl", "xlsx", "md", "sql", "txt"]
+    );
 
     assert_eq!(ExportType::Csv.with_extension("rows"), "rows.csv");
     assert_eq!(ExportType::Csv.with_extension("rows.csv"), "rows.csv");

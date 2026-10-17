@@ -29,7 +29,7 @@ fn hints_follow_the_focused_context() {
         editor.contains("F5 run") && editor.contains("F8 run all"),
         "{editor}"
     );
-    assert!(results.contains("ctrl-s export"), "{results}");
+    assert!(results.contains("ctrl-e export"), "{results}");
     assert_ne!(tree, editor);
     assert_ne!(editor, results);
     h.keys("ctrl-n");

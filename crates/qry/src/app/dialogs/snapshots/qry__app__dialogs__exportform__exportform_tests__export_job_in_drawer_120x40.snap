@@ -1,0 +1,44 @@
+---
+source: crates/qry/src/app/dialogs/exportform_tests.rs
+expression: "h.render(w, height)"
+---
+ qry  1 scratch ◐                                                                           sqlite · :memory:   NORMAL  
+ SCHEMA                       │ QUERY  ln 1, col 1                                                                      
+      No connections yet      │  1 │                                                                                    
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │ RESULTS  ⠧ exporting · 120 000 rows · 2.8 s                                             
+                              │  │id  │customer  │total                                                                 
+                              │  │int4│text      │numeric                                                               
+                              │1 │   1│customer 1│  10.50                                                               
+                              │2 │   2│customer 2│  20.50                                                               
+                              │3 │   3│customer 3│  30.50                                                               
+                              │4 │   4│customer 4│  40.50                                                               
+                              │5 │   5│customer 5│  50.50                                                               
+                              │6 │   6│customer 6│  60.50                                                               
+                              │7 │   7│customer 7│  70.50                                                               
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+                              │                                                                                         
+ JOBS · 1 running                                                               j select  c cancel  Enter show  J close 
+ ▸ scratch       SELECT * FROM orders                                  exporting 2.8 s    120 000 rows                  
+ connecting to scratch… · ⠧ exporting · 120 000 rows · 2.8 s · sqlite · :memory:                         R 1 / 7  C 1/3 
+ j move  c cancel  Enter show  J close                                                                           ? help

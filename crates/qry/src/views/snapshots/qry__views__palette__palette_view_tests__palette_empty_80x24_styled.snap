@@ -6,7 +6,7 @@ expression: "styled(&h.render_buffer(80, 24))"
  SCHEMA                       │ QUERY  ln 1, col 1                              
 ▌▸ ⠋ sq  scratch              │  1 │                                            
     ┌──────────────────────────────────────────────────────────────────────┐    
-    │ ›                                                            66 / 66 │    
+    │ ›                                                            65 / 65 │    
     │ Quit                            app                           ctrl-q │    
     │ Suspend to the shell            app                           ctrl-z │    
     │ Redraw the screen               view                                 │    

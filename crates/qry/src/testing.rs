@@ -87,7 +87,12 @@ pub struct AppHarness {
     pending: Vec<Pending>,
     /// When each session's stand-in worker finishes what it already has.
     worker_free_at: Busy,
+    /// The files the Export dialog's preview finds already there.
+    existing: Vec<std::path::PathBuf>,
 }
+
+/// The home directory `~` stands for in the harness's export previews.
+pub const TEST_HOME: &str = "/home/test";
 
 /// The tick rate the binary uses by default (`--tick-rate 4`).
 const DEFAULT_TICK_RATE: f64 = 4.0;
@@ -112,6 +117,7 @@ impl AppHarness {
             database: None,
             pending: Vec::new(),
             worker_free_at: Busy::new(),
+            existing: Vec::new(),
         }
     }
 
@@ -125,6 +131,13 @@ impl AppHarness {
     #[must_use]
     pub fn with_database(mut self, db: FakeDatabase) -> Self {
         self.database = Some(db);
+        self
+    }
+
+    /// Has the Export dialog's preview find `path` (`~` being
+    /// [`TEST_HOME`]) already there.
+    pub fn with_existing_file(&mut self, path: impl Into<std::path::PathBuf>) -> &mut Self {
+        self.existing.push(path.into());
         self
     }
 
@@ -348,6 +361,25 @@ impl AppHarness {
                             Some((answer, delay)) => self.schedule(*id, delay, vec![answer]),
                             None => {}
                         }
+                    }
+                    // The preview's look at the disk: answered at once from
+                    // the files the test says exist, and not recorded.
+                    Effect::ProbeExportPath { input, etype } => {
+                        let home = std::path::Path::new(TEST_HOME);
+                        let path = qry_core::exporter::resolve_path(input, *etype, home);
+                        let exists = self.existing.contains(&path);
+                        self.inbox.push_back(UiEvent::File(
+                            crate::app::event::FileAnswer::ExportProbed(
+                                crate::app::event::ExportProbe {
+                                    input: input.clone(),
+                                    etype: *etype,
+                                    resolved: path.display().to_string(),
+                                    exists,
+                                    is_dir: false,
+                                },
+                            ),
+                        ));
+                        continue;
                     }
                     // The fake connects in 42 ms and reports its version.
                     Effect::TestConnection { test, .. } => {

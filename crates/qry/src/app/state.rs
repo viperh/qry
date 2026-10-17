@@ -110,6 +110,8 @@ pub(crate) struct SessionState {
     pub(crate) writes_confirmed: bool,
     /// Statements held back while the `prod` confirm is open.
     pub(crate) held: Vec<Queued>,
+    /// What the Export dialog remembers for this session.
+    pub(crate) export: crate::app::dialogs::exportform::ExportMemory,
 }
 
 impl SessionState {
@@ -141,6 +143,7 @@ impl SessionState {
             label: record.label,
             writes_confirmed: false,
             held: Vec::new(),
+            export: Default::default(),
         }
     }
 
@@ -236,6 +239,9 @@ pub(crate) struct Queued {
     pub(crate) job: Option<JobId>,
     /// Every row, not only the first `max_rows`.
     pub(crate) all_rows: bool,
+    /// Not a query: an export of every row the statement gives, streamed
+    /// to a file.
+    pub(crate) export: Option<Box<crate::db::ExportJob>>,
 }
 
 impl Queued {
@@ -245,6 +251,7 @@ impl Queued {
             span,
             job: None,
             all_rows: false,
+            export: None,
         }
     }
 }

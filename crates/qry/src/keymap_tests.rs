@@ -74,7 +74,7 @@ fn the_defaults_are_the_documented_ones() {
         (K::Results, "/", A::Search),
         (K::Results, "i", A::ToggleInspector),
         (K::Results, "Enter", A::Inspect),
-        (K::Results, "ctrl-s", A::ExportResults),
+        (K::Results, "ctrl-e", A::ExportResults),
         (K::Dialog, "Enter", A::Submit),
         (K::Dialog, "Esc", A::Cancel),
         (K::Dialog, "Tab", A::NextField),

@@ -669,6 +669,12 @@ impl Theme {
         self.pick(Style::new().fg(self.fg_muted), Modifier::empty())
     }
 
+    /// A dialog's subtitle that warns, such as a result cut at the row
+    /// limit: amber.
+    pub fn subtitle_warning(&self) -> Style {
+        self.pick(Style::new().fg(self.amber), Modifier::BOLD)
+    }
+
     /// A value the user changed: amber.
     pub fn value_changed(&self) -> Style {
         self.pick(
