@@ -95,6 +95,19 @@ fn mysql_delimiter_changes_terminator_and_is_stripped() {
     assert!(!parts.iter().any(|p| p.contains("DELIMITER")));
 }
 
+/// With `$` as the terminator, `end$$` ends a statement and leaves an
+/// empty one, which is dropped like any other (found by fuzzing).
+#[test]
+fn a_doubled_custom_delimiter_makes_no_empty_statement() {
+    let src = "DELIMITER $\ncreate procedure p() begin select 1; end$$\nselect 2$";
+    let stmts = split(Dialect::MySql, src);
+    assert!(stmts.iter().all(|s| !s.span.is_empty()), "{stmts:?}");
+    let parts = texts(Dialect::MySql, src);
+    assert_eq!(parts.len(), 2, "{parts:?}");
+    assert!(parts[0].ends_with("end"), "{parts:?}");
+    assert_eq!(parts[1], "select 2");
+}
+
 #[test]
 fn statement_at_cursor_inside() {
     let stmts = split(Dialect::Sqlite, "select 1;\nselect 2;");

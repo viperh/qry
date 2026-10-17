@@ -40,6 +40,9 @@ fn within(tokens: &[Token], region: Range<usize>) -> impl Iterator<Item = Token>
             kind: t.kind,
             span: t.span.start.max(region.start)..t.span.end.min(region.end),
         })
+        // An empty region (`$` right after `end$`, the delimiter being `$`)
+        // still meets the token it falls in; clipped, that is nothing.
+        .filter(|t| !t.span.is_empty())
 }
 
 /// The upper-cased words that start `region`, skipping trivia.

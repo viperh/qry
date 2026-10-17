@@ -213,7 +213,12 @@ async fn indexes_list_their_columns_in_index_order(db: &TestDb) {
 async fn a_name_that_needs_quoting_loads_like_any_other(db: &TestDb) {
     let driver = db.connect().await;
     let dialect = db.backend.dialect();
-    let name = "Odd \"name\" 'x'";
+    // Oracle refuses a `"` in any identifier (ORA-25716), quoted or not.
+    let name = if db.backend == Backend::Oracle {
+        "Odd name 'x'"
+    } else {
+        "Odd \"name\" 'x'"
+    };
     let col = "Mixed Case";
     q(
         &driver,
