@@ -128,13 +128,13 @@ Query plans and EXPLAIN visualisation, server-side cursors for DML, scheduled jo
 
 - [x] Every user-started database operation is a job with id, session, kind, SQL, timing and state, visible in the jobs drawer (`J`).
 - [x] Jobs in one session run in FIFO order. Jobs in different sessions run concurrently.
-- [ ] A spinner, elapsed time and live row count show in the results title and status line while running. Completed results show `N rows · T`.
+- [x] A spinner, elapsed time and live row count show in the results title and status line while running. Completed results show `N rows · T`.
 - [ ] `ctrl-c` cancels the running job of the focused session on Postgres, MySQL, MariaDB and SQLite, and the server statement actually stops (integration-tested with `pg_sleep` / `SLEEP` / a recursive CTE). The Oracle behaviour is implemented or documented as specified.
-- [ ] `max_rows` (default 1000) truncates with a visible footer. `L` continues the same cursor without re-running the query. `A` fetches all, after confirmation.
+- [x] `max_rows` (default 1000) truncates with a visible footer. `L` continues the same cursor without re-running the query. `A` fetches all, after confirmation.
 - [ ] Memory: fetching the first 1000 rows of a 10M-row table never holds more than `max_rows + fetch_size` rows in memory (bench/integration assertion through a counting `RowStream`).
-- [ ] The transaction indicator is correct after `BEGIN`, `COMMIT`, `ROLLBACK` and autocommit toggles. Commit and Rollback work from the palette.
+- [x] The transaction indicator is correct after `BEGIN`, `COMMIT`, `ROLLBACK` and autocommit toggles. Commit and Rollback work from the palette.
 - [ ] Quitting or disconnecting with an open transaction asks first. `Rollback` in that dialog really rolls back (integration test).
-- [ ] Oracle no longer commits unconditionally when autocommit is off.
+- [x] Oracle no longer commits unconditionally when autocommit is off.
 - [ ] Elapsed times in tests come from the virtual clock. No test sleeps.
 
 ## Tests
@@ -236,22 +236,93 @@ Done in this pass:
 - **Fixes on the way.** Statements a failure stops are now cancelled jobs
   rather than left queued.
 
+Second pass (load more, live counts, autocommit):
+
+- **Kept cursor.** Built on T307's `Database::query_stream` rather than a
+  new `RowStream` trait: the worker (`db.rs`) streams a read (`streams`:
+  SELECT, WITH, VALUES, SHOW, EXPLAIN, DESCRIBE that `is_read_only` passes)
+  on a task of its own that holds an `Arc<Driver>`, through a channel of
+  one batch (`Cursor`). It reads `max_rows`, then looks one batch further:
+  if more come, the `Cursor` is kept and the stream simply waits on the
+  full channel, holding the server's cursor; `DbAnswer::CursorKept` goes
+  just before the truncated `QueryDone`. `DbCommand::FetchMore` reads the
+  next `max_rows` from it (`DbAnswer::MoreRows`), never running the
+  statement again. Any other command that needs the connection (a query,
+  `A`'s re-run, a schema load, an export re-run, autocommit, connecting)
+  drops it first and says `CursorClosed`; closing the session drops the
+  worker and with it the stream. Only a backend whose `streams_rows()` is
+  true (new on `Database`, default false: Postgres, SQLite, the fake) is
+  streamed this way. MySQL, MariaDB and Oracle still read through
+  `query_limited` until their `query_stream` reads as it goes (the default
+  reads the whole result first, which a 10M-row table cannot afford); on
+  them a truncated result offers `A` only, and `L` falls back to it
+  (re-run, every row, after the confirm). Closing a Postgres stream early
+  lets the connection drain the rest of the rows before the next
+  statement, as stopping at the limit did before.
+- **App.** `L` (Results, `FetchMore`) queues a `JobKind::FetchMore` job
+  (`Queued.more` names the tab); its rows are appended to that tab
+  (`results::append`: widths grow, a sort is applied again, a search starts
+  over, the label counts again), with a toast `loaded 1 000 more rows`. A
+  second `L` waits for the first. `SessionState.cursor` is the tab number
+  whose stream is kept; queueing any statement clears it at once, so the
+  old tab loses `L` before the worker even says so. The footer reads `…
+  more rows — showing the first 1 000 · L more · A all` (`L` only with a
+  kept stream). `A` (and `L` without a stream) opens `Fetch All Rows`
+  (coral, Cancel first, when the statement is not a read), and only its
+  yes sends `QueryAll`.
+- **Live row counts.** While streaming, the worker sends
+  `DbAnswer::Progress { rows }`, throttled by `Throttle` (every 1 000 rows
+  or 100 ms of the worker's own clock); the reducer only stores the
+  number in the running job, so the results title, the status line and the
+  drawer read `⠹ running · 2.2 s · 12 000 rows`. Non-streamed statements
+  report no progress.
+- **Failed mid-stream.** Rows that came before an error are kept
+  (`DbAnswer::QueryStopped`): the job is `Failed`, the run stops as on a
+  failure, and the tab has a coral footer `stopped after 5 000 rows: …`
+  (`ResultTab.stopped`). A `FetchMore` that fails keeps what it read the
+  same way.
+- **Autocommit.** `Database::set_autocommit(bool)`: MySQL/MariaDB `SET
+  autocommit=0/1`; Postgres emulates it, `BEGIN` to turn it off and
+  `COMMIT` to turn it on, and the worker begins the next transaction after
+  each COMMIT or ROLLBACK while it is off; SQLite the same, but only when
+  `is_autocommit()` says it is needed; Oracle keeps a flag of its own (its
+  driver has no switch), commits pending work when turned back on, and
+  `execute_and_commit` and `query_limited`'s non-query path commit only
+  while it is on. Palette `Toggle autocommit` sends
+  `DbCommand::SetAutocommit(!current)`; the answer
+  (`DbAnswer::Autocommit`) sets `SessionState.autocommit` and toasts. The
+  TX pill, the quit confirm and the close confirm use `tx_open()`
+  (a transaction open, or autocommit off). A new connection starts in
+  autocommit.
+- **Tests.** `db_tests.rs`: `fetch_more_continues_same_cursor` and
+  `another_statement_closes_the_kept_cursor` (SQLite), the fake's
+  `fetch_more_does_not_run_the_statement_again`, progress, mid-stream
+  failure, `Throttle`, `streams`, and autocommit's BEGIN after COMMIT on a
+  SQLite file. `jobs_tests.rs` (harness, virtual clock):
+  `truncated_footer_l_emits_fetch_more_not_rerun`, the fetch-all confirm,
+  a dropped cursor, the non-streaming fallback, the live count, a stopped
+  stream, and the palette toggle; snapshots `confirm_fetch_all_80x24`,
+  `results_failed_mid_stream_120x24` (plain and styled), and the spinner
+  and footer ones updated. `qry-core/tests/db_transactions.rs` runs per
+  backend with `db_or_skip!`: `autocommit_off_rollback_discards` (on
+  Oracle, the spec's `oracle_autocommit_off_does_not_commit`),
+  `autocommit_off_commit_keeps`, `autocommit_back_on_commits` and
+  `stream_kept_continues_where_it_stopped` (a stream left unread goes on
+  from row 1 001, and the connection works after it is dropped); only
+  SQLite ran here.
+
 Not done, and why:
 
-- **`L` load more / keeping a cursor open.** Not built: `A` re-runs the
-  statement with no limit (`DbCommand::QueryAll`) and has no confirm.
-  `FetchMore` exists only as a kind. The memory box needs the streaming
-  `RowStream`, which is not built; the limit is applied while reading, but
-  there is no counting-stream assertion.
-- **Live row counts.** No progress answers from the worker yet, so a
-  running job shows time only.
-- **Autocommit toggle and Oracle.** No `set_autocommit`; Oracle still
-  commits after each non-query statement.
-- **Integration tests** (`cancel_*`, `stream_*`, rollback-on-quit) against
-  real servers are not written; SQLite's limit and interrupt are tested in
+- **Memory box.** A kept stream holds `max_rows` plus up to three batches
+  (the one looked ahead, one in the channel, one waiting to be sent), and
+  MySQL, MariaDB and Oracle materialise; no counting-stream assertion.
+- **`fetch_size` config.** Not added: a streamed query reads 1 000 rows at
+  a time (`QUERY_FETCH_SIZE`).
+- **Integration tests** (`cancel_*`, the spec's `stream_*` and
+  rollback-on-quit) against real servers are not written; SQLite's limit and interrupt are tested in
   `qry-core/src/lib_tests.rs` (the interrupt test waits 100 ms of real time
   for the statement to start, so the "no test sleeps" box stays open).
 - **Snapshots.** `results_running_spinner` and `results_truncated_footer`
-  are 120x24, as 120x20 is under the 80x24 minimum; there is no
-  `results_failed_mid_stream` (no streaming errors yet).
+  are 120x24, as 120x20 is under the 80x24 minimum, and so is
+  `results_failed_mid_stream`.
 

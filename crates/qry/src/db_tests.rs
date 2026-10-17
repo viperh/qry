@@ -22,7 +22,7 @@ fn sqlite(name: &str, path: &str) -> StoredConnection {
 /// A worker already connected to `db`, running on its own task.
 fn spawn_fake(db: &FakeDatabase, answers: Answers) -> UnboundedSender<DbCommand> {
     let worker = Worker {
-        driver: Driver::with_database(Box::new(db.clone())),
+        driver: Arc::new(Driver::with_database(Box::new(db.clone()))),
         ..Worker::default()
     };
     spawn_worker(worker, SessionId::FIRST, answers)
@@ -340,7 +340,7 @@ async fn a_driver_error_comes_back_as_a_status_error() {
     let db = FakeDatabase::new(DatabaseType::Postgres)
         .reply(Reply::Error("relation \"nope\" does not exist".into()));
     let mut worker = Worker {
-        driver: Driver::with_database(Box::new(db.clone())),
+        driver: Arc::new(Driver::with_database(Box::new(db.clone()))),
         ..Worker::default()
     };
 
@@ -383,8 +383,10 @@ async fn commands_run_in_order_even_when_the_first_is_slow() {
     while done.len() < 2 {
         if let Some(DbAnswer::QueryDone(result)) = answers.recv().await {
             let mut result = (*result).clone();
-            // How long it took is measured on the real clock.
+            // How long it took is measured on the real clock, and a
+            // streamed read counts its rows as affected.
             result.elapsed = Duration::ZERO;
+            result.affected = None;
             done.push(result);
         }
     }
@@ -399,4 +401,242 @@ fn a_finished_query_carries_how_long_it_took() {
         panic!("expected QueryDone first");
     };
     assert_eq!(result.elapsed, Duration::from_millis(12));
+}
+
+/// Rows `1..=n` from SQLite.
+fn numbers(n: u32) -> String {
+    format!(
+        "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < {n}) \
+         SELECT n FROM s"
+    )
+}
+
+/// The next answer that is not a progress report or a notice.
+async fn next_answer(answers: &mut Receiver) -> DbAnswer {
+    loop {
+        match answers.recv().await {
+            Some(DbAnswer::Progress { .. } | DbAnswer::Notice(_)) => {}
+            Some(answer) => return answer,
+            None => panic!("the worker stopped"),
+        }
+    }
+}
+
+/// A worker for the first session keeping `max_rows` rows, connected to
+/// an in-memory SQLite.
+async fn sqlite_worker(max_rows: usize) -> (UnboundedSender<DbCommand>, Receiver) {
+    let (tx, rx) = mpsc::unbounded_channel();
+    let (db, _) = spawn(SessionId::FIRST, tx, max_rows);
+    let mut answers = Receiver(rx);
+    db.send(in_memory()).unwrap();
+    assert!(matches!(
+        next_answer(&mut answers).await,
+        DbAnswer::Connected(_)
+    ));
+    (db, answers)
+}
+
+/// The first cell of each row.
+fn firsts(rows: &[Vec<Option<String>>]) -> Vec<String> {
+    rows.iter().map(|r| r[0].clone().unwrap()).collect()
+}
+
+fn range(from: u32, to: u32) -> Vec<String> {
+    (from..=to).map(|n| n.to_string()).collect()
+}
+
+/// The answer to a `FetchMore`.
+async fn more_rows(answers: &mut Receiver) -> MoreRows {
+    match next_answer(answers).await {
+        DbAnswer::MoreRows(more) => *more,
+        other => panic!("expected MoreRows, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn fetch_more_continues_same_cursor() {
+    let (db, mut answers) = sqlite_worker(1000).await;
+    db.send(DbCommand::Query(numbers(2500))).unwrap();
+    assert_eq!(next_answer(&mut answers).await, DbAnswer::CursorKept);
+    let DbAnswer::QueryDone(result) = next_answer(&mut answers).await else {
+        panic!("expected QueryDone");
+    };
+    assert!(result.truncated);
+    assert_eq!(firsts(&result.rows), range(1, 1000));
+
+    db.send(DbCommand::FetchMore).unwrap();
+    let more = more_rows(&mut answers).await;
+    assert_eq!(firsts(&more.rows), range(1001, 2000), "on from row 1 001");
+    assert!(more.more && more.error.is_none());
+
+    db.send(DbCommand::FetchMore).unwrap();
+    let more = more_rows(&mut answers).await;
+    assert_eq!(firsts(&more.rows), range(2001, 2500));
+    assert!(!more.more, "the stream is read to its end");
+
+    // Nothing is kept now.
+    db.send(DbCommand::FetchMore).unwrap();
+    let more = more_rows(&mut answers).await;
+    assert_eq!(more.error.as_deref(), Some(CURSOR_CLOSED));
+}
+
+#[tokio::test]
+async fn another_statement_closes_the_kept_cursor() {
+    let (db, mut answers) = sqlite_worker(1000).await;
+    db.send(DbCommand::Query(numbers(1500))).unwrap();
+    assert_eq!(next_answer(&mut answers).await, DbAnswer::CursorKept);
+    next_answer(&mut answers).await; // QueryDone
+    db.send(DbCommand::Query("SELECT 1 AS one".into())).unwrap();
+    assert_eq!(next_answer(&mut answers).await, DbAnswer::CursorClosed);
+    let DbAnswer::QueryDone(result) = next_answer(&mut answers).await else {
+        panic!("the connection is free again");
+    };
+    assert_eq!(firsts(&result.rows), ["1"]);
+    db.send(DbCommand::FetchMore).unwrap();
+    let more = more_rows(&mut answers).await;
+    assert_eq!(more.error.as_deref(), Some(CURSOR_CLOSED));
+}
+
+#[tokio::test]
+async fn fetch_more_does_not_run_the_statement_again() {
+    let db = FakeDatabase::default().reply(Reply::Rows(grid(2500, 1)));
+    let (tx, rx) = mpsc::unbounded_channel();
+    let mut answers = Receiver(rx);
+    let worker = Worker {
+        driver: Arc::new(Driver::with_database(Box::new(db.clone()))),
+        max_rows: 1000,
+        ..Worker::default()
+    };
+    let worker = spawn_worker(worker, SessionId::FIRST, tx);
+    worker
+        .send(DbCommand::Query("SELECT * FROM t".into()))
+        .unwrap();
+    worker.send(DbCommand::FetchMore).unwrap();
+    worker.send(DbCommand::FetchMore).unwrap();
+    let mut rows = 0;
+    while rows < 2500 {
+        match next_answer(&mut answers).await {
+            DbAnswer::QueryDone(result) => rows += result.rows.len(),
+            DbAnswer::MoreRows(more) => rows += more.rows.len(),
+            _ => {}
+        }
+    }
+    assert_eq!(rows, 2500);
+    assert_eq!(db.calls(), ["SELECT * FROM t"], "run once");
+}
+
+#[tokio::test]
+async fn a_streamed_query_reports_progress_as_it_reads() {
+    let (db, mut answers) = sqlite_worker(0).await;
+    db.send(DbCommand::Query(numbers(5000))).unwrap();
+    let mut seen = Vec::new();
+    loop {
+        match answers.recv().await.unwrap() {
+            DbAnswer::Progress { rows } => seen.push(rows),
+            DbAnswer::QueryDone(result) => {
+                assert_eq!(result.rows.len(), 5000);
+                assert!(!result.truncated, "max_rows 0 keeps every row");
+                break;
+            }
+            _ => {}
+        }
+    }
+    assert!(!seen.is_empty(), "no progress came");
+    assert!(seen.windows(2).all(|w| w[0] < w[1]), "{seen:?}");
+    assert!(seen.iter().all(|&rows| rows <= 5000));
+}
+
+#[tokio::test]
+async fn a_stream_that_fails_midway_keeps_its_rows() {
+    let (db, mut answers) = sqlite_worker(0).await;
+    // abs() of the smallest integer overflows, at row 2 001.
+    let sql = "WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 3000) \
+               SELECT CASE WHEN n > 2000 THEN abs(-9223372036854775807 - 1) ELSE n END FROM s";
+    db.send(DbCommand::Query(sql.into())).unwrap();
+    let DbAnswer::QueryStopped { result, message } = next_answer(&mut answers).await else {
+        panic!("expected QueryStopped");
+    };
+    assert_eq!(firsts(&result.rows), range(1, 2000));
+    assert!(message.contains("overflow"), "{message}");
+}
+
+#[test]
+fn throttle_says_every_thousand_rows_or_hundred_ms() {
+    let start = Instant::now();
+    let mut throttle = Throttle::new(start);
+    assert!(!throttle.due(500, start), "too soon and too few");
+    assert!(throttle.due(1000, start));
+    assert!(!throttle.due(1500, start + Duration::from_millis(50)));
+    assert!(throttle.due(1500, start + Duration::from_millis(100)));
+    assert!(
+        !throttle.due(1500, start + Duration::from_secs(5)),
+        "nothing new to say"
+    );
+}
+
+#[test]
+fn only_reads_are_streamed() {
+    for sql in [
+        "SELECT 1",
+        "with x as (select 1) select * from x",
+        "VALUES (1)",
+        "EXPLAIN SELECT 1",
+    ] {
+        assert!(streams(Dialect::Postgres, sql), "{sql}");
+    }
+    for sql in [
+        "BEGIN",
+        "COMMIT",
+        "INSERT INTO t VALUES (1)",
+        "WITH gone AS (DELETE FROM t RETURNING *) SELECT * FROM gone",
+        "",
+    ] {
+        assert!(!streams(Dialect::Postgres, sql), "{sql}");
+    }
+}
+
+#[tokio::test]
+async fn autocommit_off_begins_again_after_each_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tx.sqlite");
+    let (tx, rx) = mpsc::unbounded_channel();
+    let (db, _) = spawn(SessionId::FIRST, tx, 0);
+    let mut answers = Receiver(rx);
+    db.send(DbCommand::Connect(Box::new(sqlite(
+        "",
+        &path.display().to_string(),
+    ))))
+    .unwrap();
+    db.send(DbCommand::Query("CREATE TABLE t (n INTEGER)".into()))
+        .unwrap();
+    db.send(DbCommand::SetAutocommit(false)).unwrap();
+    for sql in [
+        "INSERT INTO t VALUES (1)",
+        "COMMIT",
+        "INSERT INTO t VALUES (2)",
+    ] {
+        db.send(DbCommand::Query(sql.into())).unwrap();
+    }
+    let mut done = 0;
+    let mut autocommit = None;
+    while done < 4 {
+        match next_answer(&mut answers).await {
+            DbAnswer::QueryDone(_) => done += 1,
+            DbAnswer::Autocommit(outcome) => autocommit = Some(outcome),
+            DbAnswer::QueryFailed { message, .. } => panic!("{message}"),
+            _ => {}
+        }
+    }
+    assert_eq!(autocommit, Some(Ok(false)));
+    // Another connection sees the committed row only: the second insert
+    // went into the transaction begun after the COMMIT.
+    let mut other = Driver::new();
+    other
+        .connect(qry_core::ConnectionConfig::Sqlite(
+            qry_core::sqlite::SqliteConfig::new(&path, true),
+        ))
+        .await
+        .unwrap();
+    let count = other.query("SELECT COUNT(*) FROM t").await.unwrap();
+    assert_eq!(count.rows[0][0].as_deref(), Some("1"));
 }

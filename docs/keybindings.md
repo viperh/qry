@@ -156,6 +156,7 @@ These are the defaults, as `.config/config.json` sets them. A user config can re
 | `>` | widen the column |
 | `=` | reset the column widths |
 | `F` | freeze the first column |
+| `L` | load the next rows |
 | `A` | fetch every row |
 | `J` | show / hide the jobs |
 

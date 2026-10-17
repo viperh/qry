@@ -64,7 +64,10 @@ the last one answered, so a failure can stop the rest of a run. `ctrl-c`
 marks the running job cancelled and emits `Effect::CancelQuery`; the
 runtime uses the connection's cancel handle (taken when it connected, so it
 never needs the busy connection) to stop the statement on the server.
-Queries keep at most `max_rows` rows; the drivers stop reading there.
+Queries keep at most `max_rows` rows; the drivers stop reading there. On
+a backend that streams (Postgres, SQLite), the worker reads a query on a
+task of its own and, when it stops at the limit, keeps the stream waiting
+so `L` reads on from it; whatever next needs the connection closes it.
 
 ## Keys and actions
 

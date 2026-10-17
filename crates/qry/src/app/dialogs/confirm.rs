@@ -28,6 +28,8 @@ pub(crate) enum OnConfirm {
     },
     /// Run the statements waiting on this `prod` session, writes and all.
     RunOnProd(SessionId),
+    /// Run this statement again on this session, keeping every row.
+    FetchAll { session: SessionId, sql: String },
     /// Replace the existing backup at `path` with these connections.
     OverwriteConnections { path: String, ids: Vec<String> },
     /// Roll back these sessions' open transactions, then quit.
@@ -113,6 +115,24 @@ impl Confirm {
             "Run",
             false,
             OnConfirm::RunOnProd(session),
+        )
+    }
+
+    /// Asks before fetching every row of a truncated result: the
+    /// statement runs again and every row it gives is held. `writes` says
+    /// it is not a plain read, so running it again may change data.
+    pub(crate) fn fetch_all(session: SessionId, sql: String, writes: bool) -> Self {
+        let message = if writes {
+            "Run the statement again and keep every row? It is not a SELECT: running it again may change data."
+        } else {
+            "Run the statement again and keep every row? A large result can take a while and a lot of memory."
+        };
+        Self::new(
+            "Fetch All Rows",
+            message,
+            "Fetch all",
+            writes,
+            OnConfirm::FetchAll { session, sql },
         )
     }
 

@@ -156,6 +156,27 @@ impl Database for Sqlite {
         self.run(sql, Vec::new(), max_rows).await
     }
 
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
+    /// BEGIN to turn it off, COMMIT to turn it on, each only when the
+    /// connection is not already that way: SQLite refuses a BEGIN inside a
+    /// transaction and a COMMIT outside one.
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        self.conn
+            .call(move |conn| {
+                match (on, conn.is_autocommit()) {
+                    (true, false) => conn.execute_batch("COMMIT")?,
+                    (false, true) => conn.execute_batch("BEGIN")?,
+                    _ => {}
+                }
+                Ok::<_, tokio_rusqlite::Error>(())
+            })
+            .await?;
+        Ok(())
+    }
+
     async fn query_bound(&self, sql: &str, params: &[String]) -> Result<QueryResult> {
         self.run(sql, params.to_vec(), 0).await
     }

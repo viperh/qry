@@ -23,6 +23,6 @@ expression: "h.render(120, 24)"
                               │   7 │r6c0  │r6c1                                                                        
                               │   8 │r7c0  │r7c1                                                                        
                               │   9 │r8c0  │r8c1                                                                        
-                              │ … more rows — showing the first 1 000 · A fetch all                                     
+                              │ … more rows — showing the first 1 000 · L more · A all                                  
  scratch · sqlite · :memory: · auto                                                                  R 1 / 1 000  C 1/2 
  F5 run  F8 run all  F6 next pane  ctrl-p commands  ctrl-n new conn  ctrl-q quit                                F1 help

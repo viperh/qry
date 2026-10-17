@@ -26,6 +26,7 @@ pub use self::{
     state::{SessionId, SessionStatus, State},
 };
 use crate::{config::Config, theme::Theme};
+pub(crate) use reducer::tx_change;
 
 /// The app: its state, and the reducer that changes it.
 #[derive(Debug, Clone, PartialEq)]

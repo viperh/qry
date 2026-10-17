@@ -67,6 +67,10 @@ pub struct FakeDatabase {
     cancels: Arc<Mutex<usize>>,
     schema: Option<FakeSchema>,
     version: String,
+    /// What [`Database::streams_rows`] says; on unless turned off.
+    streams: bool,
+    /// Every [`Database::set_autocommit`] call, in order.
+    autocommits: Arc<Mutex<Vec<bool>>>,
 }
 
 /// What the fake says when a statement is cancelled, as Postgres does.
@@ -101,7 +105,28 @@ impl FakeDatabase {
             cancels: Arc::default(),
             schema: None,
             version: "fake 1.0".to_string(),
+            streams: true,
+            autocommits: Arc::default(),
         }
+    }
+
+    /// Says it cannot stream rows ([`Database::streams_rows`]), like the
+    /// backends whose stream reads the whole result first.
+    #[must_use]
+    pub fn without_streaming(mut self) -> Self {
+        self.streams = false;
+        self
+    }
+
+    /// Whether it says it streams rows.
+    pub fn streams(&self) -> bool {
+        self.streams
+    }
+
+    /// Every [`Database::set_autocommit`] call so far. They use up no
+    /// scripted reply and are not in [`calls`](Self::calls).
+    pub fn autocommit_calls(&self) -> Vec<bool> {
+        lock(&self.autocommits).clone()
     }
 
     /// What [`Database::server_version`] answers; `fake 1.0` unless set.
@@ -242,6 +267,15 @@ impl Database for FakeDatabase {
             result = resolve(reply) => Ok(crate::shared::truncate(result?, max_rows)),
             () = self.cancel.notified() => Err(anyhow!(CANCELLED)),
         }
+    }
+
+    fn streams_rows(&self) -> bool {
+        self.streams
+    }
+
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        lock(&self.autocommits).push(on);
+        Ok(())
     }
 
     fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {

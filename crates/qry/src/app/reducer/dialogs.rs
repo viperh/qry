@@ -205,6 +205,11 @@ pub(super) fn submit(state: &mut State, fx: &mut Vec<Effect>) {
             connections::delete(state, &id, forget_secret, delete_history, fx);
             return;
         }
+        Submission::Confirmed(OnConfirm::FetchAll { session, sql }) => {
+            close(state);
+            run::fetch_all_confirmed(state, session, sql, fx);
+            return;
+        }
         Submission::Confirmed(OnConfirm::RunOnProd(session)) => {
             run::release(state, session, fx);
             close(state);

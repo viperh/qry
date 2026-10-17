@@ -13,9 +13,13 @@ use crate::notice::Notice;
 pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mut Vec<Effect>) {
     match answer {
         DbAnswer::Connected(label) => {
-            // A new connection starts outside any transaction.
+            // A new connection starts outside any transaction, in
+            // autocommit, with no stream kept.
             if let Some(session) = state.sessions.get_mut(id) {
                 session.in_transaction = false;
+                session.autocommit = true;
+                session.cursor = None;
+                session.cursor_kept = false;
             }
             set_status(
                 state,
@@ -47,6 +51,22 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
             notices::notify(state, notice, fx);
         }
         DbAnswer::QueryDone(result) => run::done(state, id, result, fx),
+        DbAnswer::QueryStopped { result, message } => {
+            run::stopped(state, id, result, message, fx);
+        }
+        DbAnswer::CursorKept => {
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.cursor_kept = true;
+            }
+        }
+        DbAnswer::CursorClosed => {
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.cursor = None;
+            }
+        }
+        DbAnswer::MoreRows(more) => run::more_rows(state, id, *more, fx),
+        DbAnswer::Progress { rows } => run::progress(state, id, rows),
+        DbAnswer::Autocommit(outcome) => run::autocommit_set(state, id, outcome, fx),
         DbAnswer::QueryFailed { message, position } => {
             run::failed(state, id, message, position, fx);
         }
@@ -70,7 +90,7 @@ pub(super) fn answer(state: &mut State, id: SessionId, answer: DbAnswer, fx: &mu
                 session.tx_changes.clear();
                 session.in_transaction = false;
             }
-            run::stopped(state, id);
+            run::worker_gone(state, id);
             dialogs::failed(state, Awaiting::Connect(id), "database worker has stopped");
             dialogs::failed(state, Awaiting::Export(id), "database worker has stopped");
         }

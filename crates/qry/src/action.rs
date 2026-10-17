@@ -45,6 +45,9 @@ pub enum Action {
     /// Ends the session's transaction, keeping or undoing its changes.
     Commit,
     Rollback,
+    /// Turns the session's autocommit off (statements wait for a commit)
+    /// or back on.
+    ToggleAutocommit,
     ExportResults,
     /// Opens the query history.
     History,
@@ -111,6 +114,9 @@ pub enum Action {
     ResetWidths,
     /// Keeps the first column in view while the others scroll.
     FreezeColumn,
+    /// Reads the next rows of a truncated result from its kept cursor,
+    /// without running the statement again.
+    FetchMore,
     /// Runs a truncated result's statement again, for every row.
     FetchAll,
     Inspect,
@@ -194,6 +200,7 @@ impl Action {
             Self::CancelQuery => "Cancel the query (copy when none runs)",
             Self::Commit => "Commit the transaction",
             Self::Rollback => "Roll the transaction back",
+            Self::ToggleAutocommit => "Turn autocommit off / on",
             Self::ExportResults => "Export the result to a file",
             Self::History => "Query history",
             Self::RecallPrev => "Previous statement from the history",
@@ -236,6 +243,7 @@ impl Action {
             Self::WidenColumn => "Widen the column",
             Self::ResetWidths => "Reset the column widths",
             Self::FreezeColumn => "Freeze the first column",
+            Self::FetchMore => "Load the next rows",
             Self::FetchAll => "Fetch every row",
             Self::CopyRow => "Copy the row",
             Self::Inspect => "Inspect the value",
@@ -308,6 +316,7 @@ impl Action {
             Self::CancelQuery => "Cancel query",
             Self::Commit => "Commit",
             Self::Rollback => "Rollback",
+            Self::ToggleAutocommit => "Toggle autocommit",
             Self::ExportResults => "Export result…",
             Self::History => "History",
             Self::SaveSnippet => "Save snippet",
@@ -333,6 +342,7 @@ impl Action {
             Self::WidenColumn => "Widen the column",
             Self::ResetWidths => "Reset the column widths",
             Self::FreezeColumn => "Freeze the first column",
+            Self::FetchMore => "Load more rows",
             Self::FetchAll => "Fetch every row",
             Self::CopyRow => "Copy row",
             Self::Inspect => "Inspect value",
@@ -371,7 +381,8 @@ impl Action {
             | Self::RunSelection
             | Self::CancelQuery
             | Self::Commit
-            | Self::Rollback => "query",
+            | Self::Rollback
+            | Self::ToggleAutocommit => "query",
             Self::History | Self::SaveSnippet | Self::ManageSnippets => "query",
             Self::ExportResults
             | Self::Search
@@ -389,6 +400,7 @@ impl Action {
             | Self::WidenColumn
             | Self::ResetWidths
             | Self::FreezeColumn
+            | Self::FetchMore
             | Self::FetchAll
             | Self::Inspect
             | Self::ToggleInspector => "results",
@@ -445,6 +457,7 @@ impl Action {
             | Self::WidenColumn
             | Self::ResetWidths
             | Self::FreezeColumn
+            | Self::FetchMore
             | Self::FetchAll => KeyContext::Results,
             _ => KeyContext::Global,
         }

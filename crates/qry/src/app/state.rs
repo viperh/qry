@@ -101,6 +101,15 @@ pub(crate) struct SessionState {
     pub(crate) tx_changes: VecDeque<Option<bool>>,
     /// A transaction was begun and not yet committed or rolled back.
     pub(crate) in_transaction: bool,
+    /// Autocommit is on, as every connection starts; off, every statement
+    /// waits for a COMMIT.
+    pub(crate) autocommit: bool,
+    /// The number of the tab whose result's stream the worker keeps open,
+    /// so `L` can read on from it.
+    pub(crate) cursor: Option<usize>,
+    /// The worker said it kept the stream of the result it is about to
+    /// send.
+    pub(crate) cursor_kept: bool,
     /// Expand its connection in the tree once it is open.
     pub(crate) expand_when_connected: bool,
     /// What the schema browser has loaded through this session.
@@ -140,6 +149,9 @@ impl SessionState {
             running: 0,
             tx_changes: VecDeque::new(),
             in_transaction: false,
+            autocommit: true,
+            cursor: None,
+            cursor_kept: false,
             expand_when_connected: false,
             schema: SchemaCache::default(),
             label: record.label,
@@ -158,6 +170,22 @@ impl SessionState {
         self.database = fresh.database;
         self.label = fresh.label;
         self.in_transaction = false;
+        self.autocommit = true;
+        self.cursor = None;
+        self.cursor_kept = false;
+    }
+
+    /// Whether what it runs waits for a COMMIT: a transaction is open, or
+    /// autocommit is off.
+    pub(crate) fn tx_open(&self) -> bool {
+        self.in_transaction || !self.autocommit
+    }
+
+    /// Whether the shown tab's result can load more rows from a kept
+    /// stream.
+    pub(crate) fn can_load_more(&self) -> bool {
+        let tab = &self.tabs[self.active_tab.min(self.tabs.len() - 1)];
+        self.cursor == Some(tab.number) && tab.results.result.as_ref().is_some_and(|r| r.truncated)
     }
 
     pub(crate) fn is_open(&self) -> bool {
@@ -241,6 +269,9 @@ pub(crate) struct Queued {
     pub(crate) job: Option<JobId>,
     /// Every row, not only the first `max_rows`.
     pub(crate) all_rows: bool,
+    /// Not a statement: the next rows of the result in tab number `more`,
+    /// read on from its kept stream.
+    pub(crate) more: Option<usize>,
     /// Not a query: an export of every row the statement gives, streamed
     /// to a file.
     pub(crate) export: Option<Box<crate::db::ExportJob>>,
@@ -253,6 +284,7 @@ impl Queued {
             span,
             job: None,
             all_rows: false,
+            more: None,
             export: None,
         }
     }
@@ -287,6 +319,8 @@ pub(crate) struct ResultTab {
     pub(crate) table: Option<String>,
     /// The statement, to fetch every row of a truncated result again.
     pub(crate) sql: String,
+    /// Why its rows stopped short: the error that ended the stream.
+    pub(crate) stopped: Option<String>,
 }
 
 impl ResultTab {

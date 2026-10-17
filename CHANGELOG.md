@@ -42,6 +42,14 @@ The interface redesign. Everything below lands in the first release after
 - A transaction pill in the status line, Commit and Rollback in the
   palette, and a confirmation before quitting or closing a session with an
   open transaction.
+- `L` on a truncated result loads the next `max_rows` rows from the same
+  cursor without running the statement again (Postgres and SQLite; the
+  other backends ask to fetch everything instead), `A` asks before fetching
+  every row, a running query shows its live row count, and a query that
+  fails partway keeps the rows it read with a footer saying why.
+- `Toggle autocommit` in the palette, with the status line's TX pill
+  following it; Oracle no longer commits after each statement while
+  autocommit is off.
 - Query history per connection (`ctrl-r`, `alt-↑`/`alt-↓`) with passwords
   redacted, and saved snippets.
 - Connection dialogs with per-driver fields, a connection test, labels

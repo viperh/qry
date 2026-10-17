@@ -3,41 +3,41 @@ source: crates/qry/src/app/reducer/help_tests.rs
 expression: text
 ---
 ┌ Help — qry 0.1.0 ────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ ↑                    up                                    connection                                                │
-│ ↓                    down                                                                                            │
-│ ←                    left                                  Dialogs                                                   │
-│ →                    right                                 ctrl-q      quit                                          │
-│ PgUp                 up a page                             F1          show / hide the help                          │
-│ PgDn                 down a page                           ↑           up                                            │
-│ ctrl-Home            to the top                            ↓           down                                          │
-│ ctrl-End             to the bottom                         ←           left                                          │
-│ Home                 start of the line                     →           right                                         │
-│ End                  end of the line                       PgUp        up a page                                     │
-│ Enter                new line                              PgDn        down a page                                   │
-│ Tab                  indent                                Home        start of the line                             │
-│ ctrl-←               previous word                         End         end of the line                               │
-│ ctrl-→               next word                             Esc         cancel / close                                │
-│ shift-←              select left                           Enter       submit                                        │
-│ shift-→              select right                          ctrl-t      test the connection                           │
-│ shift-↑              select up                             Tab         next field                                    │
-│ shift-↓              select down                           shift-Tab   previous field                                │
-│ ctrl-shift-←         select the previous word              Space       next choice                                   │
-│ ctrl-shift-→         select the next word                  Backspace   delete the character before                   │
-│ shift-Home           select to the start of the line       Del         delete the character after                    │
-│ shift-End            select to the end of the line                                                                   │
-│ ctrl-a               select all                            Command palette                                           │
-│ Backspace            delete the character before           ctrl-q      quit                                          │
-│ Del                  delete the character after            F1          show / hide the help                          │
-│ ctrl-w               delete the word before                ctrl-p      command palette                               │
-│ alt-d                delete the word after                 ctrl-Enter  insert and run                                │
-│ ctrl-k               delete to the end of the line         ctrl-d      delete the entry                              │
-│ ctrl-z               undo                                  ↑ ctrl-k    up                                            │
-│ ctrl-y ctrl-shift-z  redo                                  ↓ ctrl-j    down                                          │
-│ ctrl-x               cut                                   ←           left                                          │
-│ ctrl-v               paste                                 →           right                                         │
-│                                                            PgUp        up a page                                     │
-│ Editor · Running                                           PgDn        down a page                                   │
-│ F5 alt-r ctrl-Enter  run the statement                     Home        start of the line                             │
+│ ↑                    up                                    shift-Enter in the tree opens another session on a        │
+│ ↓                    down                                  connection                                                │
+│ ←                    left                                                                                            │
+│ →                    right                                 Dialogs                                                   │
+│ PgUp                 up a page                             ctrl-q      quit                                          │
+│ PgDn                 down a page                           F1          show / hide the help                          │
+│ ctrl-Home            to the top                            ↑           up                                            │
+│ ctrl-End             to the bottom                         ↓           down                                          │
+│ Home                 start of the line                     ←           left                                          │
+│ End                  end of the line                       →           right                                         │
+│ Enter                new line                              PgUp        up a page                                     │
+│ Tab                  indent                                PgDn        down a page                                   │
+│ ctrl-←               previous word                         Home        start of the line                             │
+│ ctrl-→               next word                             End         end of the line                               │
+│ shift-←              select left                           Esc         cancel / close                                │
+│ shift-→              select right                          Enter       submit                                        │
+│ shift-↑              select up                             ctrl-t      test the connection                           │
+│ shift-↓              select down                           Tab         next field                                    │
+│ ctrl-shift-←         select the previous word              shift-Tab   previous field                                │
+│ ctrl-shift-→         select the next word                  Space       next choice                                   │
+│ shift-Home           select to the start of the line       Backspace   delete the character before                   │
+│ shift-End            select to the end of the line         Del         delete the character after                    │
+│ ctrl-a               select all                                                                                      │
+│ Backspace            delete the character before           Command palette                                           │
+│ Del                  delete the character after            ctrl-q      quit                                          │
+│ ctrl-w               delete the word before                F1          show / hide the help                          │
+│ alt-d                delete the word after                 ctrl-p      command palette                               │
+│ ctrl-k               delete to the end of the line         ctrl-Enter  insert and run                                │
+│ ctrl-z               undo                                  ctrl-d      delete the entry                              │
+│ ctrl-y ctrl-shift-z  redo                                  ↑ ctrl-k    up                                            │
+│ ctrl-x               cut                                   ↓ ctrl-j    down                                          │
+│ ctrl-v               paste                                 ←           left                                          │
+│                                                            →           right                                         │
+│ Editor · Running                                           PgUp        up a page                                     │
+│ F5 alt-r ctrl-Enter  run the statement                     PgDn        down a page                                   │
 │                                                                                                                      │
 │ run:  F5 statement  F8 all  ctrl-e selection  results:  / search  y copy cell  Enter inspect value                   │
 │ tree:  Enter connect  Space expand  e edit  D delete  / filter                                                       │

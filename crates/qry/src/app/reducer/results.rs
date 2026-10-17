@@ -42,6 +42,31 @@ pub(super) fn show(results: &mut ResultsState, result: Arc<QueryResult>) {
     results.record_scroll.set(0);
 }
 
+/// Adds `rows` to the end of the result, which is `truncated` while more
+/// wait. The selection, the widths' fit, the sort and a search follow;
+/// the inspector counts again.
+pub(super) fn append(results: &mut ResultsState, rows: Vec<Vec<Option<String>>>, truncated: bool) {
+    let kept = results.data_row(results.row);
+    let Some(shared) = &mut results.result else {
+        return;
+    };
+    let result = Arc::make_mut(shared);
+    result.rows.extend(rows);
+    result.truncated = truncated;
+    let fresh = grid::column_widths(result, MAX_COLUMN_WIDTH);
+    for (width, fresh) in results.widths.iter_mut().zip(fresh) {
+        *width = (*width).max(fresh);
+    }
+    if !results.sort.is_empty() {
+        results.order = Some(sort_permutation(result, &results.sort));
+        results.row = results.grid_row(kept);
+    }
+    if let Some(search) = &mut results.search {
+        search.search = Search::new(&search.input);
+    }
+    results.profile = None;
+}
+
 /// What a `Results` binding does.
 pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
     // `[` and `]` show the result before or after this one.
@@ -59,7 +84,8 @@ pub(super) fn run(state: &mut State, action: Action, fx: &mut Vec<Effect>) {
             run::cancel(state, fx);
             return;
         }
-        Action::FetchAll => return run::fetch_all(state, fx),
+        Action::FetchAll => return run::fetch_all(state),
+        Action::FetchMore => return run::fetch_more(state, fx),
         _ => {}
     }
     let Some((rows, cols)) = state

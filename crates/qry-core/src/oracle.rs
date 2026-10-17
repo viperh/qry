@@ -14,7 +14,10 @@ use std::{
     fmt::Write as _,
     fs,
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -364,6 +367,10 @@ pub struct Oracle {
     /// `Connection`. The driver has no async API of its own.
     conn: Arc<Mutex<Connection>>,
     config: OracleConfig,
+    /// Commit after each statement that is not a query. The driver has no
+    /// autocommit switch of its own, so this is it; on by default, as the
+    /// other backends commit as they go.
+    autocommit: Arc<AtomicBool>,
 }
 
 /// Shows only the (redacted) config: the driver's connection handle has no
@@ -402,6 +409,7 @@ impl Oracle {
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
             config,
+            autocommit: Arc::new(AtomicBool::new(true)),
         })
     }
 
@@ -422,12 +430,13 @@ impl Oracle {
     }
 }
 
-/// Runs a statement that is not a query, then commits. The driver has no
-/// autocommit switch, and the other backends commit as they go, so this one
-/// does too. A statement that fails is not committed.
-fn execute_and_commit(conn: &Connection, sql: &str) -> Result<u64> {
+/// Runs a statement that is not a query, then commits if `autocommit`
+/// says to. A statement that fails is not committed.
+fn execute_and_commit(conn: &Connection, sql: &str, autocommit: bool) -> Result<u64> {
     let affected = conn.execute(sql, &[]).ora()?.rows_affected();
-    conn.commit().ora()?;
+    if autocommit {
+        conn.commit().ora()?;
+    }
     Ok(affected)
 }
 
@@ -443,6 +452,7 @@ impl Database for Oracle {
 
     async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         let sql = sql.to_string();
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
         self.with_conn(move |conn| {
             let failed = |e| query_error(e, &sql);
             let mut stmt = conn
@@ -455,7 +465,9 @@ impl Database for Oracle {
             // CREATE or an INSERT is run instead of rejected.
             if !stmt.is_query() {
                 let affected = stmt.execute(&[]).map_err(failed)?.rows_affected();
-                conn.commit().ora()?;
+                if autocommit {
+                    conn.commit().ora()?;
+                }
                 return Ok(QueryResult::affected(affected));
             }
             let cursor = stmt.query(&[]).map_err(failed)?;
@@ -496,8 +508,19 @@ impl Database for Oracle {
 
     async fn execute(&self, sql: &str) -> Result<u64> {
         let sql = sql.to_string();
-        self.with_conn(move |conn| execute_and_commit(conn, &sql))
+        let autocommit = self.autocommit.load(Ordering::SeqCst);
+        self.with_conn(move |conn| execute_and_commit(conn, &sql, autocommit))
             .await
+    }
+
+    /// Sets the flag statements follow. Turning it on commits what is
+    /// pending, as MySQL's `SET autocommit=1` does.
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        if on {
+            self.with_conn(|conn| conn.commit().ora()).await?;
+        }
+        self.autocommit.store(on, Ordering::SeqCst);
+        Ok(())
     }
 
     /// Oracle keeps no `information_schema`. This follows `CURRENT_SCHEMA`,

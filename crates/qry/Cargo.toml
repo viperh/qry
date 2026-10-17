@@ -63,6 +63,8 @@ serde_json = { workspace = true }
 zeroize = { workspace = true }
 keyring = { workspace = true }
 winresource = { workspace = true }
+# The drivers' errors, as the worker holds them.
+anyhow = { workspace = true }
 
 # `Tui::suspend` raises SIGTSTP, which only exists on unix.
 [target.'cfg(not(windows))'.dependencies]

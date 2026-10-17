@@ -89,7 +89,7 @@ pub(super) fn close_or_confirm(state: &mut State, id: SessionId, fx: &mut Vec<Ef
     let Some(session) = state.sessions.get(id) else {
         return;
     };
-    if session.busy() || session.in_transaction {
+    if session.busy() || session.tx_open() {
         let form = if session.busy() {
             Confirm::close_session(session.id, &session.title)
         } else {

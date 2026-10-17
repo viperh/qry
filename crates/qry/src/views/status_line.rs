@@ -55,7 +55,7 @@ fn items(state: &State, theme: &Theme) -> Vec<Vec<Span<'static>>> {
     if session.is_open() {
         items.push(vec![
             sep(),
-            if session.in_transaction {
+            if session.tx_open() {
                 Span::styled(" TX ", theme.mode_pill(Pill::Edit))
             } else {
                 Span::styled("auto", theme.status_dim())

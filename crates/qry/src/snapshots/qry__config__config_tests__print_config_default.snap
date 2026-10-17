@@ -161,6 +161,7 @@ expression: "Config::embedded().effective_json()"
       ">": "WidenColumn",
       "=": "ResetWidths",
       "F": "FreezeColumn",
+      "L": "FetchMore",
       "A": "FetchAll",
       "Enter": "Inspect",
       "i": "ToggleInspector",

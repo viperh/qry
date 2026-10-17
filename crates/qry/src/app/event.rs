@@ -158,8 +158,29 @@ pub enum DbAnswer {
     SecretNotStored(String),
     /// Wrapped in `Arc` so the state and the export keep the same rows.
     QueryDone(Arc<QueryResult>),
+    /// The query read these rows, then failed: the rows are kept, and
+    /// the message says why it stopped.
+    QueryStopped {
+        result: Arc<QueryResult>,
+        message: String,
+    },
+    /// The query's stream stopped at the row limit and is kept open, for
+    /// a `FetchMore` to read on: sent just before the `QueryDone` of the
+    /// truncated result it belongs to.
+    CursorKept,
+    /// The kept stream was closed, as the next command needed the
+    /// connection: its result can no longer load more.
+    CursorClosed,
+    /// The answer to a `FetchMore`: the next rows of the kept stream.
+    MoreRows(Box<MoreRows>),
+    /// The running statement has read this many rows so far.
+    Progress {
+        rows: u64,
+    },
+    /// Autocommit is now on or off, or why it could not be changed.
+    Autocommit(Result<bool, String>),
     /// The query did not run; the status line that follows says why in
-    /// full. Either this or `QueryDone` ends every query.
+    /// full. Either this, `QueryStopped` or `QueryDone` ends every query.
     QueryFailed {
         message: String,
         /// Where in the statement, as a byte offset, when the server says.
@@ -205,6 +226,29 @@ pub enum DbAnswer {
     WorkerStopped,
 }
 
+/// What a `FetchMore` read on from a kept stream: its next rows, whether
+/// more wait behind them, how long it took, and the error that stopped it,
+/// if one did.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct MoreRows {
+    pub rows: Vec<Vec<Option<String>>>,
+    pub more: bool,
+    pub elapsed: std::time::Duration,
+    pub error: Option<String>,
+}
+
+/// The rows' count only: rows must never reach the log.
+impl std::fmt::Debug for MoreRows {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MoreRows")
+            .field("rows", &self.rows.len())
+            .field("more", &self.more)
+            .field("elapsed", &self.elapsed)
+            .field("error", &self.error)
+            .finish()
+    }
+}
+
 /// Like the derived `Debug`, except that a result shows only its size: a
 /// whole result set must never reach the log.
 impl std::fmt::Debug for DbAnswer {
@@ -224,6 +268,16 @@ impl std::fmt::Debug for DbAnswer {
                 result.rows.len(),
                 result.columns.len()
             ),
+            Self::QueryStopped { result, message } => f
+                .debug_struct("QueryStopped")
+                .field("rows", &result.rows.len())
+                .field("message", message)
+                .finish(),
+            Self::CursorKept => f.write_str("CursorKept"),
+            Self::CursorClosed => f.write_str("CursorClosed"),
+            Self::MoreRows(more) => f.debug_tuple("MoreRows").field(more).finish(),
+            Self::Progress { rows } => f.debug_struct("Progress").field("rows", rows).finish(),
+            Self::Autocommit(outcome) => f.debug_tuple("Autocommit").field(outcome).finish(),
             Self::QueryFailed { message, position } => f
                 .debug_struct("QueryFailed")
                 .field("message", message)

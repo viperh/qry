@@ -141,6 +141,10 @@ impl Database for Postgres {
         Some(Arc::new(Cancel(self.client.cancel_token())))
     }
 
+    fn streams_rows(&self) -> bool {
+        true
+    }
+
     async fn query_limited(&self, sql: &str, max_rows: usize) -> Result<QueryResult> {
         // Preparing first gives the columns' types, and their names even
         // when no row comes back. The simple protocol still runs it, as it

@@ -12,7 +12,7 @@ expression: text
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
-                              │ RESULTS  ⠋ running · 2.2 s                                                              
+                              │ RESULTS  ⠋ running · 2.2 s · 12 000 rows                                                
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
@@ -24,5 +24,5 @@ expression: text
                               │                                                                                         
                               │                                                                                         
                               │                                                                                         
- scratch · ⠋ running · 2.2 s · sqlite · :memory: · auto                                                                 
+ scratch · ⠋ running · 2.2 s · 12 000 rows · sqlite · :memory: · auto                                                   
  ctrl-c cancel  F5 run  F8 run all  F6 next pane  ctrl-p commands  ctrl-n new conn  ctrl-q quit                 F1 help

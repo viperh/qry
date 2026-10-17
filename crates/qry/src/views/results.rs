@@ -199,22 +199,23 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
         draw_search(search, at, theme, frame, line);
     }
 
-    // A truncated result says so on its last line.
-    if result.truncated && area.height > 2 {
+    // A result cut short says so on its last line: dim at the row limit,
+    // coral when an error stopped it.
+    let stopped = &session.tabs[session.active_tab.min(session.tabs.len() - 1)].stopped;
+    if (result.truncated || stopped.is_some()) && area.height > 2 {
         let line = Rect::new(area.x, area.bottom() - 1, area.width, 1);
         area.height -= 1;
-        let fetch = state
-            .config
-            .keymap
-            .chords_for(KeyContext::Results, &Action::FetchAll);
-        let mut text = format!(
-            " … more rows — showing the first {}",
-            thousands(result.rows.len())
-        );
-        if !fetch.is_empty() {
-            text.push_str(&format!(" · {} fetch all", display_chord(&fetch)));
-        }
-        frame.render_widget(Paragraph::new(text).style(theme.dim()), line);
+        let (text, style) = match stopped {
+            Some(error) => (
+                format!(
+                    " stopped after {} rows: {error}",
+                    thousands(result.rows.len())
+                ),
+                theme.value_error(),
+            ),
+            None => (truncated_footer(state, result.rows.len()), theme.dim()),
+        };
+        frame.render_widget(Paragraph::new(text).style(style), line);
     }
 
     let total_rows = result.rows.len();
@@ -408,6 +409,22 @@ pub(crate) fn draw(state: &State, theme: &Theme, frame: &mut Frame, area: Rect) 
             x += w;
         }
     }
+}
+
+/// ` … more rows — showing the first 1 000 · L more · A all`: `L` only
+/// while the result's stream is kept, each key as the keymap has it.
+fn truncated_footer(state: &State, rows: usize) -> String {
+    let keymap = &state.config.keymap;
+    let mut text = format!(" … more rows — showing the first {}", thousands(rows));
+    let more = keymap.chords_for(KeyContext::Results, &Action::FetchMore);
+    if state.sessions.active().can_load_more() && !more.is_empty() {
+        text.push_str(&format!(" · {} more", display_chord(&more)));
+    }
+    let all = keymap.chords_for(KeyContext::Results, &Action::FetchAll);
+    if !all.is_empty() {
+        text.push_str(&format!(" · {} all", display_chord(&all)));
+    }
+    text
 }
 
 /// ` → 3 more cols `, at the end of the header.

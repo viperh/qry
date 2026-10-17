@@ -25,7 +25,7 @@ use std::{
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub use qry_core::testing::{FakeSchema, Reply, grid, result};
-use qry_core::{QueryResult, testing::FakeDatabase};
+use qry_core::{Database, QueryResult, testing::FakeDatabase};
 use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer};
 
 pub use crate::{app::Effect, theme::ThemeEnv};
@@ -89,6 +89,9 @@ pub struct AppHarness {
     worker_free_at: Busy,
     /// The files the Export dialog's preview finds already there.
     existing: Vec<std::path::PathBuf>,
+    /// The rows past the limit of each session's last streamed query, as
+    /// the real worker keeps its stream: what `FetchMore` reads.
+    cursors: std::collections::HashMap<SessionId, VecDeque<Vec<Option<String>>>>,
 }
 
 /// The home directory `~` stands for in the harness's export previews.
@@ -118,11 +121,14 @@ impl AppHarness {
             pending: Vec::new(),
             worker_free_at: Busy::new(),
             existing: Vec::new(),
+            cursors: std::collections::HashMap::new(),
         }
     }
 
-    /// Answers `Connect`, `OpenSession`, `Query` and `LoadSchema` from `db`
-    /// (schema loads from its [`FakeSchema`]),
+    /// Answers `Connect`, `OpenSession`, `Query`, `FetchMore`,
+    /// `SetAutocommit` and `LoadSchema` from `db` (schema loads from its
+    /// [`FakeSchema`]; a truncated read keeps the rest of its rows for
+    /// `FetchMore` when the fake streams, as the worker keeps its stream),
     /// on the virtual clock: a [`Reply::Delay`] arrives once [`advance`]
     /// passes it, and a [`Reply::Hang`] never does. The requests are still
     /// recorded as effects. Without a database they are only recorded.
@@ -336,6 +342,13 @@ impl AppHarness {
     fn drain(&mut self) {
         while let Some(event) = self.inbox.pop_front() {
             for effect in self.app.handle(event) {
+                // What needs the connection closes the kept stream first.
+                if let Effect::Db(id, command) = &effect
+                    && closes_cursor(command)
+                    && self.cursors.remove(id).is_some()
+                {
+                    self.schedule(*id, 0, vec![DbAnswer::CursorClosed]);
+                }
                 match &effect {
                     Effect::Db(id, DbCommand::Connect(record))
                     | Effect::OpenSession(id, record) => {
@@ -346,6 +359,13 @@ impl AppHarness {
                         self.answer_query(*id, sql, max_rows);
                     }
                     Effect::Db(id, DbCommand::QueryAll(sql)) => self.answer_query(*id, sql, 0),
+                    Effect::Db(id, DbCommand::FetchMore) => {
+                        let max_rows = self.app.state().config.max_rows;
+                        self.answer_fetch_more(*id, max_rows);
+                    }
+                    Effect::Db(id, DbCommand::SetAutocommit(on)) if self.database.is_some() => {
+                        self.schedule(*id, 0, vec![DbAnswer::Autocommit(Ok(*on))]);
+                    }
                     Effect::CancelQuery(id) => self.cancel_query(*id),
                     Effect::Db(id, DbCommand::LoadSchema { path, generation }) => {
                         let answer = self.database.as_ref().map(|db| {
@@ -410,6 +430,7 @@ impl AppHarness {
                     // still had to do.
                     Effect::CloseSession(id) => {
                         self.worker_free_at.remove(id);
+                        self.cursors.remove(id);
                         let id = *id;
                         for pending in &mut self.pending {
                             pending
@@ -435,7 +456,18 @@ impl AppHarness {
     /// Stops session `id`'s statement in progress, if any: its answer is
     /// dropped and the failure a cancelled statement gives arrives now.
     fn cancel_query(&mut self, id: SessionId) {
-        let is_answer = |event: &UiEvent| matches!(event, UiEvent::Db(s, DbAnswer::QueryDone(_) | DbAnswer::QueryFailed { .. }) if *s == id);
+        let is_answer = |event: &UiEvent| {
+            matches!(
+                event,
+                UiEvent::Db(
+                    s,
+                    DbAnswer::QueryDone(_)
+                        | DbAnswer::QueryFailed { .. }
+                        | DbAnswer::QueryStopped { .. }
+                        | DbAnswer::MoreRows(_)
+                ) if *s == id
+            )
+        };
         let before = self.pending.len();
         self.pending
             .retain(|pending| !pending.events.iter().any(is_answer));
@@ -455,10 +487,20 @@ impl AppHarness {
         let Some(db) = &self.database else {
             return;
         };
+        let streamed = db.streams() && db::streams(db.kind().dialect(), sql);
         let mut reply = db.next_reply(sql);
         let mut after = 0;
+        let mut kept = None;
         let outcome = loop {
             match reply {
+                // A streamed read stops at the limit and keeps the rest.
+                Reply::Rows(mut result)
+                    if streamed && max_rows > 0 && result.rows.len() > max_rows =>
+                {
+                    kept = Some(result.rows.split_off(max_rows).into());
+                    result.truncated = true;
+                    break Ok(result);
+                }
                 Reply::Rows(result) => break Ok(qry_core::shared::truncate(result, max_rows)),
                 Reply::Affected(count) => {
                     break Ok(QueryResult::affected(count));
@@ -475,8 +517,48 @@ impl AppHarness {
                 }
             }
         };
-        let answer = db::query_answer(outcome, Duration::from_millis(after), None);
-        self.schedule(id, after, answer);
+        let mut answers = Vec::new();
+        if let Some(rest) = kept {
+            self.cursors.insert(id, rest);
+            answers.push(DbAnswer::CursorKept);
+        }
+        answers.extend(db::query_answer(
+            outcome,
+            Duration::from_millis(after),
+            None,
+        ));
+        self.schedule(id, after, answers);
+    }
+
+    /// Reads the next `max_rows` of session `id`'s kept rows, at once.
+    fn answer_fetch_more(&mut self, id: SessionId, max_rows: usize) {
+        if self.database.is_none() {
+            return;
+        }
+        let more = match self.cursors.get_mut(&id) {
+            Some(rest) => {
+                let take = if max_rows == 0 {
+                    rest.len()
+                } else {
+                    max_rows.min(rest.len())
+                };
+                let rows = rest.drain(..take).collect();
+                let more = !rest.is_empty();
+                crate::app::event::MoreRows {
+                    rows,
+                    more,
+                    ..Default::default()
+                }
+            }
+            None => crate::app::event::MoreRows {
+                error: Some(db::CURSOR_CLOSED.into()),
+                ..Default::default()
+            },
+        };
+        if !more.more {
+            self.cursors.remove(&id);
+        }
+        self.schedule(id, 0, vec![DbAnswer::MoreRows(Box::new(more))]);
     }
 
     /// Delivers `answers` from session `id` once its stand-in worker has
@@ -497,6 +579,16 @@ impl AppHarness {
                 events: events.collect(),
             });
         }
+    }
+}
+
+/// Whether the worker closes its kept stream before running `command`, as
+/// [`db`]'s does: everything that needs the connection.
+fn closes_cursor(command: &DbCommand) -> bool {
+    match command {
+        DbCommand::FetchMore => false,
+        DbCommand::Export(job) => !matches!(job.source, db::ExportSource::Fetched(_)),
+        _ => true,
     }
 }
 

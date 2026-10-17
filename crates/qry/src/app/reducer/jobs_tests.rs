@@ -105,8 +105,16 @@ fn finished_jobs_take_the_workers_time() {
     );
 }
 
+/// Only the database effects of `effects`.
+fn db_effects(effects: &[Effect]) -> Vec<&Effect> {
+    effects
+        .iter()
+        .filter(|e| matches!(e, Effect::Db(..)))
+        .collect()
+}
+
 #[test]
-fn truncated_footer_a_fetches_every_row_not_load_more() {
+fn truncated_footer_a_fetches_every_row_after_confirming() {
     let mut h = editor("select * from t", vec![Reply::Rows(grid(1500, 1))]);
     h.keys("f5");
     let result = h.state().results().result.clone().unwrap();
@@ -121,16 +129,217 @@ fn truncated_footer_a_fetches_every_row_not_load_more() {
     h.state_mut().focus = Focus::Results;
     h.take_effects();
     h.keys("A");
+    // No row count is known, so it asks first; nothing runs yet.
+    assert_eq!(h.dialog_title(), Some("Fetch All Rows"));
+    assert!(db_effects(&h.take_effects()).is_empty());
+    insta::assert_snapshot!("confirm_fetch_all_80x24", h.render(80, 24));
+    h.keys("enter");
     let effects = h.take_effects();
     assert_eq!(
-        effects
-            .iter()
-            .filter(|e| matches!(e, Effect::Db(..)))
-            .collect::<Vec<_>>(),
+        db_effects(&effects),
         [&Effect::Db(
             SessionId::FIRST,
             DbCommand::QueryAll("select * from t".into())
         )]
+    );
+}
+
+#[test]
+fn a_cancelled_fetch_all_confirm_runs_nothing() {
+    let mut h = editor("select * from t", vec![Reply::Rows(grid(1500, 1))]);
+    h.keys("f5");
+    h.state_mut().focus = Focus::Results;
+    h.take_effects();
+    h.keys("A esc");
+    assert_eq!(h.dialog_title(), None);
+    assert!(db_effects(&h.take_effects()).is_empty());
+}
+
+#[test]
+fn truncated_footer_l_emits_fetch_more_not_rerun() {
+    let mut h = editor("select * from t", vec![Reply::Rows(grid(2500, 1))]);
+    h.keys("f5").advance(60_000);
+    assert_eq!(
+        h.state().sessions.active().cursor,
+        Some(1),
+        "kept for tab 1"
+    );
+    let text = h.render(120, 40);
+    assert!(
+        text.contains("showing the first 1\u{2009}000 · L more · A all"),
+        "{text}"
+    );
+
+    h.state_mut().focus = Focus::Results;
+    h.take_effects();
+    h.keys("L");
+    let effects = h.take_effects();
+    assert_eq!(
+        db_effects(&effects),
+        [&Effect::Db(SessionId::FIRST, DbCommand::FetchMore)]
+    );
+    let job = h.state().jobs.iter().last().unwrap().clone();
+    assert_eq!(job.kind, qry_core::jobs::JobKind::FetchMore);
+    assert_eq!(job.state, JobState::Done { rows: 1000 });
+    // Appended to the same tab, which still has more.
+    let session = h.state().sessions.active();
+    assert_eq!(session.tabs.len(), 1);
+    let result = session.results().result.clone().unwrap();
+    assert_eq!(result.rows.len(), 2000);
+    assert_eq!(
+        result.rows[1000],
+        grid(2500, 1).rows[1000],
+        "no row repeated"
+    );
+    assert!(result.truncated);
+    h.advance(60_000);
+    assert!(h.render(120, 40).contains("L more"));
+
+    // The last 500, and then nothing more to load.
+    h.keys("L");
+    let result = h.state().results().result.clone().unwrap();
+    assert_eq!(result.rows.len(), 2500);
+    assert!(!result.truncated);
+    assert_eq!(h.state().sessions.active().cursor, None);
+    let text = h.render(120, 40);
+    assert!(!text.contains("… more rows"), "{text}");
+    assert!(text.contains("loaded 500 more rows"), "{text}");
+}
+
+#[test]
+fn another_statement_drops_the_kept_cursor() {
+    let mut h = editor(
+        "select * from t",
+        vec![Reply::Rows(grid(1500, 1)), Reply::Rows(grid(1, 1))],
+    );
+    h.keys("f5");
+    assert_eq!(h.state().sessions.active().cursor, Some(1));
+    h.keys("ctrl-a").type_str("select 1").keys("f5");
+    assert_eq!(h.state().sessions.active().cursor, None);
+
+    // Back on the first tab, which keeps its rows: `L` can only ask to
+    // fetch everything again.
+    h.state_mut().focus = Focus::Results;
+    h.keys("[");
+    assert!(!h.render(120, 40).contains("L more"));
+    h.take_effects();
+    h.keys("L");
+    assert_eq!(h.dialog_title(), Some("Fetch All Rows"));
+    assert!(db_effects(&h.take_effects()).is_empty());
+}
+
+#[test]
+fn without_a_kept_cursor_l_falls_back_to_fetching_all() {
+    let db = FakeDatabase::default()
+        .without_streaming()
+        .reply(Reply::Rows(grid(1500, 1)));
+    let mut h = AppHarness::new(Config::embedded()).with_database(db);
+    h.send(UiEvent::Started);
+    h.advance(60_000);
+    h.keys("tab").type_str("select * from t").keys("f5");
+    h.advance(60_000);
+    assert_eq!(h.state().sessions.active().cursor, None);
+    let text = h.render(120, 40);
+    assert!(
+        text.contains("showing the first 1\u{2009}000 · A all"),
+        "{text}"
+    );
+    h.state_mut().focus = Focus::Results;
+    h.take_effects();
+    h.keys("L enter");
+    assert_eq!(
+        db_effects(&h.take_effects()),
+        [&Effect::Db(
+            SessionId::FIRST,
+            DbCommand::QueryAll("select * from t".into())
+        )]
+    );
+}
+
+#[test]
+fn live_row_count_while_running() {
+    let mut h = editor("select * from events", vec![Reply::Hang]);
+    h.keys("f5").advance(1000);
+    h.db(DbAnswer::Progress { rows: 12_000 });
+    h.advance(1250);
+    assert_eq!(
+        h.state().jobs.iter().last().unwrap().state,
+        JobState::Running { rows: 12_000 }
+    );
+    let text = h.render(120, 24);
+    // The results title and the status line both say it.
+    assert_eq!(
+        text.matches("running · 2.2 s · 12\u{2009}000 rows").count(),
+        2,
+        "{text}"
+    );
+}
+
+#[test]
+fn a_query_stopped_mid_stream_keeps_its_rows() {
+    let mut h = editor("select * from events", vec![Reply::Hang]);
+    h.keys("f5").advance(500);
+    h.db(DbAnswer::QueryStopped {
+        result: std::sync::Arc::new(grid(5000, 2)),
+        message: "could not read block 7".into(),
+    });
+    let job = h.state().jobs.iter().last().unwrap().clone();
+    assert_eq!(job.state, JobState::Failed("could not read block 7".into()));
+    assert_eq!(
+        h.state().results().result.as_ref().unwrap().rows.len(),
+        5000
+    );
+    h.advance(60_000);
+    let buffer = h.render_buffer(120, 24);
+    let text = crate::testing::buffer_lines(&buffer).join("\n");
+    assert!(
+        text.contains("stopped after 5\u{2009}000 rows: could not read block 7"),
+        "{text}"
+    );
+    insta::assert_snapshot!("results_failed_mid_stream_120x24", text);
+    insta::assert_snapshot!(
+        "results_failed_mid_stream_120x24_styled",
+        crate::testing::styled(&buffer)
+    );
+}
+
+#[test]
+fn toggle_autocommit_from_the_palette() {
+    let mut h = editor("select 1", Vec::new());
+    h.keys("ctrl-p").type_str("Toggle autocommit").keys("enter");
+    assert!(h.take_effects().contains(&Effect::Db(
+        SessionId::FIRST,
+        DbCommand::SetAutocommit(false)
+    )));
+    let session = h.state().sessions.active();
+    assert!(!session.autocommit && session.tx_open());
+    let buffer = h.render_buffer(120, 30);
+    assert!(crate::testing::buffer_lines(&buffer)[28].contains(" TX "));
+    assert!(h.render(120, 30).contains("autocommit off"));
+
+    // Quitting now asks, as with an open transaction.
+    h.keys("ctrl-q");
+    assert_eq!(h.dialog_title(), Some("Open Transaction"));
+    h.keys("esc");
+
+    h.keys("ctrl-p").type_str("Toggle autocommit").keys("enter");
+    assert!(h.take_effects().contains(&Effect::Db(
+        SessionId::FIRST,
+        DbCommand::SetAutocommit(true)
+    )));
+    assert!(h.state().sessions.active().autocommit);
+    let buffer = h.render_buffer(120, 30);
+    assert!(crate::testing::buffer_lines(&buffer)[28].contains("auto"));
+}
+
+#[test]
+fn a_failed_autocommit_change_says_why_and_keeps_the_state() {
+    let mut h = editor("select 1", Vec::new());
+    h.db(DbAnswer::Autocommit(Err("not supported".into())));
+    assert!(h.state().sessions.active().autocommit);
+    assert!(
+        h.render(120, 30)
+            .contains("could not change autocommit: not supported")
     );
 }
 
@@ -238,11 +447,16 @@ fn quitting_without_a_transaction_asks_nothing() {
 #[test]
 fn job_snapshots() {
     let mut h = editor("select * from events", vec![Reply::Hang]);
-    h.keys("f5").advance(2400);
+    h.keys("f5").advance(1200);
+    h.db(DbAnswer::Progress { rows: 12_000 });
+    h.advance(1200);
     // 120x20 is under the 80x24 minimum, so these are 24 rows tall.
     let text = h.render(120, 24);
     // Timed at the ticks, every 250 ms.
-    assert!(text.contains("running · 2.2 s"), "{text}");
+    assert!(
+        text.contains("running · 2.2 s · 12\u{2009}000 rows"),
+        "{text}"
+    );
     insta::assert_snapshot!("results_running_spinner_120x24", text);
 
     let mut h = editor("select * from t", vec![Reply::Rows(grid(1500, 2))]);

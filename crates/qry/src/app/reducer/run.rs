@@ -16,6 +16,7 @@ use crate::{
     app::{
         dialogs::{DialogState, confirm::Confirm},
         effects::Effect,
+        event::MoreRows,
         state::{EditorState, Failed, Queued, SessionId, State, TabError},
     },
     connections::ConnLabel,
@@ -115,12 +116,16 @@ pub(crate) fn enqueue_on(
         return;
     }
     let jobs = &mut state.jobs;
+    // A statement closes the kept stream before it runs: the tab that had
+    // it keeps its rows and loses `L`.
+    let closes = statements.iter().any(|q| q.more.is_none());
     let statements: Vec<Queued> = statements
         .into_iter()
         .map(|mut q| {
-            let kind = match q.export {
-                Some(_) => JobKind::Export,
-                None => JobKind::Query,
+            let kind = match (&q.export, q.more) {
+                (Some(_), _) => JobKind::Export,
+                (None, Some(_)) => JobKind::FetchMore,
+                (None, None) => JobKind::Query,
             };
             q.job = Some(jobs.enqueue(id, kind, q.sql.clone()));
             q
@@ -129,6 +134,9 @@ pub(crate) fn enqueue_on(
     let Some(session) = state.sessions.get_mut(id) else {
         return;
     };
+    if closes {
+        session.cursor = None;
+    }
     session.failed = None;
     session.queue.extend(statements);
     pump(state, id, fx);
@@ -189,16 +197,174 @@ pub(super) fn drop_queued(state: &mut State, job: JobId) {
     state.jobs.cancel(job, now);
 }
 
-/// `A` on a truncated result: runs its statement again for every row.
-pub(super) fn fetch_all(state: &mut State, fx: &mut Vec<Effect>) {
+/// `A` on a truncated result: asks, then runs its statement again for
+/// every row. No row count is known beforehand, so it always asks.
+pub(super) fn fetch_all(state: &mut State) {
     let session = state.sessions.active();
     let tab = &session.tabs[session.active_tab.min(session.tabs.len() - 1)];
     if !tab.results.result.as_ref().is_some_and(|r| r.truncated) {
         return;
     }
-    let mut queued = Queued::new(tab.sql.clone(), None);
+    let writes = !is_read_only(session.dialect(), &tab.sql);
+    let confirm = Confirm::fetch_all(session.id, tab.sql.clone(), writes);
+    state.open_dialog(DialogState::Confirm(confirm));
+    state.awaiting = None;
+}
+
+/// The fetch-all confirm said yes: session `id` runs `sql` again, keeping
+/// every row. That closes the kept stream, if there is one.
+pub(crate) fn fetch_all_confirmed(
+    state: &mut State,
+    id: SessionId,
+    sql: String,
+    fx: &mut Vec<Effect>,
+) {
+    let mut queued = Queued::new(sql, None);
     queued.all_rows = true;
+    enqueue_on(state, id, vec![queued], fx);
+}
+
+/// `L` on a truncated result: the next `max_rows` rows from its kept
+/// stream, without running the statement again. A result whose stream is
+/// gone (another statement ran, or the backend cannot keep one) can only
+/// fetch everything again, so `L` asks to, as `A` does.
+pub(super) fn fetch_more(state: &mut State, fx: &mut Vec<Effect>) {
+    let session = state.sessions.active();
+    let tab = &session.tabs[session.active_tab.min(session.tabs.len() - 1)];
+    if !tab.results.result.as_ref().is_some_and(|r| r.truncated) {
+        return;
+    }
+    if !session.can_load_more() {
+        return fetch_all(state);
+    }
+    // One read at a time: a second `L` waits for the first.
+    let number = tab.number;
+    let reading = session
+        .in_flight
+        .iter()
+        .chain(&session.queue)
+        .any(|q| q.more.is_some());
+    if reading {
+        return;
+    }
+    let mut queued = Queued::new(tab.sql.clone(), None);
+    queued.more = Some(number);
     enqueue(state, vec![queued], fx);
+}
+
+/// The running statement of session `id` has read `rows` rows so far.
+pub(super) fn progress(state: &mut State, id: SessionId, rows: u64) {
+    let job = state
+        .sessions
+        .get(id)
+        .and_then(|s| s.in_flight.as_ref())
+        .and_then(|q| q.job);
+    if let Some(job) = job {
+        state.jobs.progress(job, rows);
+    }
+}
+
+/// The rows a `FetchMore` read: added to the end of their tab's result.
+/// The tab keeps `L` while more wait.
+pub(super) fn more_rows(state: &mut State, id: SessionId, more: MoreRows, fx: &mut Vec<Effect>) {
+    let now = state.now;
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    let queued = match &session.in_flight {
+        Some(q) if q.more.is_some() => session.in_flight.take(),
+        _ => None,
+    };
+    let Some(queued) = queued else {
+        return;
+    };
+    session.running = session.running.saturating_sub(1);
+    session.tx_changes.pop_front();
+    if !more.more {
+        session.cursor = None;
+    }
+    let job = queued.job;
+    let cancelled =
+        job.and_then(|j| state.jobs.get(j)).map(|j| &j.state) == Some(&JobState::Cancelled);
+    // Rows a cancelled read brought are dropped, and with them the place
+    // in the stream: the tab cannot load on from there.
+    if cancelled {
+        session.cursor = None;
+        return pump(state, id, fx);
+    }
+    let added = more.rows.len();
+    let number = queued.more;
+    let dialect = session.dialect();
+    if let Some(tab) = session.tabs.iter_mut().find(|t| Some(t.number) == number) {
+        results::append(&mut tab.results, more.rows, more.more);
+        if let Some(result) = &tab.results.result {
+            tab.label = label(dialect, &tab.sql, result);
+        }
+        if let Some(error) = &more.error {
+            tab.stopped = Some(error.clone());
+        }
+    }
+    if let Some(job) = job {
+        let ended = state
+            .jobs
+            .get(job)
+            .and_then(|j| j.started)
+            .map_or(now, |started| started + more.elapsed);
+        match &more.error {
+            Some(error) => state.jobs.fail(job, error.clone(), now),
+            None => state.jobs.finish(job, added as u64, ended),
+        }
+    }
+    let notice = match more.error {
+        Some(error) => Notice::error(format!("could not load more rows: {error}")),
+        None => Notice::success(format!(
+            "loaded {} more row{}",
+            qry_core::jobs::format_rows(added as u64),
+            if added == 1 { "" } else { "s" }
+        )),
+    };
+    notify(state, notice, fx);
+    pump(state, id, fx);
+}
+
+/// The palette's `Toggle autocommit`: asks the active session's worker to
+/// turn it the other way. The status line follows its answer.
+pub(super) fn toggle_autocommit(state: &mut State, fx: &mut Vec<Effect>) {
+    let session = state.sessions.active();
+    if !session.is_open() {
+        let notice = Notice::info("no open connection to change autocommit on");
+        return notify(state, notice, fx);
+    }
+    fx.push(Effect::Db(
+        session.id,
+        DbCommand::SetAutocommit(!session.autocommit),
+    ));
+}
+
+/// Session `id`'s worker turned autocommit on or off, or could not.
+pub(super) fn autocommit_set(
+    state: &mut State,
+    id: SessionId,
+    outcome: Result<bool, String>,
+    fx: &mut Vec<Effect>,
+) {
+    let notice = match outcome {
+        Ok(on) => {
+            if let Some(session) = state.sessions.get_mut(id) {
+                session.autocommit = on;
+                // Turning it on commits; off, the status line says TX
+                // from now on anyway.
+                session.in_transaction = false;
+            }
+            if on {
+                Notice::info("autocommit on")
+            } else {
+                Notice::info("autocommit off: changes wait for Commit")
+            }
+        }
+        Err(message) => Notice::error(format!("could not change autocommit: {message}")),
+    };
+    notify(state, notice, fx);
 }
 
 /// The prod confirm said yes: session `id` runs what it held, and is not
@@ -254,13 +420,19 @@ pub(super) fn pump(state: &mut State, id: SessionId, fx: &mut Vec<Effect>) {
         return;
     };
     session.running += 1;
-    session.tx_changes.push_back(tx_change(&next.sql));
+    // Reading on from a stream does nothing to the transaction.
+    let change = match next.more {
+        Some(_) => None,
+        None => tx_change(&next.sql),
+    };
+    session.tx_changes.push_back(change);
     let command = match &next.export {
         // The export answers with its job, so its progress finds it.
         Some(export) => DbCommand::Export(Box::new(crate::db::ExportJob {
             job: next.job,
             ..(**export).clone()
         })),
+        None if next.more.is_some() => DbCommand::FetchMore,
         None if next.all_rows => DbCommand::QueryAll(next.sql.clone()),
         None => DbCommand::Query(next.sql.clone()),
     };
@@ -300,7 +472,7 @@ fn table_name(dialect: Dialect, sql: &str) -> Option<String> {
 }
 
 /// The tab label for `result` of `sql`: `users · 42`, or `UPDATE · 3 rows`.
-fn label(dialect: Dialect, sql: &str, result: &QueryResult) -> String {
+pub(super) fn label(dialect: Dialect, sql: &str, result: &QueryResult) -> String {
     if result.columns.is_empty() {
         let verb = lex(dialect, sql)
             .into_iter()
@@ -333,6 +505,7 @@ pub(super) fn done(
     if let Some(Some(begins)) = session.tx_changes.pop_front() {
         session.in_transaction = begins;
     }
+    let kept = std::mem::take(&mut session.cursor_kept);
     let queued = session.in_flight.take();
     let job = queued.as_ref().and_then(|q| q.job);
     // A cancelled statement that finished anyway: its result is dropped.
@@ -360,6 +533,13 @@ pub(super) fn done(
     let tab = session.new_tab(label);
     tab.table = table;
     tab.sql = sql.clone();
+    let number = tab.number;
+    if kept && result.truncated {
+        session.cursor = Some(number);
+    }
+    let Some(tab) = session.tabs.iter_mut().find(|t| t.number == number) else {
+        return;
+    };
     let outcome = history::Outcome {
         ok: true,
         // The rows it returned, or else those it changed.
@@ -372,6 +552,68 @@ pub(super) fn done(
         error: None,
     };
     results::show(&mut tab.results, result);
+    history::record(state, id, &sql, outcome, fx);
+    pump(state, id, fx);
+}
+
+/// Session `id`'s statement read `result`, then failed with `message`: the
+/// rows are shown, with a footer saying why they stop there, and the job
+/// and the run end as a failure does.
+pub(super) fn stopped(
+    state: &mut State,
+    id: SessionId,
+    result: Arc<QueryResult>,
+    message: String,
+    fx: &mut Vec<Effect>,
+) {
+    let keep_going = state.config.continue_on_error;
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    session.running = session.running.saturating_sub(1);
+    session.tx_changes.pop_front();
+    session.cursor_kept = false;
+    let queued = session.in_flight.take();
+    let job = queued.as_ref().and_then(|q| q.job);
+    if job.and_then(|j| state.jobs.get(j)).map(|j| &j.state) == Some(&JobState::Cancelled) {
+        return pump(state, id, fx);
+    }
+    if let Some(job) = job {
+        state.jobs.fail(job, message.clone(), state.now);
+    }
+    let Some(session) = state.sessions.get_mut(id) else {
+        return;
+    };
+    if let Some(Queued {
+        span: Some(span), ..
+    }) = &queued
+    {
+        session.failed = Some(Failed {
+            span: span.clone(),
+            position: None,
+        });
+    }
+    let sql = queued.map(|q| q.sql).unwrap_or_default();
+    let label = label(session.dialect(), &sql, &result);
+    let table = table_name(session.dialect(), &sql);
+    let tab = session.new_tab(label);
+    tab.table = table;
+    tab.sql = sql.clone();
+    tab.stopped = Some(message.clone());
+    let outcome = history::Outcome {
+        ok: false,
+        rows: u64::try_from(result.rows.len()).ok(),
+        ms: u64::try_from(result.elapsed.as_millis()).unwrap_or(u64::MAX),
+        error: Some(message),
+    };
+    results::show(&mut tab.results, result);
+    if !keep_going {
+        for queued in session.queue.drain(..) {
+            if let Some(job) = queued.job {
+                state.jobs.cancel(job, state.now);
+            }
+        }
+    }
     history::record(state, id, &sql, outcome, fx);
     pump(state, id, fx);
 }
@@ -391,6 +633,7 @@ pub(super) fn failed(
     };
     session.running = session.running.saturating_sub(1);
     session.tx_changes.pop_front();
+    session.cursor_kept = false;
     let queued = session.in_flight.take();
     let job = queued.as_ref().and_then(|q| q.job);
     // The failure a cancel causes says nothing new.
@@ -444,10 +687,12 @@ pub(super) fn failed(
 }
 
 /// A dropped worker answers nothing more: forget what was waiting.
-pub(super) fn stopped(state: &mut State, id: SessionId) {
+pub(super) fn worker_gone(state: &mut State, id: SessionId) {
     if let Some(session) = state.sessions.get_mut(id) {
         session.queue.clear();
         session.in_flight = None;
+        session.cursor = None;
+        session.cursor_kept = false;
     }
     state.jobs.close_session(id, state.now);
 }

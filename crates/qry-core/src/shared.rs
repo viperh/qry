@@ -127,6 +127,31 @@ pub trait Database: Send + Sync {
         send_result(result, fetch_size, &out).await
     }
 
+    /// Whether [`query_stream`](Self::query_stream) reads as it goes,
+    /// holding a batch at a time, rather than this trait's default, which
+    /// reads the whole result first. Only then can a caller stop reading
+    /// at a row limit and keep the rest of the stream for later.
+    fn streams_rows(&self) -> bool {
+        false
+    }
+
+    /// Turns autocommit on or off. MySQL and MariaDB have the setting
+    /// itself. Postgres and SQLite do not, so turning it off begins a
+    /// transaction (and the caller begins another after each COMMIT or
+    /// ROLLBACK), and turning it on commits that transaction, as MySQL's
+    /// `SET autocommit=1` does. Oracle overrides this with a flag of its
+    /// own, as its driver has none.
+    async fn set_autocommit(&self, on: bool) -> Result<()> {
+        let sql = match (self.kind(), on) {
+            (DatabaseType::Mysql | DatabaseType::MariaDb, true) => "SET autocommit=1",
+            (DatabaseType::Mysql | DatabaseType::MariaDb, false) => "SET autocommit=0",
+            (DatabaseType::Postgres | DatabaseType::Sqlite, true) => "COMMIT",
+            (DatabaseType::Postgres | DatabaseType::Sqlite, false) => "BEGIN",
+            (DatabaseType::Oracle, _) => bail!("this connection cannot change autocommit"),
+        };
+        self.execute(sql).await.map(drop)
+    }
+
     /// What stops a running statement on this connection, if the backend
     /// can.
     fn cancel_handle(&self) -> Option<Arc<dyn CancelHandle>> {

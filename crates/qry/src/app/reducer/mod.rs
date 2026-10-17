@@ -162,6 +162,7 @@ fn act(state: &mut State, context: KeyContext, action: Action, fx: &mut Vec<Effe
             };
             run::enqueue(state, vec![Queued::new(sql, None)], fx);
         }
+        Action::ToggleAutocommit => run::toggle_autocommit(state, fx),
         action => match context {
             KeyContext::Tree => tree::run(state, action, fx),
             KeyContext::Editor => editor::run(state, action, fx),
@@ -189,7 +190,7 @@ fn quit(state: &mut State, fx: &mut Vec<Effect>) {
     let open: Vec<&state::SessionState> = state
         .sessions
         .iter()
-        .filter(|s| s.in_transaction && s.is_open())
+        .filter(|s| s.tx_open() && s.is_open())
         .collect();
     if open.is_empty() {
         return fx.push(Effect::Quit);

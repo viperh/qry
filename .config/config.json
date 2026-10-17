@@ -188,6 +188,7 @@
       "<gt>": "WidenColumn",
       "<=>": "ResetWidths",
       "<F>": "FreezeColumn",
+      "<L>": "FetchMore",
       "<A>": "FetchAll",
       "<J>": "ToggleJobs",
       "<ctrl-c>": "CancelQuery",

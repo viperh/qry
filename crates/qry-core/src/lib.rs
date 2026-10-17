@@ -260,6 +260,26 @@ impl Driver {
         db.query_limited(sql, max_rows).await
     }
 
+    /// What kind of database the open connection is to, if one is open.
+    pub fn kind(&self) -> Option<DatabaseType> {
+        Some(self.db.as_ref()?.kind())
+    }
+
+    /// Whether the open connection streams rows as it reads them; see
+    /// [`Database::streams_rows`].
+    pub fn streams_rows(&self) -> bool {
+        self.db.as_ref().is_some_and(|db| db.streams_rows())
+    }
+
+    /// Turns the open connection's autocommit on or off; see
+    /// [`Database::set_autocommit`].
+    pub async fn set_autocommit(&self, on: bool) -> Result<()> {
+        let Some(db) = &self.db else {
+            bail!("not connected to a database");
+        };
+        db.set_autocommit(on).await
+    }
+
     /// What stops the open connection's running statement, if it can be.
     pub fn cancel_handle(&self) -> Option<std::sync::Arc<dyn shared::CancelHandle>> {
         self.db.as_ref()?.cancel_handle()
