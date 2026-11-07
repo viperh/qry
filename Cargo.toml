@@ -96,7 +96,7 @@ zeroize = "1.9.0"
 mysql_async = "0.37.1"
 # Oracle's own thin driver: pure Rust, no Instant Client. Still a beta, so
 # pinned exactly; read its changelog before raising the pin.
-oracledb = "=26.0.0-beta.4"
+oracledb = "=26.0.0-beta.5"
 # Already in the tree through oracledb; used to check a host name before TLS.
 rustls-pki-types = "1.15.1"
 tokio-postgres = "0.7.18"
